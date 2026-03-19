@@ -2,7 +2,9 @@
 require "optparse"
 
 output = "sprof.data"
-frequency = 1000
+frequency = 100
+mode = "cpu"
+verbose = false
 
 parser = OptionParser.new do |opts|
   opts.banner = "Usage: sprof [options] [exec] command [args...]"
@@ -13,6 +15,14 @@ parser = OptionParser.new do |opts|
 
   opts.on("-f", "--frequency HZ", Integer, "Sampling frequency in Hz (default: 1000)") do |v|
     frequency = v
+  end
+
+  opts.on("-m", "--mode MODE", "Profiling mode: cpu or wall (default: cpu)") do |v|
+    mode = v
+  end
+
+  opts.on("-v", "--verbose", "Print sampling statistics to stderr") do
+    verbose = true
   end
 
   opts.on("-h", "--help", "Show this help") do
@@ -45,5 +55,7 @@ ENV["RUBYOPT"] = "-rsprof #{ENV['RUBYOPT']}".strip
 ENV["SPROF_ENABLED"] = "1"
 ENV["SPROF_OUTPUT"] = output
 ENV["SPROF_FREQUENCY"] = frequency.to_s
+ENV["SPROF_MODE"] = mode
+ENV["SPROF_VERBOSE"] = "1" if verbose
 
 exec(*ARGV)

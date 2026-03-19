@@ -5,19 +5,33 @@ require "stringio"
 module Sprof
   VERSION = "0.1.0"
 
+  @verbose = false
+
   def self.save(path)
     data = stop
     return unless data
+
+    print_stats(data) if @verbose
 
     encoded = PProf.encode(data)
     File.binwrite(path, gzip(encoded))
   end
 
-  def self.profile(output: "sprof.data", frequency: 1000, mode: :cpu)
-    start(frequency: frequency, mode: mode)
+  def self.profile(output: "sprof.data", frequency: 100, mode: :cpu, verbose: false)
+    start(frequency: frequency, mode: mode, verbose: verbose)
     yield
   ensure
     save(output)
+  end
+
+  # Wrap C start to capture verbose flag
+  class << self
+    alias_method :_start, :start
+
+    def start(frequency: 100, mode: :cpu, verbose: false)
+      @verbose = verbose || ENV["SPROF_VERBOSE"] == "1"
+      _start(frequency: frequency, mode: mode)
+    end
   end
 
   def self.gzip(data)
@@ -29,10 +43,76 @@ module Sprof
     io.string
   end
 
+  def self.print_stats(data)
+    count = data[:sampling_count] || 0
+    total_ns = data[:sampling_time_ns] || 0
+    samples = data[:samples]&.size || 0
+    mode = data[:mode] || :cpu
+    frequency = data[:frequency] || 0
+
+    total_ms = total_ns / 1_000_000.0
+    avg_us = count > 0 ? total_ns / count / 1000.0 : 0.0
+
+    $stderr.puts "[sprof] mode=#{mode} frequency=#{frequency}Hz"
+    $stderr.puts "[sprof] sampling: #{count} calls, #{format("%.2f", total_ms)}ms total, #{format("%.1f", avg_us)}us/call avg"
+    $stderr.puts "[sprof] samples recorded: #{samples}"
+
+    print_top(data)
+  end
+
+  TOP_N = 10
+
+  def self.print_top(data)
+    string_table = data[:string_table]
+    samples_raw = data[:samples]
+    return if !samples_raw || samples_raw.empty?
+
+    flat = Hash.new(0)
+    cum = Hash.new(0)
+    total_weight = 0
+
+    samples_raw.each do |frames, weight|
+      total_weight += weight
+      seen = {}
+
+      frames.each_with_index do |frame, i|
+        label = string_table[frame[1]] || ""
+        path = string_table[frame[0]] || ""
+        lineno = frame[2]
+        key = [label, path, lineno]
+
+        flat[key] += weight if i == 0  # leaf = first element (deepest frame)
+
+        unless seen[key]
+          cum[key] += weight
+          seen[key] = true
+        end
+      end
+    end
+
+    return if cum.empty?
+
+    print_top_table("flat", flat, total_weight)
+    print_top_table("cum", cum, total_weight)
+  end
+
+  def self.print_top_table(kind, table, total_weight)
+    top = table.sort_by { |_, w| -w }.first(TOP_N)
+    $stderr.puts "[sprof] top #{top.size} by #{kind}:"
+    top.each do |key, weight|
+      label, path, lineno = key
+      ms = weight / 1_000_000.0
+      pct = total_weight > 0 ? weight * 100.0 / total_weight : 0.0
+      loc = path.empty? ? "" : " (#{path}:#{lineno})"
+      $stderr.puts format("[sprof]   %8.1fms %5.1f%%  %s%s", ms, pct, label, loc)
+    end
+  end
+
   # ENV-based auto-start for CLI usage
   if ENV["SPROF_ENABLED"] == "1"
     _sprof_mode = ENV["SPROF_MODE"] == "wall" ? :wall : :cpu
-    start(frequency: (ENV["SPROF_FREQUENCY"] || 1000).to_i, mode: _sprof_mode)
+    start(frequency: (ENV["SPROF_FREQUENCY"] || 100).to_i, mode: _sprof_mode,
+          verbose: ENV["SPROF_VERBOSE"] == "1")
     at_exit { save(ENV["SPROF_OUTPUT"] || "sprof.data") }
   end
 

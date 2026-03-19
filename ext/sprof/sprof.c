@@ -48,6 +48,9 @@ typedef struct sprof_profiler {
     sprof_string_table_t string_table;
     rb_internal_thread_specific_key_t ts_key;
     rb_internal_thread_event_hook_t *thread_hook;
+    /* Sampling overhead stats */
+    size_t sampling_count;
+    int64_t sampling_total_ns;
 } sprof_profiler_t;
 
 static sprof_profiler_t g_profiler;
@@ -172,6 +175,10 @@ sprof_sample_job(void *arg)
 
     if (!prof->running) return;
 
+    /* Measure sampling overhead */
+    struct timespec ts_start, ts_end;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts_start);
+
     /* For wall mode, get wall time once (shared across all threads) */
     int64_t wall_now = 0;
     if (prof->mode == 1) {
@@ -241,6 +248,12 @@ sprof_sample_job(void *arg)
 
         prof->sample_count++;
     }
+
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts_end);
+    prof->sampling_count++;
+    prof->sampling_total_ns +=
+        ((int64_t)ts_end.tv_sec - ts_start.tv_sec) * 1000000000LL +
+        (ts_end.tv_nsec - ts_start.tv_nsec);
 }
 
 /* ---- Timer thread ---- */
@@ -266,7 +279,7 @@ static VALUE
 rb_sprof_start(int argc, VALUE *argv, VALUE self)
 {
     VALUE opts;
-    int frequency = 1000;
+    int frequency = 100;
     int mode = 0; /* 0 = cpu, 1 = wall */
 
     rb_scan_args(argc, argv, ":", &opts);
@@ -298,6 +311,8 @@ rb_sprof_start(int argc, VALUE *argv, VALUE self)
     g_profiler.frequency = frequency;
     g_profiler.mode = mode;
     g_profiler.sample_count = 0;
+    g_profiler.sampling_count = 0;
+    g_profiler.sampling_total_ns = 0;
     g_profiler.sample_capacity = SPROF_INITIAL_SAMPLES;
     g_profiler.samples = (sprof_sample_t *)calloc(
         g_profiler.sample_capacity, sizeof(sprof_sample_t));
@@ -365,6 +380,10 @@ rb_sprof_stop(VALUE self)
 
     /* frequency */
     rb_hash_aset(result, ID2SYM(rb_intern("frequency")), INT2NUM(g_profiler.frequency));
+
+    /* sampling_count, sampling_time_ns */
+    rb_hash_aset(result, ID2SYM(rb_intern("sampling_count")), SIZET2NUM(g_profiler.sampling_count));
+    rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LONG2NUM(g_profiler.sampling_total_ns));
 
     /* string_table */
     string_table_ary = rb_ary_new_capa((long)g_profiler.string_table.count);
