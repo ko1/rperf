@@ -220,8 +220,6 @@ sprof_sample_job(void *arg)
     sprof_profiler_t *prof = (sprof_profiler_t *)arg;
     VALUE threads, thread;
     long i, thread_count;
-    VALUE frame_buf[SPROF_MAX_STACK_DEPTH];
-    int line_buf[SPROF_MAX_STACK_DEPTH];
 
     if (!prof->running) return;
 
@@ -270,20 +268,15 @@ sprof_sample_job(void *arg)
 
         if (weight <= 0) continue;
 
-        /* Get backtrace */
-        int depth = rb_profile_thread_frames(thread, 0, SPROF_MAX_STACK_DEPTH, frame_buf, line_buf);
-        if (depth <= 0) continue;
-
-        /* Ensure capacity for both sample and frames */
+        /* Ensure capacity for sample and max possible frames */
         if (sprof_ensure_sample_capacity(prof) < 0) continue;
-        if (sprof_ensure_frame_pool_capacity(prof, depth) < 0) continue;
+        if (sprof_ensure_frame_pool_capacity(prof, SPROF_MAX_STACK_DEPTH) < 0) continue;
 
-        /* Store raw frame VALUEs into pool (string resolution deferred to stop) */
+        /* Get backtrace directly into frame_pool */
         size_t frame_start = prof->frame_pool_count;
-        int j;
-        for (j = 0; j < depth; j++) {
-            prof->frame_pool[frame_start + j] = frame_buf[j];
-        }
+        int depth = rb_profile_thread_frames(thread, 0, SPROF_MAX_STACK_DEPTH,
+                                             &prof->frame_pool[frame_start], NULL);
+        if (depth <= 0) continue;
 
         /* Record sample */
         sprof_sample_t *sample = &prof->samples[prof->sample_count];
