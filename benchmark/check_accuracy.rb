@@ -2,73 +2,86 @@
 # frozen_string_literal: true
 
 # Sprof accuracy benchmark runner
-#
-# Usage:
-#   ruby check_accuracy.rb                           # run all scenarios from scenarios_mixed.json
-#   ruby check_accuracy.rb 42                        # run scenario #42
-#   ruby check_accuracy.rb 10-19                     # run scenarios #10 through #19
-#   ruby check_accuracy.rb 0 5 99                    # run specific scenarios
-#   ruby check_accuracy.rb -f scenarios_rw.json      # use a different scenario file
-#   ruby check_accuracy.rb -t 10                     # set pass tolerance to 10%
-#   ruby check_accuracy.rb -m wall                   # use wall-time profiling mode
-#   ruby check_accuracy.rb -l                        # run under CPU load (all cores busy)
-#   ruby check_accuracy.rb -P stackprof              # use stackprof profiler
-#   ruby check_accuracy.rb -P vernier                # use vernier profiler
-#   ruby check_accuracy.rb -P pf2                    # use pf2 profiler
-#   ruby check_accuracy.rb -F 100                    # set sampling frequency to 100Hz
 
 require "json"
 require "open3"
 require "etc"
-
-DEFAULT_FREQUENCY = 1000
+require "optparse"
 
 # Parse options
 scenario_file = File.join(__dir__, "scenarios_mixed.json")
 tolerance = 0.20
 profiling_mode = :cpu
 profiler = "sprof"
-frequency = DEFAULT_FREQUENCY
-args = ARGV.dup
-if (idx = args.index("-f"))
-  args.delete_at(idx)
-  scenario_file = File.join(__dir__, args.delete_at(idx))
+frequency = 1000
+cpu_load = false
+verbose = false
+
+parser = OptionParser.new do |opts|
+  opts.banner = "Usage: check_accuracy.rb [options] [scenario_ids...]"
+  opts.separator ""
+  opts.separator "Examples:"
+  opts.separator "  ruby check_accuracy.rb                        # all scenarios, sprof, cpu mode"
+  opts.separator "  ruby check_accuracy.rb 0                      # scenario #0 only"
+  opts.separator "  ruby check_accuracy.rb 0-4                    # scenarios #0 through #4"
+  opts.separator "  ruby check_accuracy.rb -P stackprof -m wall   # stackprof, wall mode"
+  opts.separator ""
+
+  opts.on("-f", "--file FILE", "Scenario file (default: scenarios_mixed.json)") do |v|
+    scenario_file = File.join(__dir__, v)
+  end
+  opts.on("-m", "--mode MODE", "Profiling mode: cpu or wall (default: cpu)") do |v|
+    profiling_mode = v.to_sym
+  end
+  opts.on("-t", "--tolerance PCT", Integer, "Pass tolerance in % (default: 20)") do |v|
+    tolerance = v / 100.0
+  end
+  opts.on("-F", "--frequency HZ", Integer, "Sampling frequency in Hz (default: 1000)") do |v|
+    frequency = v
+  end
+  opts.on("-P", "--profiler NAME", "Profiler: sprof, stackprof, vernier, pf2 (default: sprof)") do |v|
+    profiler = v
+  end
+  opts.on("-l", "--load", "Run under CPU load (all cores busy)") do
+    cpu_load = true
+  end
+  opts.on("-v", "--verbose", "Show per-method detail and raw output for all scenarios") do
+    verbose = true
+  end
+  opts.on("-h", "--help", "Show this help") do
+    puts opts
+    exit
+  end
 end
-if (idx = args.index("-t"))
-  args.delete_at(idx)
-  tolerance = args.delete_at(idx).to_f / 100.0
-end
-if (idx = args.index("-m"))
-  args.delete_at(idx)
-  profiling_mode = args.delete_at(idx).to_sym
-end
-if (idx = args.index("-P"))
-  args.delete_at(idx)
-  profiler = args.delete_at(idx)
-end
-if (idx = args.index("-F"))
-  args.delete_at(idx)
-  frequency = args.delete_at(idx).to_i
-end
-cpu_load = !!args.delete("-l")
+parser.parse!(ARGV)
+args = ARGV
 
 scenarios = JSON.parse(File.read(scenario_file))
 
-# Pick expected_ms key based on mode
-expected_key = "expected_#{profiling_mode}_ms"
+# Detect scenario type
+ratio_mode = scenarios.first&.dig("type") == "ratio"
 
-# Validate that the scenario file has the expected key
-unless scenarios.first&.key?(expected_key)
-  # Fallback: legacy format with "expected_ms"
-  if scenarios.first&.key?("expected_ms")
-    expected_key = "expected_ms"
-  else
-    abort "Scenario file missing '#{expected_key}' (mode: #{profiling_mode})"
+unless ratio_mode
+  # Pick expected_ms key based on mode
+  expected_key = "expected_#{profiling_mode}_ms"
+
+  # Validate that the scenario file has the expected key
+  unless scenarios.first&.key?(expected_key)
+    # Fallback: legacy format with "expected_ms"
+    if scenarios.first&.key?("expected_ms")
+      expected_key = "expected_ms"
+    else
+      abort "Scenario file missing '#{expected_key}' (mode: #{profiling_mode})"
+    end
   end
 end
 
 # Detect all method name prefixes used across scenarios
-all_prefixes = scenarios.flat_map { |s| s["calls"].map { |name, _| name[/\A[a-z]+/] } }.uniq
+if ratio_mode
+  all_prefixes = scenarios.flat_map { |s| s["call_counts"].keys.map { |name| name[/\A[a-z]+/] } }.uniq
+else
+  all_prefixes = scenarios.flat_map { |s| s["calls"].map { |name, _| name[/\A[a-z]+/] } }.uniq
+end
 method_prefix_re = all_prefixes.join("|")
 
 # Parse arguments to select scenarios
@@ -95,6 +108,7 @@ puts "File: #{File.basename(scenario_file)}"
 puts "Profiler: #{profiler}"
 puts "Mode: #{profiling_mode}"
 puts "Frequency: #{frequency}Hz"
+puts "Tolerance: #{(tolerance * 100).to_i}%"
 puts "Load: #{cpu_load ? "ON (#{Etc.nprocessors} cores)" : "off"}"
 puts "Running #{selected.size} scenario(s) out of #{scenarios.size}"
 puts
@@ -108,6 +122,17 @@ if cpu_load
 end
 
 # --- Profiler-specific script generation ---
+
+def expand_calls(scenario)
+  if scenario["type"] == "ratio"
+    calls = []
+    scenario["call_counts"].each { |name, count| count.times { calls << [name, 0] } }
+    calls.shuffle!
+    calls
+  else
+    scenario["calls"]
+  end
+end
 
 def generate_script_sprof(calls, output_path, profiling_mode, freq)
   script = <<~RUBY
@@ -274,8 +299,27 @@ end
 
 selected.each do |scenario|
   scenario_id = scenario["id"]
-  calls = scenario["calls"]
-  expected_ms = scenario[expected_key]
+  calls = expand_calls(scenario)
+
+  if ratio_mode
+    expected_ratio = scenario["expected_ratio"]
+    if verbose
+      puts format("--- Scenario #%-4d  expected (ratio) ---", scenario_id)
+      expected_ratio.sort_by { |_, v| -v }.each do |method, r|
+        puts format("  %-20s  %6.2f%%  (%d calls)", method, r * 100, scenario["call_counts"][method])
+      end
+      puts
+    end
+  else
+    expected_ms = scenario[expected_key]
+    if verbose
+      puts format("--- Scenario #%-4d  expected (%s) ---", scenario_id, expected_key)
+      expected_ms.sort_by { |_, v| -v }.each do |method, exp|
+        puts format("  %-20s  %7.1fms", method, exp)
+      end
+      puts
+    end
+  end
 
   output_ext = case profiler
                when "vernier" then ".json"
@@ -326,36 +370,59 @@ selected.each do |scenario|
   end
 
   # Compare
-  errors = []
-  expected_ms.each do |method, exp|
-    act = actual_ms[method] || 0.0
-    error = exp > 0 ? ((act - exp).abs / exp) : 0.0
-    errors << error
+  if ratio_mode
+    # Convert actual values to ratios
+    actual_total = actual_ms.values.select { |v| expected_ratio.key?(actual_ms.key(v)) rescue false }.sum
+    actual_total = 0.0
+    expected_ratio.each_key { |m| actual_total += (actual_ms[m] || 0.0) }
+
+    errors = []
+    expected_ratio.each do |method, exp_r|
+      act_r = actual_total > 0 ? (actual_ms[method] || 0.0) / actual_total : 0.0
+      error = exp_r > 0 ? ((act_r - exp_r).abs / exp_r) : 0.0
+      errors << error
+    end
+  else
+    errors = []
+    expected_ms.each do |method, exp|
+      act = actual_ms[method] || 0.0
+      error = exp > 0 ? ((act - exp).abs / exp) : 0.0
+      errors << error
+    end
   end
 
   avg_error = errors.empty? ? 0.0 : errors.sum / errors.size
   all_errors << avg_error
   pass = avg_error <= tolerance
 
-  unless pass
-    failures << scenario_id
+  failures << scenario_id unless pass
 
-    # Print details for failing scenarios
-    puts format("--- Scenario #%-4d  FAIL (avg error: %.1f%%) ---", scenario_id, avg_error * 100)
-    expected_ms.sort_by { |_, v| -v }.each do |method, exp|
-      act = actual_ms[method] || 0.0
-      err = exp > 0 ? ((act - exp).abs / exp * 100) : 0.0
-      puts format("  %-20s  expected=%7.1fms  actual=%7.1fms  error=%5.1f%%", method, exp, act, err)
+  show_detail = !pass || verbose
+  label = pass ? "PASS" : "FAIL"
+  puts format("--- Scenario #%-4d  %s (avg error: %.1f%%) ---", scenario_id, label, avg_error * 100)
+
+  if show_detail
+    if ratio_mode
+      actual_total = 0.0
+      expected_ratio.each_key { |m| actual_total += (actual_ms[m] || 0.0) }
+
+      expected_ratio.sort_by { |_, v| -v }.each do |method, exp_r|
+        act_val = actual_ms[method] || 0.0
+        act_r = actual_total > 0 ? act_val / actual_total : 0.0
+        err = exp_r > 0 ? ((act_r - exp_r).abs / exp_r * 100) : 0.0
+        puts format("  %-20s  expected=%6.2f%%  actual=%6.2f%%  error=%5.1f%%", method, exp_r * 100, act_r * 100, err)
+      end
+    else
+      expected_ms.sort_by { |_, v| -v }.each do |method, exp|
+        act = actual_ms[method] || 0.0
+        err = exp > 0 ? ((act - exp).abs / exp * 100) : 0.0
+        puts format("  %-20s  expected=%7.1fms  actual=%7.1fms  error=%5.1f%%", method, exp, act, err)
+      end
     end
     puts
     puts "  raw output:"
-    raw_out.each_line { |l| puts "    #{l}" }
+    raw_out.to_s.each_line { |l| puts "    #{l}" }
     puts
-  end
-
-  # Progress (compact for passing)
-  if pass
-    puts format("Scenario #%-4d  PASS (%.1f%%)", scenario_id, avg_error * 100)
   end
 
   # Cleanup temp files

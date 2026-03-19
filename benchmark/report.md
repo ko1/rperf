@@ -245,3 +245,47 @@ At 100Hz, sprof achieves <8% error in all scenarios (cpu mode) and <7% in most w
 - **vernier**: accurate for wall-mode profiling of Ruby and GVL-released code at 1000Hz (1.5-7.2%). Cannot measure csleep or CPU time.
 - **pf2**: accurate for rw/cw workloads (1-7%) thanks to native stack collection. Degrades in mixed scenarios and under load.
 - **sprof**: accurate for all workload types, both modes, both frequencies, with and without load.
+
+---
+
+## Results: Call-Ratio Accuracy
+
+The previous tests measure whether profilers correctly attribute **absolute time** to each method. This section tests a different property: whether profilers correctly reflect the **relative call frequency** of methods that each consume negligible time.
+
+### Setup
+
+10 randomly selected `rw` methods are called with argument 0 (immediate return), totaling 100,000 calls distributed in random proportions. Each individual call takes only ~0.5us, so the total runtime is ~50ms. The expected result is the ratio of calls per method. The profiler output values are converted to ratios and compared against the expected ratios.
+
+This scenario tests the statistical sampling accuracy: with very short methods, the profiler cannot rely on time deltas -- it must capture enough samples to reconstruct the call distribution.
+
+### Results (scenario #0, no load)
+
+| Profiler | cpu 1kHz | cpu 10kHz | wall 1kHz | wall 10kHz |
+|----------|----------|-----------|-----------|------------|
+| sprof | 52.7% | 21.9% | 43.0% | 25.1% |
+| stackprof | 88.5% | 132.0% | 52.9% | **18.5%** |
+| vernier | 86.6% | 86.6% | 45.5% | **6.5%** |
+| pf2 | 86.5% | 96.5% | 43.1% | 48.7% |
+
+### Analysis
+
+**vernier wall 10kHz achieves the best ratio accuracy (6.5%).** Vernier assigns uniform weight to each sample, and at 10kHz it collects ~500 samples across the 50ms runtime. Uniform weighting means the ratio of samples directly reflects the ratio of time spent in each method, which in turn reflects the call frequency (since each call takes the same tiny amount of time).
+
+**stackprof wall 10kHz is also strong (18.5%).** Same principle -- uniform sample weighting works well for ratio reconstruction.
+
+**stackprof cpu gets worse at higher frequency (88% -> 132%).** At 10kHz, stackprof's cpu-mode signal fires so frequently that `Process.clock_gettime` (called inside each `rw` method) dominates the leaf samples, distorting the method-level TOTAL counts.
+
+**sprof improves but remains moderate (53% -> 22% cpu, 43% -> 25% wall).** sprof's time-delta weighting assigns each sample a weight proportional to elapsed time, not a uniform count. When methods are extremely short, the time delta between samples is dominated by profiler overhead and scheduling jitter rather than actual method execution time. This introduces noise into the per-method weights that doesn't average out as cleanly as uniform counting.
+
+**pf2 does not improve at 10kHz (87% -> 97% cpu, 43% -> 49% wall).** The native stack inclusion and cumulative-only accounting continue to distort method-level attribution regardless of frequency.
+
+### Interpretation
+
+This test reveals a fundamental trade-off in profiler design:
+
+- **Time-delta weighting** (sprof) excels at answering "**how much time** did each method consume?" -- even with few samples, each sample carries the correct time weight.
+- **Uniform sample counting** (stackprof, vernier) excels at answering "**how often** was each method active?" -- given enough samples, the count ratio converges to the true frequency ratio.
+
+For real-world profiling, the time question is almost always more useful: a method called 1000 times at 1us each (1ms total) is less interesting than a method called once at 1000ms. sprof's time-delta approach correctly ranks the latter as 1000x more important, while a uniform counter might show the former as dominant if it happens to be running during more sample points.
+
+The ratio test is a deliberately adversarial scenario for time-delta profilers: all methods consume the same negligible time, so there is no meaningful time difference to measure. The only distinguishing signal is call frequency, which favors sample-counting profilers.

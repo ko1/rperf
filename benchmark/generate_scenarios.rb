@@ -44,41 +44,80 @@ output_path = File.join(__dir__, output_file)
 
 srand(seed)
 
+RATIO_NUM_METHODS = 10
+RATIO_TOTAL_CALLS = 100_000
+
 scenarios = num_scenarios.times.map do |i|
-  num_calls = rand(CALLS_RANGE)
-  calls = num_calls.times.map do
-    prefix = prefix_type == "mixed" ? MIXED_PREFIXES.sample : prefix_type
-    method_id = rand(METHOD_RANGE)
-    usec = rand(TIME_RANGE_USEC)
-    ["#{prefix}#{method_id}", usec]
+  if prefix_type == "ratio"
+    # Ratio scenario: 10 random rw methods, 100k total calls with random distribution
+    methods = Array.new(RATIO_NUM_METHODS) { "rw#{rand(METHOD_RANGE)}" }.uniq
+    # Ensure we have exactly RATIO_NUM_METHODS unique methods
+    while methods.size < RATIO_NUM_METHODS
+      methods << "rw#{rand(METHOD_RANGE)}"
+      methods.uniq!
+    end
+
+    # Random weights -> counts that sum to RATIO_TOTAL_CALLS
+    weights = methods.map { rand(1..100) }
+    total_weight = weights.sum.to_f
+    call_counts = {}
+    assigned = 0
+    methods.each_with_index do |m, j|
+      if j == methods.size - 1
+        call_counts[m] = RATIO_TOTAL_CALLS - assigned
+      else
+        c = (weights[j] / total_weight * RATIO_TOTAL_CALLS).round
+        call_counts[m] = c
+        assigned += c
+      end
+    end
+
+    total = call_counts.values.sum.to_f
+    expected_ratio = {}
+    call_counts.each { |m, c| expected_ratio[m] = c / total }
+
+    {
+      "id" => i,
+      "type" => "ratio",
+      "call_counts" => call_counts,
+      "expected_ratio" => expected_ratio,
+    }
+  else
+    num_calls = rand(CALLS_RANGE)
+    calls = num_calls.times.map do
+      prefix = prefix_type == "mixed" ? MIXED_PREFIXES.sample : prefix_type
+      method_id = rand(METHOD_RANGE)
+      usec = rand(TIME_RANGE_USEC)
+      ["#{prefix}#{method_id}", usec]
+    end
+
+    # Repeat some calls to test accumulation of same-method samples.
+    # Pick ~30% of calls and repeat each 3-10 times.
+    repeats = calls.sample([1, (num_calls * 0.3).ceil].max)
+    repeats.each do |call|
+      rand(3..10).times { calls << call.dup }
+    end
+    calls.shuffle!
+
+    # CPU mode: rw/cw burn CPU time, csleep does not
+    expected_cpu_ms = Hash.new(0.0)
+    # Wall mode: all methods contribute their full duration
+    expected_wall_ms = Hash.new(0.0)
+
+    calls.each do |name, usec|
+      ms = usec / 1000.0
+      is_sleep = name.start_with?("csleep") || name.start_with?("cwait")
+      expected_cpu_ms[name] += is_sleep ? 0.0 : ms
+      expected_wall_ms[name] += ms
+    end
+
+    {
+      "id" => i,
+      "calls" => calls,
+      "expected_cpu_ms" => expected_cpu_ms,
+      "expected_wall_ms" => expected_wall_ms,
+    }
   end
-
-  # Repeat some calls to test accumulation of same-method samples.
-  # Pick ~30% of calls and repeat each 3-10 times.
-  repeats = calls.sample([1, (num_calls * 0.3).ceil].max)
-  repeats.each do |call|
-    rand(3..10).times { calls << call.dup }
-  end
-  calls.shuffle!
-
-  # CPU mode: rw/cw burn CPU time, csleep does not
-  expected_cpu_ms = Hash.new(0.0)
-  # Wall mode: all methods contribute their full duration
-  expected_wall_ms = Hash.new(0.0)
-
-  calls.each do |name, usec|
-    ms = usec / 1000.0
-    is_sleep = name.start_with?("csleep") || name.start_with?("cwait")
-    expected_cpu_ms[name] += is_sleep ? 0.0 : ms
-    expected_wall_ms[name] += ms
-  end
-
-  {
-    "id" => i,
-    "calls" => calls,
-    "expected_cpu_ms" => expected_cpu_ms,
-    "expected_wall_ms" => expected_wall_ms,
-  }
 end
 
 File.write(output_path, JSON.pretty_generate(scenarios))
