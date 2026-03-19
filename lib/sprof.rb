@@ -78,8 +78,7 @@ module Sprof
       frames.each_with_index do |frame, i|
         label = string_table[frame[1]] || ""
         path = string_table[frame[0]] || ""
-        lineno = frame[2]
-        key = [label, path, lineno]
+        key = [label, path]
 
         flat[key] += weight if i == 0  # leaf = first element (deepest frame)
 
@@ -100,10 +99,10 @@ module Sprof
     top = table.sort_by { |_, w| -w }.first(TOP_N)
     $stderr.puts "[sprof] top #{top.size} by #{kind}:"
     top.each do |key, weight|
-      label, path, lineno = key
+      label, path = key
       ms = weight / 1_000_000.0
       pct = total_weight > 0 ? weight * 100.0 / total_weight : 0.0
-      loc = path.empty? ? "" : " (#{path}:#{lineno})"
+      loc = path.empty? ? "" : " (#{path})"
       $stderr.puts format("[sprof]   %8.1fms %5.1f%%  %s%s", ms, pct, label, loc)
     end
   end
@@ -169,7 +168,6 @@ module Sprof
         line_buf = "".b
         func_id = functions[frame]
         line_buf << encode_uint64(1, func_id)   # function_id
-        line_buf << encode_int64(2, frame[2])    # line
         loc_buf << encode_message(4, line_buf)
         buf << encode_message(4, loc_buf)
       end
@@ -200,7 +198,7 @@ module Sprof
     def merge_samples(samples_raw)
       merged = Hash.new(0)
       samples_raw.each do |frames, weight|
-        key = frames.map { |f| [f[0], f[1], f[2]] }
+        key = frames.map { |f| [f[0], f[1]] }
         merged[key] += weight
       end
       merged.to_a

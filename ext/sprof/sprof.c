@@ -10,18 +10,13 @@
 #define SPROF_MAX_STACK_DEPTH 512
 #define SPROF_INITIAL_SAMPLES 1024
 #define SPROF_INITIAL_STRINGS 256
+#define SPROF_INITIAL_FRAME_POOL (1024 * 1024 / sizeof(VALUE)) /* ~1MB */
 
 /* ---- Data structures ---- */
 
-typedef struct sprof_frame_key {
-    int path_idx;
-    int label_idx;
-    int lineno;
-} sprof_frame_key_t;
-
 typedef struct sprof_sample {
     int depth;
-    sprof_frame_key_t frames[SPROF_MAX_STACK_DEPTH];
+    size_t frame_start; /* index into frame_pool */
     int64_t weight;
 } sprof_sample_t;
 
@@ -45,6 +40,9 @@ typedef struct sprof_profiler {
     sprof_sample_t *samples;
     size_t sample_count;
     size_t sample_capacity;
+    VALUE *frame_pool;       /* raw frame VALUEs from rb_profile_thread_frames */
+    size_t frame_pool_count;
+    size_t frame_pool_capacity;
     sprof_string_table_t string_table;
     rb_internal_thread_specific_key_t ts_key;
     rb_internal_thread_event_hook_t *thread_hook;
@@ -54,7 +52,28 @@ typedef struct sprof_profiler {
 } sprof_profiler_t;
 
 static sprof_profiler_t g_profiler;
+static VALUE g_profiler_wrapper = Qnil;
 static ID id_list, id_native_thread_id;
+
+/* ---- TypedData for GC marking of frame_pool ---- */
+
+static void
+sprof_profiler_mark(void *ptr)
+{
+    sprof_profiler_t *prof = (sprof_profiler_t *)ptr;
+    if (prof->frame_pool && prof->frame_pool_count > 0) {
+        rb_gc_mark_locations(prof->frame_pool, prof->frame_pool + prof->frame_pool_count);
+    }
+}
+
+static const rb_data_type_t sprof_profiler_type = {
+    .wrap_struct_name = "sprof_profiler",
+    .function = {
+        .dmark = sprof_profiler_mark,
+        .dfree = NULL,
+        .dsize = NULL,
+    },
+};
 
 /* ---- String table ---- */
 
@@ -161,6 +180,24 @@ sprof_ensure_sample_capacity(sprof_profiler_t *prof)
     return 0;
 }
 
+/* ---- Frame pool ---- */
+
+/* Ensure frame_pool has room for `needed` more entries. Returns 0 on success. */
+static int
+sprof_ensure_frame_pool_capacity(sprof_profiler_t *prof, int needed)
+{
+    while (prof->frame_pool_count + (size_t)needed > prof->frame_pool_capacity) {
+        size_t new_cap = prof->frame_pool_capacity * 2;
+        VALUE *new_pool = (VALUE *)realloc(
+            prof->frame_pool,
+            new_cap * sizeof(VALUE));
+        if (!new_pool) return -1;
+        prof->frame_pool = new_pool;
+        prof->frame_pool_capacity = new_cap;
+    }
+    return 0;
+}
+
 /* ---- Thread event hook ---- */
 
 static void
@@ -237,34 +274,23 @@ sprof_sample_job(void *arg)
         int depth = rb_profile_thread_frames(thread, 0, SPROF_MAX_STACK_DEPTH, frame_buf, line_buf);
         if (depth <= 0) continue;
 
-        /* Record sample */
+        /* Ensure capacity for both sample and frames */
         if (sprof_ensure_sample_capacity(prof) < 0) continue;
-        sprof_sample_t *sample = &prof->samples[prof->sample_count];
-        sample->depth = depth;
-        sample->weight = weight;
+        if (sprof_ensure_frame_pool_capacity(prof, depth) < 0) continue;
 
-        int j, alloc_failed = 0;
+        /* Store raw frame VALUEs into pool (string resolution deferred to stop) */
+        size_t frame_start = prof->frame_pool_count;
+        int j;
         for (j = 0; j < depth; j++) {
-            VALUE path = rb_profile_frame_path(frame_buf[j]);
-            VALUE label = rb_profile_frame_label(frame_buf[j]);
-
-            /* Fallback for C methods: label/path are Qnil since there is no iseq */
-            if (NIL_P(label)) label = rb_profile_frame_method_name(frame_buf[j]);
-            if (NIL_P(path))  path  = rb_profile_frame_classpath(frame_buf[j]);
-
-            const char *path_str = NIL_P(path) ? "" : StringValueCStr(path);
-            const char *label_str = NIL_P(label) ? "" : StringValueCStr(label);
-
-            int pidx = sprof_string_table_intern(&prof->string_table, path_str);
-            int lidx = sprof_string_table_intern(&prof->string_table, label_str);
-            if (pidx < 0 || lidx < 0) { alloc_failed = 1; break; }
-
-            sample->frames[j].path_idx = pidx;
-            sample->frames[j].label_idx = lidx;
-            sample->frames[j].lineno = line_buf[j];
+            prof->frame_pool[frame_start + j] = frame_buf[j];
         }
 
-        if (alloc_failed) continue;
+        /* Record sample */
+        sprof_sample_t *sample = &prof->samples[prof->sample_count];
+        sample->depth = depth;
+        sample->frame_start = frame_start;
+        sample->weight = weight;
+        prof->frame_pool_count += depth;
         prof->sample_count++;
     }
 
@@ -339,7 +365,15 @@ rb_sprof_start(int argc, VALUE *argv, VALUE self)
         rb_raise(rb_eNoMemError, "sprof: failed to allocate sample buffer");
     }
 
-    sprof_string_table_init(&g_profiler.string_table);
+    g_profiler.frame_pool_count = 0;
+    g_profiler.frame_pool_capacity = SPROF_INITIAL_FRAME_POOL;
+    g_profiler.frame_pool = (VALUE *)calloc(
+        g_profiler.frame_pool_capacity, sizeof(VALUE));
+    if (!g_profiler.frame_pool) {
+        free(g_profiler.samples);
+        g_profiler.samples = NULL;
+        rb_raise(rb_eNoMemError, "sprof: failed to allocate frame pool");
+    }
 
     /* Register thread exit hook */
     g_profiler.thread_hook = rb_internal_thread_add_event_hook(
@@ -365,7 +399,8 @@ rb_sprof_start(int argc, VALUE *argv, VALUE self)
             if (!td) {
                 free(g_profiler.samples);
                 g_profiler.samples = NULL;
-                sprof_string_table_free(&g_profiler.string_table);
+                free(g_profiler.frame_pool);
+                g_profiler.frame_pool = NULL;
                 rb_internal_thread_remove_event_hook(g_profiler.thread_hook);
                 g_profiler.thread_hook = NULL;
                 rb_raise(rb_eNoMemError, "sprof: failed to allocate thread data");
@@ -392,7 +427,8 @@ rb_sprof_start(int argc, VALUE *argv, VALUE self)
         g_profiler.thread_hook = NULL;
         free(g_profiler.samples);
         g_profiler.samples = NULL;
-        sprof_string_table_free(&g_profiler.string_table);
+        free(g_profiler.frame_pool);
+        g_profiler.frame_pool = NULL;
         rb_raise(rb_eRuntimeError, "sprof: failed to create timer thread");
     }
 
@@ -433,6 +469,9 @@ rb_sprof_stop(VALUE self)
         }
     }
 
+    /* Build string table by resolving frame VALUEs now */
+    sprof_string_table_init(&g_profiler.string_table);
+
     /* Build result hash */
     result = rb_hash_new();
 
@@ -447,23 +486,30 @@ rb_sprof_stop(VALUE self)
     rb_hash_aset(result, ID2SYM(rb_intern("sampling_count")), SIZET2NUM(g_profiler.sampling_count));
     rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LONG2NUM(g_profiler.sampling_total_ns));
 
-    /* string_table */
-    string_table_ary = rb_ary_new_capa((long)g_profiler.string_table.count);
-    for (i = 0; i < g_profiler.string_table.count; i++) {
-        rb_ary_push(string_table_ary, rb_str_new_cstr(g_profiler.string_table.strings[i]));
-    }
-    rb_hash_aset(result, ID2SYM(rb_intern("string_table")), string_table_ary);
-
     /* samples: array of [frames_array, weight] */
+    /* Resolve raw frame VALUEs to [path_idx, label_idx] via string table */
     samples_ary = rb_ary_new_capa((long)g_profiler.sample_count);
     for (i = 0; i < g_profiler.sample_count; i++) {
         sprof_sample_t *s = &g_profiler.samples[i];
         VALUE frames = rb_ary_new_capa(s->depth);
         for (j = 0; j < s->depth; j++) {
-            VALUE frame = rb_ary_new3(3,
-                INT2NUM(s->frames[j].path_idx),
-                INT2NUM(s->frames[j].label_idx),
-                INT2NUM(s->frames[j].lineno));
+            VALUE fval = g_profiler.frame_pool[s->frame_start + j];
+
+            VALUE path = rb_profile_frame_path(fval);
+            VALUE label = rb_profile_frame_label(fval);
+
+            if (NIL_P(label)) label = rb_profile_frame_method_name(fval);
+            if (NIL_P(path))  path  = rb_profile_frame_classpath(fval);
+
+            const char *path_str = NIL_P(path) ? "" : StringValueCStr(path);
+            const char *label_str = NIL_P(label) ? "" : StringValueCStr(label);
+
+            int pidx = sprof_string_table_intern(&g_profiler.string_table, path_str);
+            int lidx = sprof_string_table_intern(&g_profiler.string_table, label_str);
+
+            VALUE frame = rb_ary_new3(2,
+                INT2NUM(pidx),
+                INT2NUM(lidx));
             rb_ary_push(frames, frame);
         }
         VALUE sample = rb_ary_new3(2, frames, LONG2NUM(s->weight));
@@ -471,9 +517,19 @@ rb_sprof_stop(VALUE self)
     }
     rb_hash_aset(result, ID2SYM(rb_intern("samples")), samples_ary);
 
+    /* string_table */
+    string_table_ary = rb_ary_new_capa((long)g_profiler.string_table.count);
+    for (i = 0; i < g_profiler.string_table.count; i++) {
+        rb_ary_push(string_table_ary, rb_str_new_cstr(g_profiler.string_table.strings[i]));
+    }
+    rb_hash_aset(result, ID2SYM(rb_intern("string_table")), string_table_ary);
+
     /* Cleanup */
     free(g_profiler.samples);
     g_profiler.samples = NULL;
+    free(g_profiler.frame_pool);
+    g_profiler.frame_pool = NULL;
+    g_profiler.frame_pool_count = 0;
     sprof_string_table_free(&g_profiler.string_table);
 
     return result;
@@ -494,4 +550,8 @@ Init_sprof(void)
     memset(&g_profiler, 0, sizeof(g_profiler));
     g_profiler.pj_handle = rb_postponed_job_preregister(0, sprof_sample_job, &g_profiler);
     g_profiler.ts_key = rb_internal_thread_specific_key_create();
+
+    /* TypedData wrapper for GC marking of frame_pool */
+    g_profiler_wrapper = TypedData_Wrap_Struct(rb_cObject, &sprof_profiler_type, &g_profiler);
+    rb_gc_register_address(&g_profiler_wrapper);
 }

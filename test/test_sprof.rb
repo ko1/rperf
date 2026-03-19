@@ -106,6 +106,193 @@ class TestSprof < Test::Unit::TestCase
       "Max weight in second session (#{max_weight2}ns) should not include the gap between sessions"
   end
 
+  # --- Boundary / realloc tests ---
+
+  # Sample buffer initial capacity is 1024.
+  # With 4 threads at 1000Hz, ~4000 samples/sec → crosses boundary in <1s.
+  def test_sample_buffer_realloc
+    Sprof.start(frequency: 1000)
+
+    threads = 4.times.map do
+      Thread.new { 10_000_000.times { 1 + 1 } }
+    end
+    threads.each(&:join)
+
+    data = Sprof.stop
+    assert_not_nil data
+    samples = data[:samples]
+    string_table = data[:string_table]
+
+    # Must have crossed initial capacity of 1024
+    assert_operator samples.size, :>, 1024,
+      "Expected >1024 samples to exercise realloc (got #{samples.size})"
+
+    # Verify all samples have valid data
+    samples.each_with_index do |(frames, weight), i|
+      assert_operator weight, :>, 0, "Sample #{i}: weight should be positive"
+      assert_operator frames.size, :>, 0, "Sample #{i}: should have at least 1 frame"
+      frames.each_with_index do |frame, j|
+        assert_operator frame[0], :>=, 0, "Sample #{i} frame #{j}: invalid path_idx"
+        assert_operator frame[0], :<, string_table.size, "Sample #{i} frame #{j}: path_idx out of range"
+        assert_operator frame[1], :>=, 0, "Sample #{i} frame #{j}: invalid label_idx"
+        assert_operator frame[1], :<, string_table.size, "Sample #{i} frame #{j}: label_idx out of range"
+      end
+    end
+  end
+
+  # Frame pool initial capacity is ~87K frames.
+  # Use deep recursion + many threads to generate lots of frames quickly.
+  def test_frame_pool_realloc
+    Sprof.start(frequency: 1000)
+
+    threads = 8.times.map do
+      Thread.new do
+        # Deep recursion to increase frames per sample
+        deep_recurse(100) { 20_000_000.times { 1 + 1 } }
+      end
+    end
+    threads.each(&:join)
+
+    data = Sprof.stop
+    assert_not_nil data
+    samples = data[:samples]
+    string_table = data[:string_table]
+
+    # Calculate total frames stored
+    total_frames = samples.sum { |frames, _| frames.size }
+    initial_pool = 1024 * 1024 / 8  # ~131072 (VALUE is 8 bytes on 64-bit)
+
+    assert_operator total_frames, :>, initial_pool,
+      "Expected >#{initial_pool} total frames to exercise frame pool realloc (got #{total_frames})"
+
+    # Verify early samples (before realloc) and late samples (after realloc)
+    # both have valid frame data
+    check_targets = [samples.first(10), samples.last(10)].flatten(1)
+    check_targets.each do |frames, weight|
+      assert_operator weight, :>, 0, "weight should be positive"
+      frames.each do |frame|
+        assert_operator frame[0], :>=, 0
+        assert_operator frame[0], :<, string_table.size
+        assert_operator frame[1], :>=, 0
+        assert_operator frame[1], :<, string_table.size
+      end
+    end
+  end
+
+  # Generate deep call stacks via recursion
+  def test_deep_stack
+    Sprof.start(frequency: 1000)
+
+    deep_recurse(200) { 5_000_000.times { 1 + 1 } }
+
+    data = Sprof.stop
+    assert_not_nil data
+    samples = data[:samples]
+    assert_operator samples.size, :>, 0
+
+    max_depth = samples.map { |frames, _| frames.size }.max
+    # The recursive calls + block + test framework should produce deep stacks
+    assert_operator max_depth, :>=, 50,
+      "Expected deep stacks (max depth #{max_depth})"
+
+    # All frame indices should be valid
+    string_table = data[:string_table]
+    samples.each do |frames, weight|
+      assert_operator weight, :>, 0
+      frames.each do |frame|
+        assert_operator frame[0], :>=, 0
+        assert_operator frame[0], :<, string_table.size
+        assert_operator frame[1], :>=, 0
+        assert_operator frame[1], :<, string_table.size
+      end
+    end
+  end
+
+  # Threads created and destroyed during profiling
+  def test_thread_churn
+    Sprof.start(frequency: 1000)
+
+    20.times do
+      threads = 4.times.map do
+        Thread.new { 500_000.times { 1 + 1 } }
+      end
+      threads.each(&:join)
+    end
+
+    data = Sprof.stop
+    assert_not_nil data
+    samples = data[:samples]
+    assert_operator samples.size, :>, 0
+
+    # All weights positive, all frame indices valid
+    string_table = data[:string_table]
+    samples.each do |frames, weight|
+      assert_operator weight, :>, 0
+      frames.each do |frame|
+        assert_operator frame[0], :>=, 0
+        assert_operator frame[0], :<, string_table.size
+        assert_operator frame[1], :>=, 0
+        assert_operator frame[1], :<, string_table.size
+      end
+    end
+  end
+
+  # Restart with threads that survive across sessions
+  def test_restart_with_surviving_thread
+    worker_running = true
+    worker = Thread.new do
+      i = 0
+      i += 1 while worker_running
+    end
+
+    # Session 1
+    Sprof.start(frequency: 1000)
+    5_000_000.times { 1 + 1 }
+    data1 = Sprof.stop
+
+    sleep 0.2
+
+    # Session 2 - surviving worker thread must not carry stale state
+    Sprof.start(frequency: 1000)
+    5_000_000.times { 1 + 1 }
+    data2 = Sprof.stop
+
+    worker_running = false
+    worker.join
+
+    assert_not_nil data1
+    assert_not_nil data2
+    assert_operator data2[:samples].size, :>, 0
+
+    max_weight2 = data2[:samples].map { |_, w| w }.max || 0
+    assert_operator max_weight2, :<, 100_000_000,
+      "Surviving thread's max weight (#{max_weight2}ns) should not include inter-session gap"
+  end
+
+  # Multiple start/stop cycles to check no resource leaks cause crashes
+  def test_repeated_start_stop
+    10.times do |cycle|
+      Sprof.start(frequency: 1000)
+      1_000_000.times { 1 + 1 }
+      data = Sprof.stop
+
+      assert_not_nil data, "Cycle #{cycle}: stop should return data"
+      assert_operator data[:samples].size, :>, 0, "Cycle #{cycle}: should have samples"
+    end
+  end
+
+  private
+
+  def deep_recurse(depth, &block)
+    if depth <= 0
+      block.call
+    else
+      deep_recurse(depth - 1, &block)
+    end
+  end
+
+  # --- End boundary tests ---
+
   def test_pprof_output
     Dir.mktmpdir do |dir|
       path = File.join(dir, "test.pb.gz")
