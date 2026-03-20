@@ -1,7 +1,7 @@
 require "rake/extensiontask"
 require "rake/testtask"
 
-Rake::ExtensionTask.new("sprof") do |ext|
+Rake::ExtensionTask.new("sperf") do |ext|
   ext.lib_dir = "lib"
 end
 

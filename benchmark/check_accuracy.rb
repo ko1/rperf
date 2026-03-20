@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Sprof accuracy benchmark runner
+# Sperf accuracy benchmark runner
 
 require "json"
 require "open3"
@@ -12,7 +12,7 @@ require "optparse"
 scenario_file = File.join(__dir__, "scenarios_mixed.json")
 tolerance = 0.20
 profiling_mode = :cpu
-profiler = "sprof"
+profiler = "sperf"
 frequency = 1000
 cpu_load = false
 verbose = false
@@ -21,7 +21,7 @@ parser = OptionParser.new do |opts|
   opts.banner = "Usage: check_accuracy.rb [options] [scenario_ids...]"
   opts.separator ""
   opts.separator "Examples:"
-  opts.separator "  ruby check_accuracy.rb                        # all scenarios, sprof, cpu mode"
+  opts.separator "  ruby check_accuracy.rb                        # all scenarios, sperf, cpu mode"
   opts.separator "  ruby check_accuracy.rb 0                      # scenario #0 only"
   opts.separator "  ruby check_accuracy.rb 0-4                    # scenarios #0 through #4"
   opts.separator "  ruby check_accuracy.rb -P stackprof -m wall   # stackprof, wall mode"
@@ -39,7 +39,7 @@ parser = OptionParser.new do |opts|
   opts.on("-F", "--frequency HZ", Integer, "Sampling frequency in Hz (default: 1000)") do |v|
     frequency = v
   end
-  opts.on("-P", "--profiler NAME", "Profiler: sprof, stackprof, vernier, pf2 (default: sprof)") do |v|
+  opts.on("-P", "--profiler NAME", "Profiler: sperf, stackprof, vernier, pf2 (default: sperf)") do |v|
     profiler = v
   end
   opts.on("-l", "--load", "Run under CPU load (all cores busy)") do
@@ -103,7 +103,7 @@ selected =
 
 $current_frequency = frequency
 
-puts "=== Sprof Accuracy Check ==="
+puts "=== Sperf Accuracy Check ==="
 puts "File: #{File.basename(scenario_file)}"
 puts "Profiler: #{profiler}"
 puts "Mode: #{profiling_mode}"
@@ -138,10 +138,10 @@ def generate_script_baseline(calls)
   script = +<<~RUBY
     $LOAD_PATH.unshift(File.join(__dir__, "..", "lib"))
     $LOAD_PATH.unshift(File.join(__dir__, "lib"))
-    require "sprof_workload_methods"
+    require "sperf_workload_methods"
     t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
   RUBY
-  calls.each { |name, usec| script << "SprofWorkload.#{name}(#{usec})\n" }
+  calls.each { |name, usec| script << "SperfWorkload.#{name}(#{usec})\n" }
   script << <<~RUBY
     elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
     puts "elapsed_ms=\#{(elapsed * 1000).round(1)}"
@@ -149,24 +149,24 @@ def generate_script_baseline(calls)
   script
 end
 
-def generate_script_sprof(calls, output_path, profiling_mode, freq)
+def generate_script_sperf(calls, output_path, profiling_mode, freq)
   script = +<<~RUBY
     $LOAD_PATH.unshift(File.join(__dir__, "..", "lib"))
     $LOAD_PATH.unshift(File.join(__dir__, "lib"))
-    require "sprof"
-    require "sprof_workload_methods"
+    require "sperf"
+    require "sperf_workload_methods"
     t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    Sprof.start(frequency: #{freq}, mode: :#{profiling_mode})
+    Sperf.start(frequency: #{freq}, mode: :#{profiling_mode})
   RUBY
-  calls.each { |name, usec| script << "SprofWorkload.#{name}(#{usec})\n" }
+  calls.each { |name, usec| script << "SperfWorkload.#{name}(#{usec})\n" }
   script << <<~RUBY
-    data = Sprof.stop
+    data = Sperf.stop
     elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
     puts "elapsed_ms=\#{(elapsed * 1000).round(1)}"
     puts "sampling_count=\#{data[:sampling_count]}"
     puts "sampling_time_ns=\#{data[:sampling_time_ns]}"
-    encoded = Sprof::PProf.encode(data)
-    File.binwrite(#{output_path.inspect}, Sprof.gzip(encoded))
+    encoded = Sperf::PProf.encode(data)
+    File.binwrite(#{output_path.inspect}, Sperf.gzip(encoded))
   RUBY
   script
 end
@@ -177,11 +177,11 @@ def generate_script_stackprof(calls, output_path, profiling_mode, freq)
   script = +<<~RUBY
     $LOAD_PATH.unshift(File.join(__dir__, "lib"))
     require "stackprof"
-    require "sprof_workload_methods"
+    require "sperf_workload_methods"
     t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     StackProf.run(mode: :#{mode}, interval: #{interval_us}, raw: true, out: #{output_path.inspect}) do
   RUBY
-  calls.each { |name, usec| script << "  SprofWorkload.#{name}(#{usec})\n" }
+  calls.each { |name, usec| script << "  SperfWorkload.#{name}(#{usec})\n" }
   script << <<~RUBY
     end
     elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
@@ -196,11 +196,11 @@ def generate_script_vernier(calls, output_path, profiling_mode, freq)
   script = +<<~RUBY
     $LOAD_PATH.unshift(File.join(__dir__, "lib"))
     require "vernier"
-    require "sprof_workload_methods"
+    require "sperf_workload_methods"
     t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     result = Vernier.trace(mode: :#{mode}, interval: #{interval_us}) do
   RUBY
-  calls.each { |name, usec| script << "  SprofWorkload.#{name}(#{usec})\n" }
+  calls.each { |name, usec| script << "  SperfWorkload.#{name}(#{usec})\n" }
   script << <<~RUBY
     end
     elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
@@ -216,11 +216,11 @@ def generate_script_pf2(calls, output_path, profiling_mode, freq)
   script = +<<~RUBY
     $LOAD_PATH.unshift(File.join(__dir__, "lib"))
     require "pf2"
-    require "sprof_workload_methods"
+    require "sperf_workload_methods"
     t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     Pf2.profile(out: #{output_path.inspect}, format: :pprof, time_mode: :#{time_mode}, interval_ms: #{interval_ms}) do
   RUBY
-  calls.each { |name, usec| script << "  SprofWorkload.#{name}(#{usec})\n" }
+  calls.each { |name, usec| script << "  SperfWorkload.#{name}(#{usec})\n" }
   script << <<~RUBY
     end
     elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
@@ -260,7 +260,7 @@ def parse_results_stackprof(output_path, _method_re)
 
   # Parse stackprof --text output:
   #      TOTAL    (pct)     SAMPLES    (pct)     FRAME
-  #        234  (59.2%)          12   (3.0%)     SprofWorkload.rw317
+  #        234  (59.2%)          12   (3.0%)     SperfWorkload.rw317
   # TOTAL = cumulative sample count for the frame (what we want).
   # interval is in microseconds (cpu) or microseconds (wall).
   # Extract interval from the header: Mode: cpu(1000)
@@ -271,7 +271,7 @@ def parse_results_stackprof(output_path, _method_re)
 
   actual_ms = {}
   raw_out.each_line do |line|
-    if line =~ /^\s+(\d+)\s+\(\s*[\d.]+%\)\s+\d+\s+\(\s*[\d.]+%\)\s+SprofWorkload\.((#{$method_prefix_re_global})\d+)\s*$/
+    if line =~ /^\s+(\d+)\s+\(\s*[\d.]+%\)\s+\d+\s+\(\s*[\d.]+%\)\s+SperfWorkload\.((#{$method_prefix_re_global})\d+)\s*$/
       total_samples = $1.to_i
       name = $2
       actual_ms[name] = total_samples * interval_us / 1000.0
@@ -304,8 +304,8 @@ def parse_results_vernier(output_path, _method_re)
       fi = stack_table["frame"][idx]
       funci = frame_table["func"][fi]
       name = strings[func_table["name"][funci]]
-      # Strip "SprofWorkload." prefix if present
-      short = name.sub(/\ASprofWorkload\./, "")
+      # Strip "SperfWorkload." prefix if present
+      short = name.sub(/\ASperfWorkload\./, "")
       unless seen[short]
         cum_time[short] += weight
         seen[short] = true
@@ -325,7 +325,7 @@ failures = []
 
 # Build regex for pprof parsing based on method prefix
 # Matches cum column (4th value column): flat flat% sum% CUM cum% name
-pprof_method_re = /^\s*\S+\s+\S+\s+\S+\s+([\d.]+)(s|ms|us)\s+[\d.]+%\s+(?:SprofWorkload\.)?((#{method_prefix_re})\d+)\s*$/
+pprof_method_re = /^\s*\S+\s+\S+\s+\S+\s+([\d.]+)(s|ms|us)\s+[\d.]+%\s+(?:SperfWorkload\.)?((#{method_prefix_re})\d+)\s*$/
 # For stackprof (needs to be accessible from parse function)
 $method_prefix_re_global = method_prefix_re
 
@@ -379,7 +379,7 @@ selected.each do |scenario|
 
   # Generate test script
   script = case profiler
-           when "sprof"    then generate_script_sprof(calls, output_path, profiling_mode, frequency)
+           when "sperf"    then generate_script_sperf(calls, output_path, profiling_mode, frequency)
            when "stackprof" then generate_script_stackprof(calls, output_path, profiling_mode, frequency)
            when "vernier"  then generate_script_vernier(calls, output_path, profiling_mode, frequency)
            when "pf2"      then generate_script_pf2(calls, output_path, profiling_mode, frequency)
@@ -421,7 +421,7 @@ selected.each do |scenario|
 
   # Parse results
   actual_ms, raw_out = case profiler
-                       when "sprof", "pf2"
+                       when "sperf", "pf2"
                          parse_results_pprof(output_path, pprof_method_re)
                        when "stackprof"
                          parse_results_stackprof(output_path, pprof_method_re)

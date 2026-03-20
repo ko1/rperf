@@ -1,8 +1,8 @@
-require "sprof.so"
+require "sperf.so"
 require "zlib"
 require "stringio"
 
-module Sprof
+module Sperf
   VERSION = "0.1.0"
 
   @verbose = false
@@ -18,7 +18,7 @@ module Sprof
   #   .txt       → text report (human/AI readable flat + cumulative table)
   #   otherwise (.pb.gz etc) → pprof protobuf (gzip compressed)
   def self.start(frequency: 100, mode: :cpu, output: nil, verbose: false, format: nil, stat: false)
-    @verbose = verbose || ENV["SPROF_VERBOSE"] == "1"
+    @verbose = verbose || ENV["SPERF_VERBOSE"] == "1"
     @output = output
     @format = format
     @stat = stat
@@ -104,9 +104,9 @@ module Sprof
     total_ms = total_ns / 1_000_000.0
     avg_us = count > 0 ? total_ns / count / 1000.0 : 0.0
 
-    $stderr.puts "[sprof] mode=#{mode} frequency=#{frequency}Hz"
-    $stderr.puts "[sprof] sampling: #{count} calls, #{format("%.2f", total_ms)}ms total, #{format("%.1f", avg_us)}us/call avg"
-    $stderr.puts "[sprof] samples recorded: #{samples}"
+    $stderr.puts "[sperf] mode=#{mode} frequency=#{frequency}Hz"
+    $stderr.puts "[sperf] sampling: #{count} calls, #{format("%.2f", total_ms)}ms total, #{format("%.1f", avg_us)}us/call avg"
+    $stderr.puts "[sperf] samples recorded: #{samples}"
 
     print_top(data)
   end
@@ -147,13 +147,13 @@ module Sprof
 
   def self.print_top_table(kind, table, total_weight)
     top = table.sort_by { |_, w| -w }.first(TOP_N)
-    $stderr.puts "[sprof] top #{top.size} by #{kind}:"
+    $stderr.puts "[sperf] top #{top.size} by #{kind}:"
     top.each do |key, weight|
       label, path = key
       ms = weight / 1_000_000.0
       pct = total_weight > 0 ? weight * 100.0 / total_weight : 0.0
       loc = path.empty? ? "" : " (#{path})"
-      $stderr.puts format("[sprof]   %8.1fms %5.1f%%  %s%s", ms, pct, label, loc)
+      $stderr.puts format("[sperf]   %8.1fms %5.1f%%  %s%s", ms, pct, label, loc)
     end
   end
 
@@ -164,7 +164,7 @@ module Sprof
     user_ns = (times.utime * 1_000_000_000).to_i
     sys_ns = (times.stime * 1_000_000_000).to_i
 
-    command = ENV["SPROF_STAT_COMMAND"] || "(unknown)"
+    command = ENV["SPERF_STAT_COMMAND"] || "(unknown)"
 
     $stderr.puts
     $stderr.puts " Performance stats for '#{command}':"
@@ -273,19 +273,19 @@ module Sprof
   private_class_method :format_ms
 
   # ENV-based auto-start for CLI usage
-  if ENV["SPROF_ENABLED"] == "1"
-    _sprof_mode_str = ENV["SPROF_MODE"] || "cpu"
-    unless %w[cpu wall].include?(_sprof_mode_str)
-      raise ArgumentError, "SPROF_MODE must be 'cpu' or 'wall', got: #{_sprof_mode_str.inspect}"
+  if ENV["SPERF_ENABLED"] == "1"
+    _sperf_mode_str = ENV["SPERF_MODE"] || "cpu"
+    unless %w[cpu wall].include?(_sperf_mode_str)
+      raise ArgumentError, "SPERF_MODE must be 'cpu' or 'wall', got: #{_sperf_mode_str.inspect}"
     end
-    _sprof_mode = _sprof_mode_str == "wall" ? :wall : :cpu
-    _sprof_format = ENV["SPROF_FORMAT"] ? ENV["SPROF_FORMAT"].to_sym : nil
-    _sprof_stat = ENV["SPROF_STAT"] == "1"
-    start(frequency: (ENV["SPROF_FREQUENCY"] || 100).to_i, mode: _sprof_mode,
-          output: _sprof_stat ? ENV["SPROF_OUTPUT"] : (ENV["SPROF_OUTPUT"] || "sprof.data"),
-          verbose: ENV["SPROF_VERBOSE"] == "1",
-          format: _sprof_format,
-          stat: _sprof_stat)
+    _sperf_mode = _sperf_mode_str == "wall" ? :wall : :cpu
+    _sperf_format = ENV["SPERF_FORMAT"] ? ENV["SPERF_FORMAT"].to_sym : nil
+    _sperf_stat = ENV["SPERF_STAT"] == "1"
+    start(frequency: (ENV["SPERF_FREQUENCY"] || 100).to_i, mode: _sperf_mode,
+          output: _sperf_stat ? ENV["SPERF_OUTPUT"] : (ENV["SPERF_OUTPUT"] || "sperf.data"),
+          verbose: ENV["SPERF_VERBOSE"] == "1",
+          format: _sperf_format,
+          stat: _sperf_stat)
     at_exit { stop }
   end
 

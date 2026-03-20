@@ -1,19 +1,19 @@
 require "test-unit"
-require "sprof"
+require "sperf"
 require "tempfile"
 require "zlib"
 
-class TestSprof < Test::Unit::TestCase
+class TestSperf < Test::Unit::TestCase
   def teardown
     # Ensure profiler is stopped after each test
-    Sprof.stop rescue nil
+    Sperf.stop rescue nil
   end
 
   def test_start_stop
-    Sprof.start(frequency: 100)
+    Sperf.start(frequency: 100)
     # Do some work
     1_000_000.times { 1 + 1 }
-    data = Sprof.stop
+    data = Sperf.stop
 
     assert_kind_of Hash, data
     assert_include data, :samples
@@ -22,9 +22,9 @@ class TestSprof < Test::Unit::TestCase
   end
 
   def test_cpu_bound_weight
-    Sprof.start(frequency: 1000)
+    Sperf.start(frequency: 1000)
     10_000_000.times { 1 + 1 }
-    data = Sprof.stop
+    data = Sperf.stop
 
     assert_not_nil data
     samples = data[:samples]
@@ -41,7 +41,7 @@ class TestSprof < Test::Unit::TestCase
   def test_profile_block
     Dir.mktmpdir do |dir|
       path = File.join(dir, "test.data")
-      Sprof.start(output: path, frequency: 500) do
+      Sperf.start(output: path, frequency: 500) do
         5_000_000.times { 1 + 1 }
       end
 
@@ -58,41 +58,41 @@ class TestSprof < Test::Unit::TestCase
   end
 
   def test_multithread
-    Sprof.start(frequency: 1000)
+    Sperf.start(frequency: 1000)
 
     threads = 4.times.map do
       Thread.new { 5_000_000.times { 1 + 1 } }
     end
     threads.each(&:join)
 
-    data = Sprof.stop
+    data = Sperf.stop
     assert_not_nil data
     assert_operator data[:samples].size, :>, 0, "Should have samples from threads"
   end
 
   def test_double_start_raises
-    Sprof.start(frequency: 100)
-    assert_raise(RuntimeError) { Sprof.start(frequency: 100) }
-    Sprof.stop
+    Sperf.start(frequency: 100)
+    assert_raise(RuntimeError) { Sperf.start(frequency: 100) }
+    Sperf.stop
   end
 
   def test_stop_without_start_returns_nil
-    assert_nil Sprof.stop
+    assert_nil Sperf.stop
   end
 
   def test_restart_clears_thread_state
     # First session
-    Sprof.start(frequency: 1000)
+    Sperf.start(frequency: 1000)
     1_000_000.times { 1 + 1 }
-    data1 = Sprof.stop
+    data1 = Sperf.stop
 
     # Sleep to create a gap between sessions
     sleep 0.2
 
     # Second session - weights should NOT include the 200ms gap
-    Sprof.start(frequency: 1000)
+    Sperf.start(frequency: 1000)
     1_000_000.times { 1 + 1 }
-    data2 = Sprof.stop
+    data2 = Sperf.stop
 
     assert_not_nil data1
     assert_not_nil data2
@@ -110,14 +110,14 @@ class TestSprof < Test::Unit::TestCase
   # Sample buffer initial capacity is 1024.
   # With 4 threads at 1000Hz, ~4000 samples/sec → crosses boundary in <1s.
   def test_sample_buffer_realloc
-    Sprof.start(frequency: 1000)
+    Sperf.start(frequency: 1000)
 
     threads = 4.times.map do
       Thread.new { 10_000_000.times { 1 + 1 } }
     end
     threads.each(&:join)
 
-    data = Sprof.stop
+    data = Sperf.stop
     assert_not_nil data
     samples = data[:samples]
 
@@ -132,7 +132,7 @@ class TestSprof < Test::Unit::TestCase
   # Frame pool initial capacity is ~131K frames (1MB / 8 bytes per VALUE).
   # Use deep recursion + many threads to generate lots of frames quickly.
   def test_frame_pool_realloc
-    Sprof.start(frequency: 1000)
+    Sperf.start(frequency: 1000)
 
     threads = 8.times.map do
       Thread.new do
@@ -141,7 +141,7 @@ class TestSprof < Test::Unit::TestCase
     end
     threads.each(&:join)
 
-    data = Sprof.stop
+    data = Sperf.stop
     assert_not_nil data
     samples = data[:samples]
 
@@ -159,11 +159,11 @@ class TestSprof < Test::Unit::TestCase
 
   # Generate deep call stacks via recursion
   def test_deep_stack
-    Sprof.start(frequency: 1000)
+    Sperf.start(frequency: 1000)
 
     deep_recurse(200) { 5_000_000.times { 1 + 1 } }
 
-    data = Sprof.stop
+    data = Sperf.stop
     assert_not_nil data
     samples = data[:samples]
     assert_operator samples.size, :>, 0
@@ -177,7 +177,7 @@ class TestSprof < Test::Unit::TestCase
 
   # Threads created and destroyed during profiling
   def test_thread_churn
-    Sprof.start(frequency: 1000)
+    Sperf.start(frequency: 1000)
 
     20.times do
       threads = 4.times.map do
@@ -186,7 +186,7 @@ class TestSprof < Test::Unit::TestCase
       threads.each(&:join)
     end
 
-    data = Sprof.stop
+    data = Sperf.stop
     assert_not_nil data
     assert_operator data[:samples].size, :>, 0
     assert_valid_samples(data[:samples])
@@ -201,16 +201,16 @@ class TestSprof < Test::Unit::TestCase
     end
 
     # Session 1
-    Sprof.start(frequency: 1000)
+    Sperf.start(frequency: 1000)
     5_000_000.times { 1 + 1 }
-    data1 = Sprof.stop
+    data1 = Sperf.stop
 
     sleep 0.2
 
     # Session 2 - surviving worker thread must not carry stale state
-    Sprof.start(frequency: 1000)
+    Sperf.start(frequency: 1000)
     5_000_000.times { 1 + 1 }
-    data2 = Sprof.stop
+    data2 = Sperf.stop
 
     worker_running = false
     worker.join
@@ -227,9 +227,9 @@ class TestSprof < Test::Unit::TestCase
   # Multiple start/stop cycles to check no resource leaks cause crashes
   def test_repeated_start_stop
     10.times do |cycle|
-      Sprof.start(frequency: 1000)
+      Sperf.start(frequency: 1000)
       1_000_000.times { 1 + 1 }
-      data = Sprof.stop
+      data = Sperf.stop
 
       assert_not_nil data, "Cycle #{cycle}: stop should return data"
       assert_operator data[:samples].size, :>, 0, "Cycle #{cycle}: should have samples"
@@ -239,7 +239,7 @@ class TestSprof < Test::Unit::TestCase
   # --- GVL event tracking tests ---
 
   def test_gvl_blocked_frames_wall_mode
-    Sprof.start(frequency: 100, mode: :wall)
+    Sperf.start(frequency: 100, mode: :wall)
 
     # sleep releases GVL → triggers SUSPENDED/READY/RESUMED
     threads = 4.times.map do
@@ -247,7 +247,7 @@ class TestSprof < Test::Unit::TestCase
     end
     threads.each(&:join)
 
-    data = Sprof.stop
+    data = Sperf.stop
     assert_not_nil data
 
     labels = data[:samples].flat_map { |frames, _| frames.map { |_, label| label } }
@@ -259,14 +259,14 @@ class TestSprof < Test::Unit::TestCase
   end
 
   def test_gvl_events_cpu_mode_no_synthetic
-    Sprof.start(frequency: 100, mode: :cpu)
+    Sperf.start(frequency: 100, mode: :cpu)
 
     threads = 4.times.map do
       Thread.new { 20.times { sleep 0.002 } }
     end
     threads.each(&:join)
 
-    data = Sprof.stop
+    data = Sperf.stop
     assert_not_nil data
 
     labels = data[:samples].flat_map { |frames, _| frames.map { |_, label| label } }
@@ -277,7 +277,7 @@ class TestSprof < Test::Unit::TestCase
   end
 
   def test_gvl_wait_weight_positive
-    Sprof.start(frequency: 100, mode: :wall)
+    Sperf.start(frequency: 100, mode: :wall)
 
     # Multiple threads contending for GVL
     threads = 4.times.map do
@@ -285,7 +285,7 @@ class TestSprof < Test::Unit::TestCase
     end
     threads.each(&:join)
 
-    data = Sprof.stop
+    data = Sperf.stop
     assert_not_nil data
 
     gvl_samples = data[:samples].select { |frames, _|
@@ -303,15 +303,15 @@ class TestSprof < Test::Unit::TestCase
   def test_c_busy_wait_thread_captured_cpu
     begin
       $LOAD_PATH.unshift(File.expand_path("../benchmark/lib", __dir__))
-      require "sprof_workload_methods"
+      require "sperf_workload_methods"
     rescue LoadError
       omit "benchmark workload not built (cd benchmark && rake compile)"
     end
 
-    Sprof.start(frequency: 1000, mode: :cpu)
-    t = Thread.new { SprofWorkload.cw1(100_000) }  # 100ms C busy-wait
+    Sperf.start(frequency: 1000, mode: :cpu)
+    t = Thread.new { SperfWorkload.cw1(100_000) }  # 100ms C busy-wait
     t.join
-    data = Sprof.stop
+    data = Sperf.stop
 
     total_weight = data[:samples].sum { |_, w| w }
     # cw1 holds GVL with no safepoints; only SUSPENDED captures it.
@@ -322,15 +322,15 @@ class TestSprof < Test::Unit::TestCase
 
   def test_c_busy_wait_thread_captured_wall
     begin
-      require "sprof_workload_methods"
+      require "sperf_workload_methods"
     rescue LoadError
       omit "benchmark workload not built (cd benchmark && rake compile)"
     end
 
-    Sprof.start(frequency: 1000, mode: :wall)
-    t = Thread.new { SprofWorkload.cw1(100_000) }  # 100ms C busy-wait
+    Sperf.start(frequency: 1000, mode: :wall)
+    t = Thread.new { SperfWorkload.cw1(100_000) }  # 100ms C busy-wait
     t.join
-    data = Sprof.stop
+    data = Sperf.stop
 
     total_weight = data[:samples].sum { |_, w| w }
     assert_operator total_weight, :>, 50_000_000,
@@ -340,7 +340,7 @@ class TestSprof < Test::Unit::TestCase
   def test_pprof_output
     Dir.mktmpdir do |dir|
       path = File.join(dir, "test.pb.gz")
-      Sprof.start(output: path, frequency: 500) do
+      Sperf.start(output: path, frequency: 500) do
         5_000_000.times { 1 + 1 }
       end
 
@@ -358,10 +358,10 @@ class TestSprof < Test::Unit::TestCase
   # --- CLI help subcommand test ---
 
   def test_cli_help_subcommand
-    exe = File.expand_path("../exe/sprof", __dir__)
+    exe = File.expand_path("../exe/sperf", __dir__)
     output = IO.popen([RbConfig.ruby, exe, "help"], &:read)
 
-    assert_equal 0, $?.exitstatus, "sprof help should exit 0"
+    assert_equal 0, $?.exitstatus, "sperf help should exit 0"
     assert_include output, "OVERVIEW"
     assert_include output, "CLI USAGE"
     assert_include output, "RUBY API"
@@ -378,9 +378,9 @@ class TestSprof < Test::Unit::TestCase
     old_stderr = $stderr
     $stderr = StringIO.new
 
-    Sprof.start(frequency: 500, mode: :wall, stat: true)
+    Sperf.start(frequency: 500, mode: :wall, stat: true)
     5_000_000.times { 1 + 1 }
-    data = Sprof.stop
+    data = Sperf.stop
 
     output = $stderr.string
     $stderr = old_stderr
@@ -407,15 +407,15 @@ class TestSprof < Test::Unit::TestCase
     # Capture stderr output
     old_stderr = $stderr
     $stderr = StringIO.new
-    ENV["SPROF_STAT_COMMAND"] = "ruby test.rb"
+    ENV["SPERF_STAT_COMMAND"] = "ruby test.rb"
 
-    Sprof.instance_variable_set(:@stat_start_mono,
+    Sperf.instance_variable_set(:@stat_start_mono,
       Process.clock_gettime(Process::CLOCK_MONOTONIC) - 0.2)
-    Sprof.print_stat(data)
+    Sperf.print_stat(data)
 
     output = $stderr.string
     $stderr = old_stderr
-    ENV.delete("SPROF_STAT_COMMAND")
+    ENV.delete("SPERF_STAT_COMMAND")
 
     assert_include output, "Performance stats for 'ruby test.rb'"
     assert_include output, "user"
@@ -446,7 +446,7 @@ class TestSprof < Test::Unit::TestCase
       mode: :cpu,
     }
 
-    result = Sprof::Text.encode(data)
+    result = Sperf::Text.encode(data)
 
     assert_include result, "Total: 3.5ms (cpu)"
     assert_include result, "Samples: 3"
@@ -461,7 +461,7 @@ class TestSprof < Test::Unit::TestCase
   def test_text_output
     Dir.mktmpdir do |dir|
       path = File.join(dir, "profile.txt")
-      Sprof.start(output: path, frequency: 500) do
+      Sperf.start(output: path, frequency: 500) do
         5_000_000.times { 1 + 1 }
       end
 
@@ -478,12 +478,12 @@ class TestSprof < Test::Unit::TestCase
 
   def test_save_text
     Dir.mktmpdir do |dir|
-      data = Sprof.start(frequency: 500) do
+      data = Sperf.start(frequency: 500) do
         5_000_000.times { 1 + 1 }
       end
 
       path = File.join(dir, "report.dat")
-      Sprof.save(path, data, format: :text)
+      Sperf.save(path, data, format: :text)
 
       content = File.read(path)
       assert_include content, "Total:"
@@ -494,7 +494,7 @@ class TestSprof < Test::Unit::TestCase
 
   def test_text_encode_empty
     data = { samples: [], frequency: 100, mode: :cpu }
-    result = Sprof::Text.encode(data)
+    result = Sperf::Text.encode(data)
     assert_equal "No samples recorded.\n", result
   end
 
@@ -511,7 +511,7 @@ class TestSprof < Test::Unit::TestCase
       mode: :cpu,
     }
 
-    result = Sprof::Collapsed.encode(data)
+    result = Sperf::Collapsed.encode(data)
     lines = result.strip.split("\n")
 
     assert_equal 2, lines.size
@@ -530,7 +530,7 @@ class TestSprof < Test::Unit::TestCase
   def test_collapsed_output
     Dir.mktmpdir do |dir|
       path = File.join(dir, "test.collapsed")
-      Sprof.start(output: path, frequency: 500) do
+      Sperf.start(output: path, frequency: 500) do
         5_000_000.times { 1 + 1 }
       end
 
@@ -556,12 +556,12 @@ class TestSprof < Test::Unit::TestCase
   def test_save_collapsed
     Dir.mktmpdir do |dir|
       # Collect some data
-      data = Sprof.start(frequency: 500) do
+      data = Sperf.start(frequency: 500) do
         5_000_000.times { 1 + 1 }
       end
 
       path = File.join(dir, "test.txt")
-      Sprof.save(path, data, format: :collapsed)
+      Sperf.save(path, data, format: :collapsed)
 
       content = File.read(path)
       lines = content.strip.split("\n")

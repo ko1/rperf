@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Unified scenario generator for sprof accuracy benchmarks.
+# Unified scenario generator for sperf accuracy benchmarks.
 #
 # Usage:
 #   ruby generate_scenarios.rb                        # default: mixed, 10 scenarios

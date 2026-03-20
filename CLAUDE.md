@@ -1,8 +1,8 @@
-# sprof - Development Guide
+# sperf - Development Guide
 
 ## Project Overview
 
-sprof is a safepoint-based sampling profiler for Ruby. It uses actual time deltas (not uniform sample counts) as weights to correct safepoint bias. Output is pprof protobuf format.
+sperf is a safepoint-based sampling profiler for Ruby. It uses actual time deltas (not uniform sample counts) as weights to correct safepoint bias. Output is pprof protobuf format.
 
 - Linux only (uses Linux kernel ABI for per-thread CPU clocks)
 - Requires Ruby >= 4.0.0
@@ -10,10 +10,10 @@ sprof is a safepoint-based sampling profiler for Ruby. It uses actual time delta
 ## Architecture
 
 ```
-ext/sprof/sprof.c    -- C extension: timer thread, GVL/GC event hooks, sampling
-lib/sprof.rb         -- Ruby API: start/stop, pprof protobuf encoder
-exe/sprof            -- CLI wrapper (sets ENV, exec's the target command)
-test/test_sprof.rb   -- Unit tests
+ext/sperf/sperf.c    -- C extension: timer thread, GVL/GC event hooks, sampling
+lib/sperf.rb         -- Ruby API: start/stop, pprof protobuf encoder
+exe/sperf            -- CLI wrapper (sets ENV, exec's the target command)
+test/test_sperf.rb   -- Unit tests
 benchmark/           -- Accuracy benchmark suite (see benchmark/README.md)
 ```
 
@@ -29,7 +29,7 @@ rake test             # Run unit tests
 ```bash
 cd benchmark
 rake compile          # Build benchmark workload C extension
-ruby check_accuracy.rb                        # Default: sprof, mixed scenarios, cpu mode
+ruby check_accuracy.rb                        # Default: sperf, mixed scenarios, cpu mode
 ruby check_accuracy.rb -m wall                # Wall mode
 ruby check_accuracy.rb -P stackprof -m cpu    # Compare with other profilers
 ruby check_accuracy.rb -l -m wall             # Run under CPU load
@@ -44,18 +44,18 @@ See `benchmark/README.md` for full documentation.
 - **GVL event tracking** (wall mode): Hooks SUSPENDED/READY/RESUMED thread events. SUSPENDED captures backtrace + normal sample. RESUMED records `[GVL blocked]` (off-GVL time) and `[GVL wait]` (GVL contention time) as synthetic frames reusing the saved stack.
 - **GC phase tracking**: Hooks GC_ENTER/GC_EXIT events. Records `[GC marking]` and `[GC sweeping]` samples with wall time weight, attributed to the stack that triggered GC.
 - **Deferred string resolution**: Sampling stores raw frame VALUEs in a pool. String resolution (`rb_profile_frame_full_label`, `rb_profile_frame_path`) happens at stop time, not during sampling. This keeps the hot path allocation-free.
-- **No protobuf dependency**: pprof format is encoded with a hand-written encoder in `lib/sprof.rb` (`Sprof::PProf.encode`). String table is built in Ruby at encode time.
+- **No protobuf dependency**: pprof format is encoded with a hand-written encoder in `lib/sperf.rb` (`Sperf::PProf.encode`). String table is built in Ruby at encode time.
 - **Two clock modes**: cpu (per-thread `clock_gettime` via Linux TID-based clockid) and wall (`CLOCK_MONOTONIC`).
 - **Method-level profiling**: No line numbers. Frame labels use `rb_profile_frame_full_label` for qualified names (e.g., `Integer#times`).
 
 ## Coding Notes
 
-- The C extension uses a single global `sprof_profiler_t`. Only one profiling session at a time.
-- C extension exports `_c_start`/`_c_stop`; Ruby wraps them as `Sprof.start`/`Sprof.stop` with output/verbose/block support.
+- The C extension uses a single global `sperf_profiler_t`. Only one profiling session at a time.
+- C extension exports `_c_start`/`_c_stop`; Ruby wraps them as `Sperf.start`/`Sperf.stop` with output/verbose/block support.
 - Frame pool (`VALUE *frame_pool`, initial ~1MB) stores raw frame VALUEs from `rb_profile_thread_frames`. A TypedData wrapper with `dmark` using `rb_gc_mark_locations` keeps them alive across GC.
 - `rb_profile_thread_frames` writes directly into the frame pool (no intermediate buffer).
 - Sample buffer and frame pool both grow by 2x on demand via `realloc`.
-- Per-thread data (`sprof_thread_data_t`) is created via `sprof_thread_data_create()` which caches the native TID via `syscall(SYS_gettid)` to avoid per-sample syscalls.
+- Per-thread data (`sperf_thread_data_t`) is created via `sperf_thread_data_create()` which caches the native TID via `syscall(SYS_gettid)` to avoid per-sample syscalls.
 - Thread exit cleanup is handled by `RUBY_INTERNAL_THREAD_EVENT_EXITED` hook. Stop cleans up all live threads' thread-specific data.
 - GVL blocked/wait synthetic frames are only recorded in wall mode (CPU time doesn't advance while off-GVL).
 - GC samples always use wall time regardless of mode.

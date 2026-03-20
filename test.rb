@@ -8,8 +8,8 @@
 #   csleep(n) — nanosleep with GVL held, no CPU consumed
 #   cwait(n)  — nanosleep with GVL released, no CPU consumed
 
-require "sprof"
-require "sprof_workload_methods"
+require "sperf"
+require "sperf_workload_methods"
 
 # Each call is 10ms (10_000 usec). 100 calls total, split across 5 threads.
 # Shuffle order within each thread for variety.
@@ -37,7 +37,7 @@ def compute_expected(plans, usec)
   plans.each do |plan|
     plan.each do |type, method_name|
       ms = usec / 1000.0
-      name = "SprofWorkload.#{method_name}"
+      name = "SperfWorkload.#{method_name}"
       case type
       when :cw
         cpu_ms[name] += ms
@@ -58,18 +58,18 @@ end
 expected = compute_expected(thread_plans, USEC)
 
 def run_scenario(thread_plans, usec, mode)
-  Sprof.start(frequency: 1000, mode: mode, verbose: true)
+  Sperf.start(frequency: 1000, mode: mode, verbose: true)
 
   threads = thread_plans.map do |plan|
     Thread.new do
       plan.each do |_type, method_name|
-        SprofWorkload.send(method_name, usec)
+        SperfWorkload.send(method_name, usec)
       end
     end
   end
   threads.each(&:join)
 
-  Sprof.stop
+  Sperf.stop
 end
 
 def print_results(data, expected_flat, expected_blocked, label)
@@ -204,13 +204,13 @@ data_cpu = run_scenario(thread_plans, USEC, :cpu)
 print_results(data_cpu, expected[:cpu], nil, "cpu")
 
 # Save pprof files
-dir = "/tmp/claude-1000/sprof-demo"
+dir = "/tmp/claude-1000/sperf-demo"
 Dir.mkdir(dir) unless Dir.exist?(dir)
 
 [[:wall, data_wall], [:cpu, data_cpu]].each do |mode, data|
   path = File.join(dir, "#{mode}.pb.gz")
-  encoded = Sprof::PProf.encode(data)
-  File.binwrite(path, Sprof.gzip(encoded))
+  encoded = Sperf::PProf.encode(data)
+  File.binwrite(path, Sperf.gzip(encoded))
   puts
   puts "Saved #{mode} profile: #{path}"
   puts "  go tool pprof -http=:8080 #{path}"

@@ -5,7 +5,7 @@
 # Creates garbage in different methods to see which code triggers GC.
 # Expected: [GC marking] samples attributed to the allocating methods.
 
-require "sprof"
+require "sperf"
 
 def alloc_strings(n)
   n.times { "hello" * 50 }
@@ -19,7 +19,7 @@ def alloc_hashes(n)
   n.times { { a: 1, b: 2, c: 3, d: 4, e: 5 } }
 end
 
-data = Sprof.start(frequency: 1000, mode: :wall, verbose: true, output: 'sprof.data') do
+data = Sperf.start(frequency: 1000, mode: :wall, verbose: true, output: 'sperf.data') do
   5.times do
     alloc_strings(200_000)
     alloc_arrays(200_000)

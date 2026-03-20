@@ -2,22 +2,23 @@
 require "optparse"
 
 HELP_TEXT = <<'HELP'
-sprof - safepoint-based sampling profiler for Ruby
+sperf - safepoint-based sampling performance profiler for Ruby
 
 OVERVIEW
 
-  sprof profiles Ruby programs by sampling at safepoints and using actual
+  sperf profiles Ruby programs by sampling at safepoints and using actual
   time deltas (nanoseconds) as weights to correct safepoint bias.
   Linux only. Requires Ruby >= 4.0.0.
 
 CLI USAGE
 
-  sprof record [options] command [args...]
-  sprof stat [options] command [args...]
-  sprof help
+  sperf record [options] command [args...]
+  sperf stat [options] command [args...]
+  sperf report [options] [file]
+  sperf help
 
   record: Profile and save to file.
-    -o, --output PATH       Output file (default: sprof.data)
+    -o, --output PATH       Output file (default: sperf.data)
     -f, --frequency HZ      Sampling frequency in Hz (default: 100)
     -m, --mode MODE         cpu or wall (default: cpu)
     --format FORMAT         pprof, collapsed, or text (default: auto from extension)
@@ -32,42 +33,50 @@ CLI USAGE
     Shows: user/sys/real time, time breakdown (CPU execution, GVL blocked,
     GVL wait, GC marking, GC sweeping), and top 5 hot functions.
 
+  report: Open pprof profile with go tool pprof. Requires Go.
+    --top                   Print top functions by flat time
+    --text                  Print text report
+    Default (no flag): opens interactive web UI in browser.
+    Default file: sperf.data
+
   Examples:
-    sprof record ruby app.rb
-    sprof record -o profile.pb.gz ruby app.rb
-    sprof record -m wall -f 500 -o profile.pb.gz ruby server.rb
-    sprof record -o profile.collapsed ruby app.rb
-    sprof record -o profile.txt ruby app.rb
-    sprof stat ruby app.rb
-    sprof stat -o profile.pb.gz ruby app.rb
+    sperf record ruby app.rb
+    sperf record -o profile.pb.gz ruby app.rb
+    sperf record -m wall -f 500 -o profile.pb.gz ruby server.rb
+    sperf record -o profile.collapsed ruby app.rb
+    sperf record -o profile.txt ruby app.rb
+    sperf stat ruby app.rb
+    sperf stat -o profile.pb.gz ruby app.rb
+    sperf report
+    sperf report --top profile.pb.gz
 
 RUBY API
 
-  require "sprof"
+  require "sperf"
 
   # Block form (recommended) — profiles the block and writes to file
-  Sprof.start(output: "profile.pb.gz", frequency: 500, mode: :cpu) do
+  Sperf.start(output: "profile.pb.gz", frequency: 500, mode: :cpu) do
     # code to profile
   end
 
   # Manual start/stop — returns data hash for programmatic use
-  Sprof.start(frequency: 1000, mode: :wall)
+  Sperf.start(frequency: 1000, mode: :wall)
   # ... code to profile ...
-  data = Sprof.stop
+  data = Sperf.stop
 
   # Save data to file later
-  Sprof.save("profile.pb.gz", data)
-  Sprof.save("profile.collapsed", data)
-  Sprof.save("profile.txt", data)
+  Sperf.save("profile.pb.gz", data)
+  Sperf.save("profile.collapsed", data)
+  Sperf.save("profile.txt", data)
 
-  Sprof.start parameters:
+  Sperf.start parameters:
     frequency:  Sampling frequency in Hz (Integer, default: 100)
     mode:       :cpu or :wall (Symbol, default: :cpu)
     output:     File path to write on stop (String or nil)
     verbose:    Print statistics to stderr (true/false, default: false)
     format:     :pprof, :collapsed, :text, or nil for auto-detect (Symbol or nil)
 
-  Sprof.stop return value:
+  Sperf.stop return value:
     nil if profiler was not running; otherwise a Hash:
       { mode: :cpu,             # or :wall
         frequency: 500,
@@ -78,7 +87,7 @@ RUBY API
           ...                   #   weight: Integer (nanoseconds)
         ] }
 
-  Sprof.save(path, data, format: nil)
+  Sperf.save(path, data, format: nil)
     Writes data to path. format: :pprof, :collapsed, or :text.
     nil auto-detects from extension.
 
@@ -131,7 +140,7 @@ OUTPUT FORMATS
 
 SYNTHETIC FRAMES
 
-  In wall mode, sprof adds synthetic frames that represent non-CPU time:
+  In wall mode, sperf adds synthetic frames that represent non-CPU time:
 
   [GVL blocked]   Time the thread spent off-GVL (I/O, sleep, C extension
                    releasing GVL). Attributed to the stack at SUSPENDED.
@@ -208,12 +217,12 @@ READING PPROF PROGRAMMATICALLY
 ENVIRONMENT VARIABLES
 
   Used internally by the CLI to pass options to the auto-started profiler:
-    SPROF_ENABLED=1       Enable auto-start on require
-    SPROF_OUTPUT=path     Output file path
-    SPROF_FREQUENCY=hz    Sampling frequency
-    SPROF_MODE=cpu|wall   Profiling mode
-    SPROF_FORMAT=fmt      pprof, collapsed, or text
-    SPROF_VERBOSE=1       Print statistics
+    SPERF_ENABLED=1       Enable auto-start on require
+    SPERF_OUTPUT=path     Output file path
+    SPERF_FREQUENCY=hz    Sampling frequency
+    SPERF_MODE=cpu|wall   Profiling mode
+    SPERF_FORMAT=fmt      pprof, collapsed, or text
+    SPERF_VERBOSE=1       Print statistics
 
 TIPS
 
@@ -224,9 +233,10 @@ TIPS
   - The verbose flag (-v) shows sampling overhead and top functions on stderr.
 HELP
 
-USAGE = "Usage: sprof record [options] command [args...]\n" \
-       "       sprof stat [options] command [args...]\n" \
-       "       sprof help\n"
+USAGE = "Usage: sperf record [options] command [args...]\n" \
+       "       sperf stat [options] command [args...]\n" \
+       "       sperf report [options] [file]\n" \
+       "       sperf help\n"
 
 subcommand = ARGV.shift
 
@@ -234,6 +244,59 @@ case subcommand
 when "help"
   puts HELP_TEXT
   exit
+when "report"
+  # sperf report: wrapper around go tool pprof
+  report_mode = :http  # default: open in browser
+  report_file = nil
+
+  report_parser = OptionParser.new do |opts|
+    opts.banner = "Usage: sperf report [options] [file]\n" \
+                  "       Opens pprof profile in browser (default) or prints summary.\n" \
+                  "       Default file: sperf.data"
+
+    opts.on("--top", "Print top functions by flat time") do
+      report_mode = :top
+    end
+
+    opts.on("--text", "Print text report") do
+      report_mode = :text
+    end
+
+    opts.on("-h", "--help", "Show this help") do
+      puts opts
+      exit
+    end
+  end
+
+  begin
+    report_parser.order!(ARGV)
+  rescue OptionParser::InvalidOption => e
+    $stderr.puts e.message
+    $stderr.puts report_parser
+    exit 1
+  end
+
+  report_file = ARGV.shift || "sperf.data"
+
+  unless File.exist?(report_file)
+    $stderr.puts "File not found: #{report_file}"
+    exit 1
+  end
+
+  unless system("go", "version", out: File::NULL, err: File::NULL)
+    $stderr.puts "'go' command not found. Install Go to use 'sperf report'."
+    $stderr.puts "  https://go.dev/dl/"
+    exit 1
+  end
+
+  case report_mode
+  when :top
+    exec("go", "tool", "pprof", "-top", report_file)
+  when :text
+    exec("go", "tool", "pprof", "-text", report_file)
+  else
+    exec("go", "tool", "pprof", "-http=:0", report_file)
+  end
 when "record", "stat"
   # continue below
 else
@@ -242,7 +305,7 @@ else
   exit 1
 end
 
-output = (subcommand == "stat") ? nil : "sprof.data"
+output = (subcommand == "stat") ? nil : "sperf.data"
 frequency = 100
 mode = (subcommand == "stat") ? "wall" : "cpu"
 format = nil
@@ -251,7 +314,7 @@ verbose = false
 parser = OptionParser.new do |opts|
   opts.banner = USAGE
 
-  opts.on("-o", "--output PATH", "Output file#{subcommand == 'stat' ? ' (default: none)' : ' (default: sprof.data)'}") do |v|
+  opts.on("-o", "--output PATH", "Output file#{subcommand == 'stat' ? ' (default: none)' : ' (default: sperf.data)'}") do |v|
     output = v
   end
 
@@ -277,7 +340,7 @@ parser = OptionParser.new do |opts|
   opts.on("-h", "--help", "Show this help") do
     puts opts
     puts
-    puts "Run 'sprof help' for full documentation (modes, formats, diagnostics guide, etc.)"
+    puts "Run 'sperf help' for full documentation (modes, formats, diagnostics guide, etc.)"
     exit
   end
 end
@@ -296,20 +359,20 @@ if ARGV.empty?
   exit 1
 end
 
-# Add lib dir to RUBYLIB so -rsprof can find the extension
+# Add lib dir to RUBYLIB so -rsperf can find the extension
 lib_dir = File.expand_path("../lib", __dir__)
 ENV["RUBYLIB"] = [lib_dir, ENV["RUBYLIB"]].compact.join(File::PATH_SEPARATOR)
-ENV["RUBYOPT"] = "-rsprof #{ENV['RUBYOPT']}".strip
-ENV["SPROF_ENABLED"] = "1"
-ENV["SPROF_OUTPUT"] = output if output
-ENV["SPROF_FREQUENCY"] = frequency.to_s
-ENV["SPROF_MODE"] = mode
-ENV["SPROF_FORMAT"] = format if format
-ENV["SPROF_VERBOSE"] = "1" if verbose
+ENV["RUBYOPT"] = "-rsperf #{ENV['RUBYOPT']}".strip
+ENV["SPERF_ENABLED"] = "1"
+ENV["SPERF_OUTPUT"] = output if output
+ENV["SPERF_FREQUENCY"] = frequency.to_s
+ENV["SPERF_MODE"] = mode
+ENV["SPERF_FORMAT"] = format if format
+ENV["SPERF_VERBOSE"] = "1" if verbose
 
 if subcommand == "stat"
-  ENV["SPROF_STAT"] = "1"
-  ENV["SPROF_STAT_COMMAND"] = ARGV.join(" ")
+  ENV["SPERF_STAT"] = "1"
+  ENV["SPERF_STAT_COMMAND"] = ARGV.join(" ")
 end
 
 exec(*ARGV)
