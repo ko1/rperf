@@ -6,6 +6,8 @@
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 #define SPROF_MAX_STACK_DEPTH 512
 #define SPROF_INITIAL_SAMPLES 1024
@@ -13,14 +15,27 @@
 
 /* ---- Data structures ---- */
 
+enum sprof_sample_type {
+    SPROF_SAMPLE_NORMAL      = 0,
+    SPROF_SAMPLE_GVL_BLOCKED = 1,  /* off-GVL: SUSPENDED → READY */
+    SPROF_SAMPLE_GVL_WAIT    = 2,  /* GVL wait: READY → RESUMED */
+};
+
 typedef struct sprof_sample {
     int depth;
     size_t frame_start; /* index into frame_pool */
     int64_t weight;
+    int type;           /* sprof_sample_type */
 } sprof_sample_t;
 
 typedef struct sprof_thread_data {
     int64_t prev_cpu_ns;
+    int64_t prev_wall_ns;
+    /* GVL event tracking */
+    int64_t suspended_at_ns;        /* wall time at SUSPENDED */
+    int64_t ready_at_ns;            /* wall time at READY */
+    size_t suspended_frame_start;   /* saved stack in frame_pool */
+    int suspended_frame_depth;      /* saved stack depth */
 } sprof_thread_data_t;
 
 typedef struct sprof_profiler {
@@ -44,7 +59,6 @@ typedef struct sprof_profiler {
 
 static sprof_profiler_t g_profiler;
 static VALUE g_profiler_wrapper = Qnil;
-static ID id_list, id_native_thread_id;
 
 /* ---- TypedData for GC marking of frame_pool ---- */
 
@@ -88,6 +102,20 @@ sprof_wall_time_ns(void)
     return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }
 
+/* ---- Get current thread's time based on profiler mode ---- */
+
+/* Uses syscall(SYS_gettid) to avoid rb_funcall — safe in hook contexts */
+static int64_t
+sprof_current_time_ns(sprof_profiler_t *prof)
+{
+    if (prof->mode == 0) {
+        pid_t tid = (pid_t)syscall(SYS_gettid);
+        return sprof_cpu_time_ns(tid);
+    } else {
+        return sprof_wall_time_ns();
+    }
+}
+
 /* ---- Sample buffer ---- */
 
 /* Returns 0 on success, -1 on allocation failure */
@@ -124,13 +152,115 @@ sprof_ensure_frame_pool_capacity(sprof_profiler_t *prof, int needed)
     return 0;
 }
 
-/* ---- Thread event hook ---- */
+/* ---- Record a sample ---- */
 
 static void
-sprof_thread_exit_hook(rb_event_flag_t event, const rb_internal_thread_event_data_t *data, void *user_data)
+sprof_record_sample(sprof_profiler_t *prof, size_t frame_start, int depth,
+                    int64_t weight, int type)
 {
-    sprof_profiler_t *prof = (sprof_profiler_t *)user_data;
-    VALUE thread = data->thread;
+    if (weight <= 0) return;
+    if (sprof_ensure_sample_capacity(prof) < 0) return;
+
+    sprof_sample_t *sample = &prof->samples[prof->sample_count];
+    sample->depth = depth;
+    sample->frame_start = frame_start;
+    sample->weight = weight;
+    sample->type = type;
+    prof->sample_count++;
+}
+
+/* ---- Thread event hooks ---- */
+
+static void
+sprof_handle_suspended(sprof_profiler_t *prof, VALUE thread)
+{
+    /* Has GVL — safe to call Ruby APIs */
+    int64_t time_now = sprof_current_time_ns(prof);
+    int64_t wall_now = sprof_wall_time_ns();
+    if (time_now < 0) return;
+
+    sprof_thread_data_t *td = (sprof_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
+    int is_first = 0;
+
+    if (td == NULL) {
+        td = (sprof_thread_data_t *)calloc(1, sizeof(sprof_thread_data_t));
+        if (!td) return;
+        rb_internal_thread_specific_set(thread, prof->ts_key, td);
+        td->prev_cpu_ns = time_now;
+        td->prev_wall_ns = wall_now;
+        is_first = 1;
+    }
+
+    /* Capture backtrace into frame_pool */
+    if (sprof_ensure_frame_pool_capacity(prof, SPROF_MAX_STACK_DEPTH) < 0) return;
+    size_t frame_start = prof->frame_pool_count;
+    int depth = rb_profile_thread_frames(thread, 0, SPROF_MAX_STACK_DEPTH,
+                                         &prof->frame_pool[frame_start], NULL);
+    if (depth <= 0) return;
+    prof->frame_pool_count += depth;
+
+    /* Record normal sample (skip if first time — no prev_time) */
+    if (!is_first) {
+        int64_t weight = time_now - td->prev_cpu_ns;
+        sprof_record_sample(prof, frame_start, depth, weight, SPROF_SAMPLE_NORMAL);
+    }
+
+    /* Save stack and timestamp for READY/RESUMED */
+    td->suspended_at_ns = wall_now;
+    td->suspended_frame_start = frame_start;
+    td->suspended_frame_depth = depth;
+    td->prev_cpu_ns = time_now;
+    td->prev_wall_ns = wall_now;
+}
+
+static void
+sprof_handle_ready(sprof_profiler_t *prof, VALUE thread)
+{
+    /* May NOT have GVL — only simple C operations allowed */
+    sprof_thread_data_t *td = (sprof_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
+    if (!td) return;
+
+    td->ready_at_ns = sprof_wall_time_ns();
+}
+
+static void
+sprof_handle_resumed(sprof_profiler_t *prof, VALUE thread)
+{
+    /* Has GVL */
+    sprof_thread_data_t *td = (sprof_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
+    if (!td) return;
+
+    int64_t wall_now = sprof_wall_time_ns();
+
+    /* Record GVL blocked/wait samples (wall mode only) */
+    if (prof->mode == 1 && td->suspended_frame_depth > 0) {
+        if (td->ready_at_ns > 0 && td->ready_at_ns > td->suspended_at_ns) {
+            int64_t blocked_ns = td->ready_at_ns - td->suspended_at_ns;
+            sprof_record_sample(prof, td->suspended_frame_start,
+                                td->suspended_frame_depth, blocked_ns,
+                                SPROF_SAMPLE_GVL_BLOCKED);
+        }
+        if (td->ready_at_ns > 0 && wall_now > td->ready_at_ns) {
+            int64_t wait_ns = wall_now - td->ready_at_ns;
+            sprof_record_sample(prof, td->suspended_frame_start,
+                                td->suspended_frame_depth, wait_ns,
+                                SPROF_SAMPLE_GVL_WAIT);
+        }
+    }
+
+    /* Reset prev times to current — next timer sample measures from resume */
+    int64_t time_now = sprof_current_time_ns(prof);
+    if (time_now >= 0) td->prev_cpu_ns = time_now;
+    td->prev_wall_ns = wall_now;
+
+    /* Clear suspended state */
+    td->suspended_frame_depth = 0;
+    td->ready_at_ns = 0;
+}
+
+static void
+sprof_handle_exited(sprof_profiler_t *prof, VALUE thread)
+{
     sprof_thread_data_t *td = (sprof_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
     if (td) {
         free(td);
@@ -138,14 +268,30 @@ sprof_thread_exit_hook(rb_event_flag_t event, const rb_internal_thread_event_dat
     }
 }
 
-/* ---- Sampling callback (postponed job) ---- */
+static void
+sprof_thread_event_hook(rb_event_flag_t event, const rb_internal_thread_event_data_t *data, void *user_data)
+{
+    sprof_profiler_t *prof = (sprof_profiler_t *)user_data;
+    if (!prof->running) return;
+
+    VALUE thread = data->thread;
+
+    if (event & RUBY_INTERNAL_THREAD_EVENT_SUSPENDED)
+        sprof_handle_suspended(prof, thread);
+    else if (event & RUBY_INTERNAL_THREAD_EVENT_READY)
+        sprof_handle_ready(prof, thread);
+    else if (event & RUBY_INTERNAL_THREAD_EVENT_RESUMED)
+        sprof_handle_resumed(prof, thread);
+    else if (event & RUBY_INTERNAL_THREAD_EVENT_EXITED)
+        sprof_handle_exited(prof, thread);
+}
+
+/* ---- Sampling callback (postponed job) — current thread only ---- */
 
 static void
 sprof_sample_job(void *arg)
 {
     sprof_profiler_t *prof = (sprof_profiler_t *)arg;
-    VALUE threads, thread;
-    long i, thread_count;
 
     if (!prof->running) return;
 
@@ -153,65 +299,37 @@ sprof_sample_job(void *arg)
     struct timespec ts_start, ts_end;
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts_start);
 
-    /* For wall mode, get wall time once (shared across all threads) */
-    int64_t wall_now = 0;
-    if (prof->mode == 1) {
-        wall_now = sprof_wall_time_ns();
-    }
+    VALUE thread = rb_thread_current();
+    int64_t time_now = sprof_current_time_ns(prof);
+    if (time_now < 0) return;
 
-    threads = rb_funcall(rb_cThread, id_list, 0);
-    thread_count = RARRAY_LEN(threads);
-
-    for (i = 0; i < thread_count; i++) {
-        thread = RARRAY_AREF(threads, i);
-
-        int64_t time_now;
-
-        if (prof->mode == 0) {
-            /* CPU mode: per-thread CPU time */
-            VALUE tid_val = rb_funcall(thread, id_native_thread_id, 0);
-            if (NIL_P(tid_val)) continue;
-            pid_t tid = (pid_t)NUM2INT(tid_val);
-            time_now = sprof_cpu_time_ns(tid);
-            if (time_now < 0) continue;
-        } else {
-            /* Wall mode: monotonic clock */
-            time_now = wall_now;
-        }
-
-        /* Get/create per-thread data */
-        sprof_thread_data_t *td = (sprof_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
-        if (td == NULL) {
-            td = (sprof_thread_data_t *)calloc(1, sizeof(sprof_thread_data_t));
-            if (!td) continue; /* allocation failed, skip this thread */
-            rb_internal_thread_specific_set(thread, prof->ts_key, td);
-            td->prev_cpu_ns = time_now;
-            continue; /* Skip first sample for this thread */
-        }
-
-        int64_t weight = time_now - td->prev_cpu_ns;
+    /* Get/create per-thread data */
+    sprof_thread_data_t *td = (sprof_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
+    if (td == NULL) {
+        td = (sprof_thread_data_t *)calloc(1, sizeof(sprof_thread_data_t));
+        if (!td) return;
+        rb_internal_thread_specific_set(thread, prof->ts_key, td);
         td->prev_cpu_ns = time_now;
-
-        if (weight <= 0) continue;
-
-        /* Ensure capacity for sample and max possible frames */
-        if (sprof_ensure_sample_capacity(prof) < 0) continue;
-        if (sprof_ensure_frame_pool_capacity(prof, SPROF_MAX_STACK_DEPTH) < 0) continue;
-
-        /* Get backtrace directly into frame_pool */
-        size_t frame_start = prof->frame_pool_count;
-        int depth = rb_profile_thread_frames(thread, 0, SPROF_MAX_STACK_DEPTH,
-                                             &prof->frame_pool[frame_start], NULL);
-        if (depth <= 0) continue;
-
-        /* Record sample */
-        sprof_sample_t *sample = &prof->samples[prof->sample_count];
-        sample->depth = depth;
-        sample->frame_start = frame_start;
-        sample->weight = weight;
-        prof->frame_pool_count += depth;
-        prof->sample_count++;
+        td->prev_wall_ns = sprof_wall_time_ns();
+        return; /* Skip first sample for this thread */
     }
+
+    int64_t weight = time_now - td->prev_cpu_ns;
+    td->prev_cpu_ns = time_now;
+    td->prev_wall_ns = sprof_wall_time_ns();
+
+    if (weight <= 0) return;
+
+    /* Capture backtrace and record sample */
+    if (sprof_ensure_frame_pool_capacity(prof, SPROF_MAX_STACK_DEPTH) < 0) return;
+
+    size_t frame_start = prof->frame_pool_count;
+    int depth = rb_profile_thread_frames(thread, 0, SPROF_MAX_STACK_DEPTH,
+                                         &prof->frame_pool[frame_start], NULL);
+    if (depth <= 0) return;
+    prof->frame_pool_count += depth;
+
+    sprof_record_sample(prof, frame_start, depth, weight, SPROF_SAMPLE_NORMAL);
 
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts_end);
     prof->sampling_count++;
@@ -310,25 +428,19 @@ rb_sprof_start(int argc, VALUE *argv, VALUE self)
         rb_raise(rb_eNoMemError, "sprof: failed to allocate frame pool");
     }
 
-    /* Register thread exit hook */
+    /* Register thread event hook for all events */
     g_profiler.thread_hook = rb_internal_thread_add_event_hook(
-        sprof_thread_exit_hook,
-        RUBY_INTERNAL_THREAD_EVENT_EXITED,
+        sprof_thread_event_hook,
+        RUBY_INTERNAL_THREAD_EVENT_EXITED |
+        RUBY_INTERNAL_THREAD_EVENT_SUSPENDED |
+        RUBY_INTERNAL_THREAD_EVENT_READY |
+        RUBY_INTERNAL_THREAD_EVENT_RESUMED,
         &g_profiler);
 
     /* Pre-initialize current thread's time so the first sample is not skipped */
     {
         VALUE cur_thread = rb_thread_current();
-        int64_t init_time = -1;
-        if (g_profiler.mode == 1) {
-            init_time = sprof_wall_time_ns();
-        } else {
-            VALUE tid_val = rb_funcall(cur_thread, id_native_thread_id, 0);
-            if (!NIL_P(tid_val)) {
-                pid_t tid = (pid_t)NUM2INT(tid_val);
-                init_time = sprof_cpu_time_ns(tid);
-            }
-        }
+        int64_t init_time = sprof_current_time_ns(&g_profiler);
         if (init_time >= 0) {
             sprof_thread_data_t *td = (sprof_thread_data_t *)calloc(1, sizeof(sprof_thread_data_t));
             if (!td) {
@@ -341,6 +453,7 @@ rb_sprof_start(int argc, VALUE *argv, VALUE self)
                 rb_raise(rb_eNoMemError, "sprof: failed to allocate thread data");
             }
             td->prev_cpu_ns = init_time;
+            td->prev_wall_ns = sprof_wall_time_ns();
             rb_internal_thread_specific_set(cur_thread, g_profiler.ts_key, td);
         }
     }
@@ -349,7 +462,6 @@ rb_sprof_start(int argc, VALUE *argv, VALUE self)
 
     if (pthread_create(&g_profiler.timer_thread, NULL, sprof_timer_func, &g_profiler) != 0) {
         g_profiler.running = 0;
-        /* Clean up thread data for current thread */
         {
             VALUE cur = rb_thread_current();
             sprof_thread_data_t *td = (sprof_thread_data_t *)rb_internal_thread_specific_get(cur, g_profiler.ts_key);
@@ -391,7 +503,7 @@ rb_sprof_stop(VALUE self)
 
     /* Clean up thread-specific data for all live threads */
     {
-        VALUE threads = rb_funcall(rb_cThread, id_list, 0);
+        VALUE threads = rb_funcall(rb_cThread, rb_intern("list"), 0);
         long tc = RARRAY_LEN(threads);
         long ti;
         for (ti = 0; ti < tc; ti++) {
@@ -419,15 +531,27 @@ rb_sprof_stop(VALUE self)
     rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LONG2NUM(g_profiler.sampling_total_ns));
 
     /* samples: array of [frames_array, weight]
-     * Each frame is [path_string, label_string] */
+     * Each frame is [path_string, label_string]
+     * GVL blocked/wait samples get synthetic frame prepended (leaf position) */
     samples_ary = rb_ary_new_capa((long)g_profiler.sample_count);
     for (i = 0; i < g_profiler.sample_count; i++) {
         sprof_sample_t *s = &g_profiler.samples[i];
-        VALUE frames = rb_ary_new_capa(s->depth);
+        VALUE frames = rb_ary_new_capa(s->depth + 1);
+
+        /* Prepend synthetic frame at leaf position (index 0) for GVL samples */
+        if (s->type == SPROF_SAMPLE_GVL_BLOCKED) {
+            VALUE syn = rb_ary_new3(2, rb_str_new_lit("<GVL>"), rb_str_new_lit("[GVL blocked]"));
+            rb_ary_push(frames, syn);
+        } else if (s->type == SPROF_SAMPLE_GVL_WAIT) {
+            VALUE syn = rb_ary_new3(2, rb_str_new_lit("<GVL>"), rb_str_new_lit("[GVL wait]"));
+            rb_ary_push(frames, syn);
+        }
+
         for (j = 0; j < s->depth; j++) {
             VALUE fval = g_profiler.frame_pool[s->frame_start + j];
             rb_ary_push(frames, sprof_resolve_frame(fval));
         }
+
         VALUE sample = rb_ary_new3(2, frames, LONG2NUM(s->weight));
         rb_ary_push(samples_ary, sample);
     }
@@ -451,9 +575,6 @@ Init_sprof(void)
     VALUE mSprof = rb_define_module("Sprof");
     rb_define_module_function(mSprof, "start", rb_sprof_start, -1);
     rb_define_module_function(mSprof, "stop", rb_sprof_stop, 0);
-
-    id_list = rb_intern("list");
-    id_native_thread_id = rb_intern("native_thread_id");
 
     memset(&g_profiler, 0, sizeof(g_profiler));
     g_profiler.pj_handle = rb_postponed_job_preregister(0, sprof_sample_job, &g_profiler);
