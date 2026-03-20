@@ -297,6 +297,46 @@ class TestSprof < Test::Unit::TestCase
     end
   end
 
+  # RESUMED must create thread_data so that a subsequent SUSPENDED can
+  # record a sample. Without this, C busy-wait threads (no safepoints)
+  # lose their entire CPU time because SUSPENDED sees is_first=1.
+  def test_c_busy_wait_thread_captured_cpu
+    begin
+      $LOAD_PATH.unshift(File.expand_path("../benchmark/lib", __dir__))
+      require "sprof_workload_methods"
+    rescue LoadError
+      omit "benchmark workload not built (cd benchmark && rake compile)"
+    end
+
+    Sprof.start(frequency: 1000, mode: :cpu)
+    t = Thread.new { SprofWorkload.cw1(100_000) }  # 100ms C busy-wait
+    t.join
+    data = Sprof.stop
+
+    total_weight = data[:samples].sum { |_, w| w }
+    # cw1 holds GVL with no safepoints; only SUSPENDED captures it.
+    # Should see ~100ms of CPU time.
+    assert_operator total_weight, :>, 50_000_000,
+      "C busy-wait thread should be captured (got #{"%.1f" % (total_weight / 1_000_000.0)}ms, expect ~100ms)"
+  end
+
+  def test_c_busy_wait_thread_captured_wall
+    begin
+      require "sprof_workload_methods"
+    rescue LoadError
+      omit "benchmark workload not built (cd benchmark && rake compile)"
+    end
+
+    Sprof.start(frequency: 1000, mode: :wall)
+    t = Thread.new { SprofWorkload.cw1(100_000) }  # 100ms C busy-wait
+    t.join
+    data = Sprof.stop
+
+    total_weight = data[:samples].sum { |_, w| w }
+    assert_operator total_weight, :>, 50_000_000,
+      "C busy-wait thread should be captured in wall mode (got #{"%.1f" % (total_weight / 1_000_000.0)}ms)"
+  end
+
   def test_pprof_output
     Dir.mktmpdir do |dir|
       path = File.join(dir, "test.pb.gz")

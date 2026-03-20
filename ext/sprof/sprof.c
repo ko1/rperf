@@ -231,7 +231,14 @@ sprof_handle_resumed(sprof_profiler_t *prof, VALUE thread)
 {
     /* Has GVL */
     sprof_thread_data_t *td = (sprof_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
-    if (!td) return;
+
+    if (td == NULL) {
+        /* First event for this thread — initialize */
+        td = (sprof_thread_data_t *)calloc(1, sizeof(sprof_thread_data_t));
+        if (!td) return;
+        td->tid = (pid_t)syscall(SYS_gettid);
+        rb_internal_thread_specific_set(thread, prof->ts_key, td);
+    }
 
     int64_t wall_now = sprof_wall_time_ns();
 
