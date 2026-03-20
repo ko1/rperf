@@ -4,8 +4,7 @@
 
 sperf is a safepoint-based sampling performance profiler for Ruby. It uses actual time deltas (not uniform sample counts) as weights to correct safepoint bias.
 
-- Linux only (uses Linux kernel ABI for per-thread CPU clocks)
-- Requires Ruby >= 4.0.0
+- Requires Ruby >= 4.0.0 (POSIX systems: Linux, macOS, etc.)
 - Output: pprof protobuf, collapsed stacks, or text report
 
 ## Architecture

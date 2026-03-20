@@ -6,7 +6,7 @@
 
 A safepoint-based sampling performance profiler for Ruby. Uses actual time deltas as sample weights to correct safepoint bias.
 
-- Linux only, requires Ruby >= 4.0.0
+- Requires Ruby >= 4.0.0
 - Output: pprof protobuf, collapsed stacks, or text report
 - Modes: CPU time (per-thread) and wall time (with GVL/GC tracking)
 
@@ -94,7 +94,7 @@ If a safepoint is delayed, the sample carries proportionally more weight. The to
 
 | Mode | Clock | What it measures |
 |------|-------|------------------|
-| `cpu` (default) | Per-thread CPU clock (Linux ABI) | CPU cycles consumed (excludes sleep/I/O) |
+| `cpu` (default) | `CLOCK_THREAD_CPUTIME_ID` | CPU time consumed (excludes sleep/I/O) |
 | `wall` | `CLOCK_MONOTONIC` | Real elapsed time (includes everything) |
 
 Use `cpu` to find what consumes CPU. Use `wall` to find what makes things slow (I/O, GVL contention, GC).
