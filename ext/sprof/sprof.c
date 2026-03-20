@@ -168,6 +168,21 @@ sprof_record_sample(sprof_profiler_t *prof, size_t frame_start, int depth,
     prof->sample_count++;
 }
 
+/* ---- Thread data initialization ---- */
+
+/* Create and initialize per-thread data. Must be called on the target thread. */
+static sprof_thread_data_t *
+sprof_thread_data_create(sprof_profiler_t *prof, VALUE thread)
+{
+    sprof_thread_data_t *td = (sprof_thread_data_t *)calloc(1, sizeof(sprof_thread_data_t));
+    if (!td) return NULL;
+    td->tid = (pid_t)syscall(SYS_gettid);
+    td->prev_cpu_ns = sprof_current_time_ns(prof, td);
+    td->prev_wall_ns = sprof_wall_time_ns();
+    rb_internal_thread_specific_set(thread, prof->ts_key, td);
+    return td;
+}
+
 /* ---- Thread event hooks ---- */
 
 static void
@@ -180,14 +195,8 @@ sprof_handle_suspended(sprof_profiler_t *prof, VALUE thread)
     int is_first = 0;
 
     if (td == NULL) {
-        td = (sprof_thread_data_t *)calloc(1, sizeof(sprof_thread_data_t));
+        td = sprof_thread_data_create(prof, thread);
         if (!td) return;
-        td->tid = (pid_t)syscall(SYS_gettid);
-        rb_internal_thread_specific_set(thread, prof->ts_key, td);
-        td->prev_wall_ns = wall_now;
-        int64_t time_now = sprof_current_time_ns(prof, td);
-        if (time_now < 0) return;
-        td->prev_cpu_ns = time_now;
         is_first = 1;
     }
 
@@ -233,11 +242,8 @@ sprof_handle_resumed(sprof_profiler_t *prof, VALUE thread)
     sprof_thread_data_t *td = (sprof_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
 
     if (td == NULL) {
-        /* First event for this thread — initialize */
-        td = (sprof_thread_data_t *)calloc(1, sizeof(sprof_thread_data_t));
+        td = sprof_thread_data_create(prof, thread);
         if (!td) return;
-        td->tid = (pid_t)syscall(SYS_gettid);
-        rb_internal_thread_specific_set(thread, prof->ts_key, td);
     }
 
     int64_t wall_now = sprof_wall_time_ns();
@@ -314,12 +320,8 @@ sprof_sample_job(void *arg)
     /* Get/create per-thread data */
     sprof_thread_data_t *td = (sprof_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
     if (td == NULL) {
-        td = (sprof_thread_data_t *)calloc(1, sizeof(sprof_thread_data_t));
+        td = sprof_thread_data_create(prof, thread);
         if (!td) return;
-        td->tid = (pid_t)syscall(SYS_gettid);
-        rb_internal_thread_specific_set(thread, prof->ts_key, td);
-        td->prev_cpu_ns = sprof_current_time_ns(prof, td);
-        td->prev_wall_ns = sprof_wall_time_ns();
         return; /* Skip first sample for this thread */
     }
 
@@ -452,7 +454,7 @@ rb_sprof_start(int argc, VALUE *argv, VALUE self)
     /* Pre-initialize current thread's time so the first sample is not skipped */
     {
         VALUE cur_thread = rb_thread_current();
-        sprof_thread_data_t *td = (sprof_thread_data_t *)calloc(1, sizeof(sprof_thread_data_t));
+        sprof_thread_data_t *td = sprof_thread_data_create(&g_profiler, cur_thread);
         if (!td) {
             free(g_profiler.samples);
             g_profiler.samples = NULL;
@@ -460,12 +462,8 @@ rb_sprof_start(int argc, VALUE *argv, VALUE self)
             g_profiler.frame_pool = NULL;
             rb_internal_thread_remove_event_hook(g_profiler.thread_hook);
             g_profiler.thread_hook = NULL;
-                rb_raise(rb_eNoMemError, "sprof: failed to allocate thread data");
+            rb_raise(rb_eNoMemError, "sprof: failed to allocate thread data");
         }
-        td->tid = (pid_t)syscall(SYS_gettid);
-        td->prev_cpu_ns = sprof_current_time_ns(&g_profiler, td);
-        td->prev_wall_ns = sprof_wall_time_ns();
-        rb_internal_thread_specific_set(cur_thread, g_profiler.ts_key, td);
     }
 
     g_profiler.running = 1;
