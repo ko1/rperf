@@ -7,10 +7,22 @@ module Sprof
 
   @verbose = false
   @output = nil
+  @stat = false
+  @stat_start_mono = nil
+  STAT_TOP_N = 5
+  SYNTHETIC_LABELS = %w[[GVL\ blocked] [GVL\ wait] [GC\ marking] [GC\ sweeping]].freeze
 
-  def self.start(frequency: 100, mode: :cpu, output: nil, verbose: false)
+  # Starts profiling.
+  # format: :pprof, :collapsed, or :text. nil = auto-detect from output extension
+  #   .collapsed → collapsed stacks (FlameGraph / speedscope compatible)
+  #   .txt       → text report (human/AI readable flat + cumulative table)
+  #   otherwise (.pb.gz etc) → pprof protobuf (gzip compressed)
+  def self.start(frequency: 100, mode: :cpu, output: nil, verbose: false, format: nil, stat: false)
     @verbose = verbose || ENV["SPROF_VERBOSE"] == "1"
     @output = output
+    @format = format
+    @stat = stat
+    @stat_start_mono = Process.clock_gettime(Process::CLOCK_MONOTONIC) if @stat
     _c_start(frequency: frequency, mode: mode)
 
     if block_given?
@@ -27,20 +39,51 @@ module Sprof
     return unless data
 
     print_stats(data) if @verbose
+    print_stat(data) if @stat
 
     if @output
-      encoded = PProf.encode(data)
-      File.binwrite(@output, gzip(encoded))
+      fmt = detect_format(@output, @format)
+      case fmt
+      when :collapsed
+        File.write(@output, Collapsed.encode(data))
+      when :text
+        File.write(@output, Text.encode(data))
+      else
+        File.binwrite(@output, gzip(PProf.encode(data)))
+      end
       @output = nil
+      @format = nil
     end
 
     data
   end
 
-  def self.save(path, data)
-    encoded = PProf.encode(data)
-    File.binwrite(path, gzip(encoded))
+  # Saves profiling data to a file.
+  # format: :pprof, :collapsed, or :text. nil = auto-detect from path extension
+  #   .collapsed → collapsed stacks (FlameGraph / speedscope compatible)
+  #   .txt       → text report (human/AI readable flat + cumulative table)
+  #   otherwise (.pb.gz etc) → pprof protobuf (gzip compressed)
+  def self.save(path, data, format: nil)
+    fmt = detect_format(path, format)
+    case fmt
+    when :collapsed
+      File.write(path, Collapsed.encode(data))
+    when :text
+      File.write(path, Text.encode(data))
+    else
+      File.binwrite(path, gzip(PProf.encode(data)))
+    end
   end
+
+  def self.detect_format(path, format)
+    return format.to_sym if format
+    case path.to_s
+    when /\.collapsed\z/ then :collapsed
+    when /\.txt\z/       then :text
+    else :pprof
+    end
+  end
+  private_class_method :detect_format
 
   def self.gzip(data)
     io = StringIO.new
@@ -114,6 +157,121 @@ module Sprof
     end
   end
 
+  def self.print_stat(data)
+    samples_raw = data[:samples] || []
+    real_ns = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - @stat_start_mono) * 1_000_000_000).to_i
+    times = Process.times
+    user_ns = (times.utime * 1_000_000_000).to_i
+    sys_ns = (times.stime * 1_000_000_000).to_i
+
+    command = ENV["SPROF_STAT_COMMAND"] || "(unknown)"
+
+    $stderr.puts
+    $stderr.puts " Performance stats for '#{command}':"
+    $stderr.puts
+
+    # user / sys / real
+    $stderr.puts format("  %14s ms   user", format_ms(user_ns))
+    $stderr.puts format("  %14s ms   sys", format_ms(sys_ns))
+    $stderr.puts format("  %14s ms   real", format_ms(real_ns))
+
+    # Time breakdown from samples
+    if samples_raw.size > 0
+      breakdown = Hash.new(0)
+      total_weight = 0
+
+      samples_raw.each do |frames, weight|
+        total_weight += weight
+        leaf_label = frames.first&.last || ""
+        category = case leaf_label
+                   when "[GVL blocked]" then :gvl_blocked
+                   when "[GVL wait]"    then :gvl_wait
+                   when "[GC marking]"  then :gc_marking
+                   when "[GC sweeping]" then :gc_sweeping
+                   else :cpu_execution
+                   end
+        breakdown[category] += weight
+      end
+
+      $stderr.puts
+
+      [
+        [:cpu_execution, "CPU execution"],
+        [:gvl_blocked,   "GVL blocked (I/O, sleep)"],
+        [:gvl_wait,      "GVL wait (contention)"],
+        [:gc_marking,    "GC marking"],
+        [:gc_sweeping,   "GC sweeping"],
+      ].each do |key, label|
+        w = breakdown[key]
+        next if w == 0
+        pct = total_weight > 0 ? w * 100.0 / total_weight : 0.0
+        $stderr.puts format("  %14s ms %5.1f%%   %s", format_ms(w), pct, label)
+      end
+
+      # GC statistics (cumulative since process start)
+      gc = GC.stat
+      $stderr.puts format("  %14s ms           GC time (%s count: %s minor, %s major)",
+                          format_ms(gc[:time] * 1_000_000),
+                          format_integer(gc[:count]),
+                          format_integer(gc[:minor_gc_count]),
+                          format_integer(gc[:major_gc_count]))
+      $stderr.puts format("  %14s              allocated objects", format_integer(gc[:total_allocated_objects]))
+      $stderr.puts format("  %14s              freed objects", format_integer(gc[:total_freed_objects]))
+
+      # Top N by flat
+      flat = Hash.new(0)
+      samples_raw.each do |frames, weight|
+        frames.each_with_index do |frame, i|
+          if i == 0
+            _, label = frame
+            next if SYNTHETIC_LABELS.include?(label)
+            flat[[label, frame[0]]] += weight
+          end
+        end
+      end
+
+      unless flat.empty?
+        top = flat.sort_by { |_, w| -w }.first(STAT_TOP_N)
+        $stderr.puts
+        $stderr.puts " Top #{top.size} by flat:"
+        top.each do |key, weight|
+          label, path = key
+          pct = total_weight > 0 ? weight * 100.0 / total_weight : 0.0
+          loc = path.empty? ? "" : " (#{path})"
+          $stderr.puts format("  %14s ms %5.1f%%   %s%s", format_ms(weight), pct, label, loc)
+        end
+      end
+
+    end
+
+    # Footer
+    if samples_raw.size > 0
+      unique_stacks = samples_raw.map { |frames, _| frames }.uniq.size
+      overhead_pct = real_ns > 0 ? (data[:sampling_time_ns] || 0) * 100.0 / real_ns : 0.0
+      $stderr.puts
+      $stderr.puts format("  %d samples (%d unique stacks), %.1f%% profiler overhead",
+                          samples_raw.size, unique_stacks, overhead_pct)
+    end
+
+    $stderr.puts
+  end
+
+  def self.format_integer(n)
+    n.to_s.reverse.gsub(/(\d{3})(?=\d)/, '\\1,').reverse
+  end
+  private_class_method :format_integer
+
+  # Format nanoseconds as ms with 1 decimal place and comma-separated integer part.
+  # Example: 5_609_200_000 → "5,609.2"
+  def self.format_ms(ns)
+    ms = ns / 1_000_000.0
+    int_part = ms.truncate
+    frac = format(".%d", ((ms - int_part).abs * 10).round % 10)
+    int_str = int_part.to_s.reverse.gsub(/(\d{3})(?=\d)/, '\\1,').reverse
+    "#{int_str}#{frac}"
+  end
+  private_class_method :format_ms
+
   # ENV-based auto-start for CLI usage
   if ENV["SPROF_ENABLED"] == "1"
     _sprof_mode_str = ENV["SPROF_MODE"] || "cpu"
@@ -121,10 +279,86 @@ module Sprof
       raise ArgumentError, "SPROF_MODE must be 'cpu' or 'wall', got: #{_sprof_mode_str.inspect}"
     end
     _sprof_mode = _sprof_mode_str == "wall" ? :wall : :cpu
+    _sprof_format = ENV["SPROF_FORMAT"] ? ENV["SPROF_FORMAT"].to_sym : nil
+    _sprof_stat = ENV["SPROF_STAT"] == "1"
     start(frequency: (ENV["SPROF_FREQUENCY"] || 100).to_i, mode: _sprof_mode,
-          output: ENV["SPROF_OUTPUT"] || "sprof.data",
-          verbose: ENV["SPROF_VERBOSE"] == "1")
+          output: _sprof_stat ? ENV["SPROF_OUTPUT"] : (ENV["SPROF_OUTPUT"] || "sprof.data"),
+          verbose: ENV["SPROF_VERBOSE"] == "1",
+          format: _sprof_format,
+          stat: _sprof_stat)
     at_exit { stop }
+  end
+
+  # Text report encoder — human/AI readable flat + cumulative top-N table.
+  module Text
+    module_function
+
+    def encode(data, top_n: 50)
+      samples_raw = data[:samples]
+      mode = data[:mode] || :cpu
+      frequency = data[:frequency] || 0
+
+      return "No samples recorded.\n" if !samples_raw || samples_raw.empty?
+
+      flat = Hash.new(0)
+      cum = Hash.new(0)
+      total_weight = 0
+
+      samples_raw.each do |frames, weight|
+        total_weight += weight
+        seen = {}
+
+        frames.each_with_index do |frame, i|
+          path, label = frame
+          key = [label, path]
+          flat[key] += weight if i == 0
+
+          unless seen[key]
+            cum[key] += weight
+            seen[key] = true
+          end
+        end
+      end
+
+      out = String.new
+      total_ms = total_weight / 1_000_000.0
+      out << "Total: #{"%.1f" % total_ms}ms (#{mode})\n"
+      out << "Samples: #{samples_raw.size}, Frequency: #{frequency}Hz\n"
+      out << "\n"
+      out << format_table("Flat", flat, total_weight, top_n)
+      out << "\n"
+      out << format_table("Cumulative", cum, total_weight, top_n)
+      out
+    end
+
+    def format_table(title, table, total_weight, top_n)
+      sorted = table.sort_by { |_, w| -w }.first(top_n)
+      out = String.new
+      out << "#{title}:\n"
+      sorted.each do |key, weight|
+        label, path = key
+        ms = weight / 1_000_000.0
+        pct = total_weight > 0 ? weight * 100.0 / total_weight : 0.0
+        loc = path.empty? ? "" : " (#{path})"
+        out << ("  %8.1fms %5.1f%%  %s%s\n" % [ms, pct, label, loc])
+      end
+      out
+    end
+  end
+
+  # Collapsed stacks encoder for FlameGraph / speedscope.
+  # Output: one line per unique stack, "frame1;frame2;...;leafN weight\n"
+  module Collapsed
+    module_function
+
+    def encode(data)
+      merged = Hash.new(0)
+      data[:samples].each do |frames, weight|
+        key = frames.reverse.map { |_, label| label }.join(";")
+        merged[key] += weight
+      end
+      merged.map { |stack, weight| "#{stack} #{weight}" }.join("\n") + "\n"
+    end
   end
 
   # Hand-written protobuf encoder for pprof profile format.

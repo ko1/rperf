@@ -355,6 +355,226 @@ class TestSprof < Test::Unit::TestCase
     end
   end
 
+  # --- CLI help subcommand test ---
+
+  def test_cli_help_subcommand
+    exe = File.expand_path("../exe/sprof", __dir__)
+    output = IO.popen([RbConfig.ruby, exe, "help"], &:read)
+
+    assert_equal 0, $?.exitstatus, "sprof help should exit 0"
+    assert_include output, "OVERVIEW"
+    assert_include output, "CLI USAGE"
+    assert_include output, "RUBY API"
+    assert_include output, "PROFILING MODES"
+    assert_include output, "OUTPUT FORMATS"
+    assert_include output, "SYNTHETIC FRAMES"
+    assert_include output, "INTERPRETING RESULTS"
+    assert_include output, "DIAGNOSING COMMON PERFORMANCE PROBLEMS"
+  end
+
+  # --- Stat output tests ---
+
+  def test_stat_output
+    old_stderr = $stderr
+    $stderr = StringIO.new
+
+    Sprof.start(frequency: 500, mode: :wall, stat: true)
+    5_000_000.times { 1 + 1 }
+    data = Sprof.stop
+
+    output = $stderr.string
+    $stderr = old_stderr
+
+    assert_not_nil data
+    assert_include output, "Performance stats"
+    assert_include output, "real"
+    assert_include output, "CPU execution"
+  end
+
+  def test_print_stat
+    data = {
+      samples: [
+        [[["/a.rb", "A#foo"], ["/b.rb", "B#bar"]], 100_000_000],
+        [[["<GVL>", "[GVL blocked]"], ["/a.rb", "A#foo"]], 50_000_000],
+        [[["<GC>", "[GC marking]"], ["/a.rb", "A#foo"]], 10_000_000],
+      ],
+      frequency: 100,
+      mode: :wall,
+      sampling_count: 100,
+      sampling_time_ns: 500_000,
+    }
+
+    # Capture stderr output
+    old_stderr = $stderr
+    $stderr = StringIO.new
+    ENV["SPROF_STAT_COMMAND"] = "ruby test.rb"
+
+    Sprof.instance_variable_set(:@stat_start_mono,
+      Process.clock_gettime(Process::CLOCK_MONOTONIC) - 0.2)
+    Sprof.print_stat(data)
+
+    output = $stderr.string
+    $stderr = old_stderr
+    ENV.delete("SPROF_STAT_COMMAND")
+
+    assert_include output, "Performance stats for 'ruby test.rb'"
+    assert_include output, "user"
+    assert_include output, "sys"
+    assert_include output, "real"
+    assert_include output, "CPU execution"
+    assert_include output, "GVL blocked"
+    assert_include output, "GC marking"
+    assert_include output, "GC time"
+    assert_include output, "allocated objects"
+    assert_include output, "freed objects"
+    assert_include output, "Top"
+    assert_include output, "samples"
+    assert_include output, "unique stacks"
+    assert_include output, "profiler overhead"
+  end
+
+  # --- Text format tests ---
+
+  def test_text_encode
+    data = {
+      samples: [
+        [[["/a.rb", "A#foo"], ["/b.rb", "B#bar"]], 1_000_000],
+        [[["/a.rb", "A#foo"], ["/b.rb", "B#bar"]], 2_000_000],
+        [[["/c.rb", "C#baz"]], 500_000],
+      ],
+      frequency: 100,
+      mode: :cpu,
+    }
+
+    result = Sprof::Text.encode(data)
+
+    assert_include result, "Total: 3.5ms (cpu)"
+    assert_include result, "Samples: 3"
+    assert_include result, "Frequency: 100Hz"
+    assert_include result, "Flat:"
+    assert_include result, "Cumulative:"
+    assert_include result, "A#foo"
+    assert_include result, "B#bar"
+    assert_include result, "C#baz"
+  end
+
+  def test_text_output
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "profile.txt")
+      Sprof.start(output: path, frequency: 500) do
+        5_000_000.times { 1 + 1 }
+      end
+
+      assert File.exist?(path), "Output file should exist"
+      content = File.read(path)
+
+      assert_include content, "Total:"
+      assert_include content, "Flat:"
+      assert_include content, "Cumulative:"
+      # Weight lines should have ms and %
+      assert_match(/\d+\.\d+ms\s+\d+\.\d+%/, content)
+    end
+  end
+
+  def test_save_text
+    Dir.mktmpdir do |dir|
+      data = Sprof.start(frequency: 500) do
+        5_000_000.times { 1 + 1 }
+      end
+
+      path = File.join(dir, "report.dat")
+      Sprof.save(path, data, format: :text)
+
+      content = File.read(path)
+      assert_include content, "Total:"
+      assert_include content, "Flat:"
+      assert_include content, "Cumulative:"
+    end
+  end
+
+  def test_text_encode_empty
+    data = { samples: [], frequency: 100, mode: :cpu }
+    result = Sprof::Text.encode(data)
+    assert_equal "No samples recorded.\n", result
+  end
+
+  # --- Collapsed stacks format tests ---
+
+  def test_collapsed_encode
+    data = {
+      samples: [
+        [[["/a.rb", "A#foo"], ["/b.rb", "B#bar"]], 1000],
+        [[["/a.rb", "A#foo"], ["/b.rb", "B#bar"]], 2000],
+        [[["/c.rb", "C#baz"]], 500],
+      ],
+      frequency: 100,
+      mode: :cpu,
+    }
+
+    result = Sprof::Collapsed.encode(data)
+    lines = result.strip.split("\n")
+
+    assert_equal 2, lines.size
+
+    merged = {}
+    lines.each do |line|
+      stack, weight = line.rpartition(" ").then { |s, _, w| [s, w] }
+      merged[stack] = weight.to_i
+    end
+
+    # frames are deepest-first, so reverse gives bottom→top: B#bar;A#foo
+    assert_equal 3000, merged["B#bar;A#foo"]
+    assert_equal 500, merged["C#baz"]
+  end
+
+  def test_collapsed_output
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "test.collapsed")
+      Sprof.start(output: path, frequency: 500) do
+        5_000_000.times { 1 + 1 }
+      end
+
+      assert File.exist?(path), "Output file should exist"
+      content = File.read(path)
+
+      # Should NOT be gzip
+      refute_equal "\x1f\x8b".b, content.b[0, 2], "Should not be gzip format"
+
+      lines = content.strip.split("\n")
+      assert_operator lines.size, :>, 0, "Should have at least one line"
+
+      lines.each do |line|
+        stack, weight_str = line.rpartition(" ").then { |s, _, w| [s, w] }
+        assert_not_nil stack, "Line should have a stack"
+        assert_not_nil weight_str, "Line should have a weight"
+        weight = weight_str.to_i
+        assert_operator weight, :>, 0, "Weight should be positive: #{line}"
+      end
+    end
+  end
+
+  def test_save_collapsed
+    Dir.mktmpdir do |dir|
+      # Collect some data
+      data = Sprof.start(frequency: 500) do
+        5_000_000.times { 1 + 1 }
+      end
+
+      path = File.join(dir, "test.txt")
+      Sprof.save(path, data, format: :collapsed)
+
+      content = File.read(path)
+      lines = content.strip.split("\n")
+      assert_operator lines.size, :>, 0
+
+      lines.each do |line|
+        _stack, weight_str = line.rpartition(" ").then { |s, _, w| [s, w] }
+        weight = weight_str.to_i
+        assert_operator weight, :>, 0, "Weight should be positive"
+      end
+    end
+  end
+
   private
 
   def deep_recurse(depth, &block)
