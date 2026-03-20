@@ -246,6 +246,19 @@ USAGE = "Usage: sperf record [options] command [args...]\n" \
        "       sperf diff [options] base.pb.gz target.pb.gz\n" \
        "       sperf help\n"
 
+# Handle top-level flags before subcommand parsing
+case ARGV.first
+when "-v", "--version"
+  require "sperf"
+  puts "sperf #{Sperf::VERSION}"
+  exit
+when "-h", "--help"
+  puts USAGE
+  puts
+  puts "Run 'sperf help' for full documentation"
+  exit
+end
+
 subcommand = ARGV.shift
 
 case subcommand

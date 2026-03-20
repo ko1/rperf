@@ -193,30 +193,68 @@ module Sperf
         breakdown[category] += weight
       end
 
+      # Column layout: "  %14s %2s %6s  label"
+      #   value(14) + unit(2) + pct(6) + gap(2) + label
+      pct_line  = ->(val, unit, pct, label) {
+        format("  %14s %-2s %5.1f%%  %s", val, unit, pct, label)
+      }
+      stat_line = ->(val, unit, label) {
+        format("  %14s %-2s         %s", val, unit, label)
+      }
+
       $stderr.puts
 
       [
         [:cpu_execution, "CPU execution"],
-        [:gvl_blocked,   "GVL blocked (I/O, sleep)"],
-        [:gvl_wait,      "GVL wait (contention)"],
-        [:gc_marking,    "GC marking"],
-        [:gc_sweeping,   "GC sweeping"],
+        [:gvl_blocked,   "[Ruby] GVL blocked (I/O, sleep)"],
+        [:gvl_wait,      "[Ruby] GVL wait (contention)"],
+        [:gc_marking,    "[Ruby] GC marking"],
+        [:gc_sweeping,   "[Ruby] GC sweeping"],
       ].each do |key, label|
         w = breakdown[key]
         next if w == 0
         pct = total_weight > 0 ? w * 100.0 / total_weight : 0.0
-        $stderr.puts format("  %14s ms %5.1f%%   %s", format_ms(w), pct, label)
+        $stderr.puts pct_line.call(format_ms(w), "ms", pct, label)
       end
 
       # GC statistics (cumulative since process start)
       gc = GC.stat
-      $stderr.puts format("  %14s ms           GC time (%s count: %s minor, %s major)",
-                          format_ms(gc[:time] * 1_000_000),
-                          format_integer(gc[:count]),
-                          format_integer(gc[:minor_gc_count]),
-                          format_integer(gc[:major_gc_count]))
-      $stderr.puts format("  %14s              allocated objects", format_integer(gc[:total_allocated_objects]))
-      $stderr.puts format("  %14s              freed objects", format_integer(gc[:total_freed_objects]))
+      $stderr.puts stat_line.call(format_ms(gc[:time] * 1_000_000), "ms",
+                                  "[Ruby] GC time (%s count: %s minor, %s major)" % [
+                                    format_integer(gc[:count]),
+                                    format_integer(gc[:minor_gc_count]),
+                                    format_integer(gc[:major_gc_count])])
+      $stderr.puts stat_line.call(format_integer(gc[:total_allocated_objects]), "  ", "[Ruby] allocated objects")
+      $stderr.puts stat_line.call(format_integer(gc[:total_freed_objects]), "  ", "[Ruby] freed objects")
+      if defined?(RubyVM::YJIT) && RubyVM::YJIT.enabled?
+        yjit = RubyVM::YJIT.runtime_stats
+        if yjit[:ratio_in_yjit]
+          $stderr.puts stat_line.call(format("%.1f%%", yjit[:ratio_in_yjit] * 100), "  ", "[Ruby] YJIT code execution ratio")
+        end
+      end
+
+      # System resources
+      sys_stats = get_system_stats
+      maxrss_kb = sys_stats[:maxrss_kb]
+      if maxrss_kb
+        $stderr.puts stat_line.call(format_integer((maxrss_kb / 1024.0).round), "MB", "[OS] peak memory (maxrss)")
+      end
+      if sys_stats[:ctx_voluntary]
+        $stderr.puts stat_line.call(
+          format_integer(sys_stats[:ctx_voluntary] + sys_stats[:ctx_involuntary]), "  ",
+          "[OS] context switches (%s voluntary, %s involuntary)" % [
+            format_integer(sys_stats[:ctx_voluntary]),
+            format_integer(sys_stats[:ctx_involuntary])])
+      end
+      if sys_stats[:io_read_bytes]
+        r = sys_stats[:io_read_bytes]
+        w = sys_stats[:io_write_bytes]
+        $stderr.puts stat_line.call(
+          format_integer(((r + w) / 1024.0 / 1024.0).round), "MB",
+          "[OS] disk I/O (%s MB read, %s MB write)" % [
+            format_integer((r / 1024.0 / 1024.0).round),
+            format_integer((w / 1024.0 / 1024.0).round)])
+      end
 
       # Top N by flat
       flat = Hash.new(0)
@@ -238,7 +276,7 @@ module Sperf
           label, path = key
           pct = total_weight > 0 ? weight * 100.0 / total_weight : 0.0
           loc = path.empty? ? "" : " (#{path})"
-          $stderr.puts format("  %14s ms %5.1f%%   %s%s", format_ms(weight), pct, label, loc)
+          $stderr.puts pct_line.call(format_ms(weight), "ms", pct, "#{label}#{loc}")
         end
       end
 
@@ -271,6 +309,44 @@ module Sperf
     "#{int_str}#{frac}"
   end
   private_class_method :format_ms
+
+  # Collect system-level stats. Returns a hash; missing keys are omitted.
+  def self.get_system_stats
+    stats = {}
+
+    if File.readable?("/proc/self/status")
+      # Linux: parse /proc/self/status
+      File.read("/proc/self/status").each_line do |line|
+        case line
+        when /\AVmHWM:\s+(\d+)\s+kB/
+          stats[:maxrss_kb] = $1.to_i
+        when /\Avoluntary_ctxt_switches:\s+(\d+)/
+          stats[:ctx_voluntary] = $1.to_i
+        when /\Anonvoluntary_ctxt_switches:\s+(\d+)/
+          stats[:ctx_involuntary] = $1.to_i
+        end
+      end
+    else
+      # macOS/BSD: ps reports RSS in KB
+      rss = `ps -o rss= -p #{$$}`.strip.to_i rescue nil
+      stats[:maxrss_kb] = rss if rss && rss > 0
+    end
+
+    if File.readable?("/proc/self/io")
+      # Linux: parse /proc/self/io
+      File.read("/proc/self/io").each_line do |line|
+        case line
+        when /\Aread_bytes:\s+(\d+)/
+          stats[:io_read_bytes] = $1.to_i
+        when /\Awrite_bytes:\s+(\d+)/
+          stats[:io_write_bytes] = $1.to_i
+        end
+      end
+    end
+
+    stats
+  end
+  private_class_method :get_system_stats
 
   # ENV-based auto-start for CLI usage
   if ENV["SPERF_ENABLED"] == "1"
