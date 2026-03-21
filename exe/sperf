@@ -1,5 +1,13 @@
 #!/usr/bin/env ruby
 require "optparse"
+require "socket"
+
+def find_available_port
+  server = TCPServer.new("localhost", 0)
+  port = server.addr[1]
+  server.close
+  port
+end
 
 HELP_TEXT = <<'HELP'
 sperf - safepoint-based sampling performance profiler for Ruby
@@ -321,7 +329,7 @@ when "report"
   when :text
     exec("go", "tool", "pprof", "-text", report_file)
   else
-    exec("go", "tool", "pprof", "-http=:0", report_file)
+    exec("go", "tool", "pprof", "-http=localhost:#{find_available_port}", report_file)
   end
 when "diff"
   # sperf diff: compare two pprof profiles via go tool pprof -diff_base
@@ -379,7 +387,7 @@ when "diff"
   when :text
     exec("go", "tool", "pprof", "-text", "-diff_base=#{base_file}", target_file)
   else
-    exec("go", "tool", "pprof", "-http=:0", "-diff_base=#{base_file}", target_file)
+    exec("go", "tool", "pprof", "-http=localhost:#{find_available_port}", "-diff_base=#{base_file}", target_file)
   end
 when "record", "stat"
   # continue below
