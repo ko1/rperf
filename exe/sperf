@@ -22,12 +22,16 @@ CLI USAGE
     -f, --frequency HZ      Sampling frequency in Hz (default: 1000)
     -m, --mode MODE         cpu or wall (default: cpu)
     --format FORMAT         pprof, collapsed, or text (default: auto from extension)
+    --signal VALUE          Timer signal (Linux only): signal number, or 'false'
+                            for nanosleep thread (default: auto)
     -v, --verbose           Print sampling statistics to stderr
 
   stat: Run command and print performance summary to stderr.
     Always uses wall mode. No file output by default.
     -o, --output PATH       Also save profile to file (default: none)
     -f, --frequency HZ      Sampling frequency in Hz (default: 1000)
+    --signal VALUE          Timer signal (Linux only): signal number, or 'false'
+                            for nanosleep thread (default: auto)
     -v, --verbose           Print additional sampling statistics
 
     Shows: user/sys/real time, time breakdown (CPU execution, GVL blocked,
@@ -230,6 +234,7 @@ ENVIRONMENT VARIABLES
     SPERF_MODE=cpu|wall   Profiling mode
     SPERF_FORMAT=fmt      pprof, collapsed, or text
     SPERF_VERBOSE=1       Print statistics
+    SPERF_SIGNAL=N|false  Timer signal number or 'false' for nanosleep (Linux only)
 
 TIPS
 
@@ -388,6 +393,7 @@ output = (subcommand == "stat") ? nil : "sperf.data"
 frequency = 1000
 mode = (subcommand == "stat") ? "wall" : "cpu"
 format = nil
+signal = nil
 verbose = false
 
 parser = OptionParser.new do |opts|
@@ -410,6 +416,10 @@ parser = OptionParser.new do |opts|
             "Output format: pprof, collapsed, or text (default: auto from extension)") do |v|
       format = v
     end
+  end
+
+  opts.on("--signal VALUE", "Timer signal (Linux only): signal number, or 'false' for nanosleep thread") do |v|
+    signal = (v == "false") ? "false" : v
   end
 
   opts.on("-v", "--verbose", "Print sampling statistics to stderr") do
@@ -448,6 +458,7 @@ ENV["SPERF_FREQUENCY"] = frequency.to_s
 ENV["SPERF_MODE"] = mode
 ENV["SPERF_FORMAT"] = format if format
 ENV["SPERF_VERBOSE"] = "1" if verbose
+ENV["SPERF_SIGNAL"] = signal if signal
 
 if subcommand == "stat"
   ENV["SPERF_STAT"] = "1"

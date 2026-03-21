@@ -359,11 +359,18 @@ module Sperf
     _sperf_mode = _sperf_mode_str == "wall" ? :wall : :cpu
     _sperf_format = ENV["SPERF_FORMAT"] ? ENV["SPERF_FORMAT"].to_sym : nil
     _sperf_stat = ENV["SPERF_STAT"] == "1"
-    start(frequency: (ENV["SPERF_FREQUENCY"] || 1000).to_i, mode: _sperf_mode,
-          output: _sperf_stat ? ENV["SPERF_OUTPUT"] : (ENV["SPERF_OUTPUT"] || "sperf.data"),
-          verbose: ENV["SPERF_VERBOSE"] == "1",
-          format: _sperf_format,
-          stat: _sperf_stat)
+    _sperf_signal = case ENV["SPERF_SIGNAL"]
+                    when nil then nil
+                    when "false" then false
+                    else ENV["SPERF_SIGNAL"].to_i
+                    end
+    _sperf_start_opts = { frequency: (ENV["SPERF_FREQUENCY"] || 1000).to_i, mode: _sperf_mode,
+                          output: _sperf_stat ? ENV["SPERF_OUTPUT"] : (ENV["SPERF_OUTPUT"] || "sperf.data"),
+                          verbose: ENV["SPERF_VERBOSE"] == "1",
+                          format: _sperf_format,
+                          stat: _sperf_stat }
+    _sperf_start_opts[:signal] = _sperf_signal unless _sperf_signal.nil?
+    start(**_sperf_start_opts)
     at_exit { stop }
   end
 
