@@ -60,6 +60,8 @@ Run `sperf help` for full documentation (all options, output interpretation, dia
 
 ## Subcommands
 
+Inspired by Linux `perf` — familiar subcommand interface for profiling workflows.
+
 | Command | Description |
 |---------|-------------|
 | `sperf record` | Profile a command and save to file |
