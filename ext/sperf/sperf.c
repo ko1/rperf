@@ -40,6 +40,7 @@ typedef struct sperf_sample {
     size_t frame_start; /* index into frame_pool */
     int64_t weight;
     int type;           /* sperf_sample_type */
+    int thread_seq;     /* thread sequence number (1-based) */
 } sperf_sample_t;
 
 typedef struct sperf_thread_data {
@@ -50,6 +51,7 @@ typedef struct sperf_thread_data {
     int64_t ready_at_ns;            /* wall time at READY */
     size_t suspended_frame_start;   /* saved stack in frame_pool */
     int suspended_frame_depth;      /* saved stack depth */
+    int thread_seq;                 /* thread sequence number (1-based) */
 } sperf_thread_data_t;
 
 typedef struct sperf_profiler {
@@ -75,9 +77,12 @@ typedef struct sperf_profiler {
     int64_t gc_enter_ns;         /* wall time at GC_ENTER */
     size_t gc_frame_start;       /* saved stack at GC_ENTER */
     int gc_frame_depth;          /* saved stack depth */
+    int gc_thread_seq;           /* thread_seq at GC_ENTER */
     /* Timing metadata for pprof */
     struct timespec start_realtime;   /* CLOCK_REALTIME at start */
     struct timespec start_monotonic;  /* CLOCK_MONOTONIC at start */
+    /* Thread sequence counter */
+    int next_thread_seq;
     /* Sampling overhead stats */
     size_t sampling_count;
     int64_t sampling_total_ns;
@@ -178,7 +183,7 @@ sperf_ensure_frame_pool_capacity(sperf_profiler_t *prof, int needed)
 
 static void
 sperf_record_sample(sperf_profiler_t *prof, size_t frame_start, int depth,
-                    int64_t weight, int type)
+                    int64_t weight, int type, int thread_seq)
 {
     if (weight <= 0) return;
     if (sperf_ensure_sample_capacity(prof) < 0) return;
@@ -188,6 +193,7 @@ sperf_record_sample(sperf_profiler_t *prof, size_t frame_start, int depth,
     sample->frame_start = frame_start;
     sample->weight = weight;
     sample->type = type;
+    sample->thread_seq = thread_seq;
     prof->sample_count++;
 }
 
@@ -201,6 +207,7 @@ sperf_thread_data_create(sperf_profiler_t *prof, VALUE thread)
     if (!td) return NULL;
     td->prev_cpu_ns = sperf_current_time_ns(prof, td);
     td->prev_wall_ns = sperf_wall_time_ns();
+    td->thread_seq = ++prof->next_thread_seq;
     rb_internal_thread_specific_set(thread, prof->ts_key, td);
     return td;
 }
@@ -236,7 +243,7 @@ sperf_handle_suspended(sperf_profiler_t *prof, VALUE thread)
     /* Record normal sample (skip if first time — no prev_time) */
     if (!is_first) {
         int64_t weight = time_now - td->prev_cpu_ns;
-        sperf_record_sample(prof, frame_start, depth, weight, SPERF_SAMPLE_NORMAL);
+        sperf_record_sample(prof, frame_start, depth, weight, SPERF_SAMPLE_NORMAL, td->thread_seq);
     }
 
     /* Save stack and timestamp for READY/RESUMED */
@@ -276,13 +283,13 @@ sperf_handle_resumed(sperf_profiler_t *prof, VALUE thread)
             int64_t blocked_ns = td->ready_at_ns - td->suspended_at_ns;
             sperf_record_sample(prof, td->suspended_frame_start,
                                 td->suspended_frame_depth, blocked_ns,
-                                SPERF_SAMPLE_GVL_BLOCKED);
+                                SPERF_SAMPLE_GVL_BLOCKED, td->thread_seq);
         }
         if (td->ready_at_ns > 0 && wall_now > td->ready_at_ns) {
             int64_t wait_ns = wall_now - td->ready_at_ns;
             sperf_record_sample(prof, td->suspended_frame_start,
                                 td->suspended_frame_depth, wait_ns,
-                                SPERF_SAMPLE_GVL_WAIT);
+                                SPERF_SAMPLE_GVL_WAIT, td->thread_seq);
         }
     }
 
@@ -356,6 +363,13 @@ sperf_gc_event_hook(rb_event_flag_t event, VALUE data, VALUE self, ID id, VALUE 
         prof->frame_pool_count += depth;
         prof->gc_frame_start = frame_start;
         prof->gc_frame_depth = depth;
+
+        /* Save thread_seq for the GC_EXIT sample */
+        {
+            VALUE thread = rb_thread_current();
+            sperf_thread_data_t *td = (sperf_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
+            prof->gc_thread_seq = td ? td->thread_seq : 0;
+        }
     }
     else if (event & RUBY_INTERNAL_EVENT_GC_EXIT) {
         if (prof->gc_frame_depth <= 0) return;
@@ -367,7 +381,7 @@ sperf_gc_event_hook(rb_event_flag_t event, VALUE data, VALUE self, ID id, VALUE 
                    : SPERF_SAMPLE_GC_MARKING;
 
         sperf_record_sample(prof, prof->gc_frame_start,
-                            prof->gc_frame_depth, weight, type);
+                            prof->gc_frame_depth, weight, type, prof->gc_thread_seq);
         prof->gc_frame_depth = 0;
     }
 }
@@ -413,7 +427,7 @@ sperf_sample_job(void *arg)
     if (depth <= 0) return;
     prof->frame_pool_count += depth;
 
-    sperf_record_sample(prof, frame_start, depth, weight, SPERF_SAMPLE_NORMAL);
+    sperf_record_sample(prof, frame_start, depth, weight, SPERF_SAMPLE_NORMAL, td->thread_seq);
 
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts_end);
     prof->sampling_count++;
@@ -519,6 +533,7 @@ rb_sperf_start(int argc, VALUE *argv, VALUE self)
     g_profiler.frequency = frequency;
     g_profiler.mode = mode;
     g_profiler.sample_count = 0;
+    g_profiler.next_thread_seq = 0;
     g_profiler.sampling_count = 0;
     g_profiler.sampling_total_ns = 0;
     g_profiler.sample_capacity = SPERF_INITIAL_SAMPLES;
@@ -735,7 +750,7 @@ rb_sperf_stop(VALUE self)
             rb_ary_push(frames, sperf_resolve_frame(fval));
         }
 
-        VALUE sample = rb_ary_new3(2, frames, LONG2NUM(s->weight));
+        VALUE sample = rb_ary_new3(3, frames, LONG2NUM(s->weight), INT2NUM(s->thread_seq));
         rb_ary_push(samples_ary, sample);
     }
     rb_hash_aset(result, ID2SYM(rb_intern("samples")), samples_ary);

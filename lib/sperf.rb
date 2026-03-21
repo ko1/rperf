@@ -475,16 +475,17 @@ module Sperf
         end
       }
 
-      # Convert string frames to index frames and merge identical stacks
+      # Convert string frames to index frames and merge identical stacks per thread
       merged = Hash.new(0)
-      samples_raw.each do |frames, weight|
-        key = frames.map { |path, label| [intern.(path), intern.(label)] }
+      thread_seq_key = intern.("thread_seq")
+      samples_raw.each do |frames, weight, thread_seq|
+        key = [frames.map { |path, label| [intern.(path), intern.(label)] }, thread_seq || 0]
         merged[key] += weight
       end
       merged = merged.to_a
 
       # Build location/function tables
-      locations, functions = build_tables(merged)
+      locations, functions = build_tables(merged.map { |(frames, _), w| [frames, w] })
 
       # Intern type label and unit
       type_label = mode == :wall ? "wall" : "cpu"
@@ -497,12 +498,18 @@ module Sperf
       # field 1: sample_type (repeated ValueType)
       buf << encode_message(1, encode_value_type(type_idx, ns_idx))
 
-      # field 2: sample (repeated Sample)
-      merged.each do |frames, weight|
+      # field 2: sample (repeated Sample) with thread_seq label
+      merged.each do |(frames, thread_seq), weight|
         sample_buf = "".b
         loc_ids = frames.map { |f| locations[f] }
         sample_buf << encode_packed_uint64(1, loc_ids)
         sample_buf << encode_packed_int64(2, [weight])
+        if thread_seq && thread_seq > 0
+          label_buf = "".b
+          label_buf << encode_int64(1, thread_seq_key)  # key
+          label_buf << encode_int64(3, thread_seq)       # num
+          sample_buf << encode_message(3, label_buf)
+        end
         buf << encode_message(2, sample_buf)
       end
 
