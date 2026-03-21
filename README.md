@@ -113,9 +113,22 @@ sperf hooks GVL and GC events to attribute non-CPU time:
 | `[GC marking]` | Time in GC mark phase |
 | `[GC sweeping]` | Time in GC sweep phase |
 
-## Limitations
+## Pros & Cons
 
-- **Method-level granularity only**: sperf profiles at the method level, not the line level. If a method is slow, you will see which method it is, but not which line within it. This is a deliberate trade-off for lower overhead and simpler implementation.
+### Pros
+
+- **Safepoint-based, but accurate**: Like other Ruby profilers, sperf can only sample at safepoints. However, it uses actual time deltas as sample weights to correct for safepoint delays — so the profiling results faithfully reflect where time is actually spent.
+- **GVL & GC visibility** (wall mode): Attributes off-GVL time, GVL contention, and GC phases to the responsible call stacks with synthetic frames.
+- **Low overhead**: No extra thread on Linux (signal-based timer). Sampling overhead is ~1-5 us per sample.
+- **pprof compatible**: Output works with `go tool pprof`, speedscope, and other standard tools.
+- **No code changes required**: Profile any Ruby program via CLI (`sperf stat ruby app.rb`) or environment variables (`SPERF_ENABLED=1`).
+
+### Cons
+
+- **Method-level only**: Profiles at the method level, not the line level. You can see which method is slow, but not which line within it.
+- **Ruby >= 3.4.0**: Requires recent Ruby for the internal APIs used (postponed jobs, thread event hooks).
+- **POSIX only**: Linux, macOS, etc. No Windows support.
+- **Safepoint sampling**: Cannot sample inside C extensions or during long-running C calls that don't reach a safepoint. Time spent there is attributed to the next sample.
 
 ## Output Formats
 
