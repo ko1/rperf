@@ -38,7 +38,7 @@ graph TD
 
 ## Global profiler state
 
-sperf uses a single global `sperf_profiler_t` struct. Only one profiling session can be active at a time. The struct holds:
+sperf uses a single global `sperf_profiler_t` struct. Only one profiling session can be active at a time ([single session](#index:single session) limitation). The struct holds:
 
 - Timer configuration (frequency, mode, signal number)
 - Sample buffer (dynamically growing array)
@@ -155,7 +155,7 @@ GC samples always use wall time regardless of the profiling mode, because GC tim
 
 ## Deferred string resolution
 
-During sampling, sperf stores raw frame `VALUE`s (Ruby internal object references) in the frame pool — not strings. This keeps the hot path allocation-free and fast.
+During sampling, sperf stores raw frame `VALUE`s (Ruby internal object references) in the [frame pool](#index:frame pool) — not strings. This [deferred string resolution](#index:deferred string resolution) keeps the hot path allocation-free and fast.
 
 String resolution happens at stop time:
 
@@ -187,7 +187,7 @@ Thread data is created lazily on first encounter and freed on the `EXITED` event
 
 ## Fork safety
 
-sperf registers a `pthread_atfork` child handler that silently stops profiling in the forked child process:
+sperf registers a `pthread_atfork` child handler that silently stops profiling in the forked child process ([fork safety](#index:fork safety)):
 
 - Clears the timer/signal state
 - Removes event hooks

@@ -4,7 +4,7 @@ sperf provides a perf-like command-line interface with four main subcommands: `r
 
 ## sperf stat
 
-`sperf stat` is the quickest way to get a performance overview. It runs your command with wall-mode profiling and prints a summary to stderr.
+[`sperf stat`](#index:sperf stat) is the quickest way to get a performance overview. It runs your command with [wall](#index:wall mode)-mode profiling and prints a summary to stderr.
 
 ```bash
 sperf stat ruby my_app.rb
@@ -100,7 +100,7 @@ sperf stat [options] command [args...]
 
 ## sperf record
 
-`sperf record` profiles a command and saves the result to a file. This is the primary way to capture profiles for detailed analysis.
+[`sperf record`](#index:sperf record) profiles a command and saves the result to a file. This is the primary way to capture profiles for detailed analysis.
 
 ```bash
 sperf record ruby my_app.rb
@@ -120,8 +120,8 @@ This creates `sperf.data`. You can then analyze it with `sperf report` or other 
 
 sperf supports two profiling modes:
 
-- **cpu** (default): Measures per-thread CPU time. Best for finding functions that consume CPU cycles. Ignores time spent sleeping, in I/O, or waiting for the GVL.
-- **wall**: Measures wall-clock time. Best for finding where wall time goes, including I/O, sleep, and GVL contention.
+- **[cpu](#index:cpu mode)** (default): Measures per-thread CPU time. Best for finding functions that consume CPU cycles. Ignores time spent sleeping, in I/O, or waiting for the GVL.
+- **[wall](#index:wall mode)**: Measures wall-clock time. Best for finding where wall time goes, including I/O, sleep, and GVL contention.
 
 ```bash
 # CPU mode (default)
@@ -236,7 +236,7 @@ sperf record [options] command [args...]
 
 ## sperf report
 
-`sperf report` opens a pprof profile for analysis. It wraps `go tool pprof` and requires Go to be installed.
+[`sperf report`](#index:sperf report) opens a pprof profile for analysis. It wraps `go tool pprof` and requires Go to be installed.
 
 ```bash
 # Open interactive web UI (default)
@@ -280,7 +280,7 @@ The default behavior (without `--top` or `--text`) opens an interactive web UI i
 
 ## sperf diff
 
-`sperf diff` compares two pprof profiles, showing the difference (target - base). This is useful for measuring the impact of optimizations.
+[`sperf diff`](#index:sperf diff) compares two pprof profiles, showing the difference (target - base). This is useful for measuring the impact of optimizations.
 
 ```bash
 # Open diff in browser

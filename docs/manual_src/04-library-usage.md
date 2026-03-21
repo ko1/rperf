@@ -6,7 +6,7 @@ sperf provides a Ruby API for programmatic profiling. This is useful when you wa
 
 ### Block form (recommended)
 
-The simplest way to use sperf is with the block form of `Sperf.start`. It profiles the block and returns the profiling data:
+The simplest way to use sperf is with the block form of [`Sperf.start`](#index:Sperf.start). It profiles the block and returns the profiling data:
 
 ```ruby
 require "sperf"
@@ -65,7 +65,7 @@ Sperf.start(frequency: 1000, mode: :wall)
 data = Sperf.stop
 ```
 
-`Sperf.stop` returns the data hash, or `nil` if the profiler was not running.
+[`Sperf.stop`](#index:Sperf.stop) returns the data hash, or `nil` if the profiler was not running.
 
 ## Sperf.start parameters
 
@@ -101,7 +101,7 @@ Each sample has:
 
 ## Sperf.save
 
-`Sperf.save` writes profiling data to a file in any supported format:
+[`Sperf.save`](#index:Sperf.save) writes profiling data to a file in any supported format:
 
 ```ruby
 Sperf.save("profile.pb.gz", data)        # pprof format

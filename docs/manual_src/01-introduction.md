@@ -2,9 +2,9 @@
 
 ## What is sperf?
 
-sperf is a safepoint-based sampling performance profiler for Ruby. It helps you find where your Ruby program spends its time — whether that's CPU computation, I/O waits, GVL contention, or garbage collection.
+[sperf](#index) is a [safepoint](#index:safepoint)-based [sampling](#index:sampling) performance profiler for Ruby. It helps you find where your Ruby program spends its time — whether that's CPU computation, I/O waits, [GVL](#index:GVL) contention, or garbage collection.
 
-Unlike traditional sampling profilers that count samples uniformly, sperf uses actual time deltas (in nanoseconds) as weights for each sample. This corrects the safepoint bias problem that affects all Ruby sampling profilers, producing more accurate results.
+Unlike traditional sampling profilers that count samples uniformly, sperf uses actual time deltas (in nanoseconds) as [weight](#index:weight)s for each sample. This corrects the [safepoint bias](#index:safepoint bias) problem that affects all Ruby sampling profilers, producing more accurate results.
 
 sperf is inspired by Linux [perf](#cite:demelo2010), providing a familiar CLI interface with subcommands like `record`, `stat`, and `report`.
 
@@ -16,7 +16,7 @@ Ruby already has profiling tools like [stackprof](#cite:stackprof). So why sperf
 
 Most Ruby sampling profilers collect backtraces by calling `rb_profile_frames` directly in the signal handler. This approach yields backtraces at the actual signal timing, but relies on undocumented internal VM state — `rb_profile_frames` is not guaranteed to be async-signal-safe, and the results can be unreliable if the VM is in the middle of updating its internal structures.
 
-sperf takes a different approach: it uses the postponed job mechanism (`rb_postponed_job`), which is the Ruby VM's official API for safely deferring work from signal handlers. Backtrace collection is deferred to the next [safepoint](#index) — a point where the VM is in a consistent state and `rb_profile_frames` can return reliable results. The trade-off is that when a timer fires between safepoints, the actual sample is delayed until the next safepoint.
+sperf takes a different approach: it uses the [postponed job](#index:postponed job) mechanism (`rb_postponed_job`), which is the Ruby VM's official API for safely deferring work from signal handlers. Backtrace collection is deferred to the next [safepoint](#index:safepoint) — a point where the VM is in a consistent state and `rb_profile_frames` can return reliable results. The trade-off is that when a timer fires between safepoints, the actual sample is delayed until the next safepoint.
 
 If each sample were counted equally (weight = 1), a sample delayed by a long-running C method would get the same weight as one taken immediately. This is the [safepoint bias](#cite:mytkowicz2010) problem: functions that happen to be running when the thread reaches a safepoint appear more often than they should, while functions between safepoints are under-represented.
 
@@ -39,9 +39,9 @@ sperf solves this by recording `clock_now - clock_prev` as the weight of each sa
 
 ### Other advantages
 
-- **GVL and GC awareness**: In wall mode, sperf tracks time spent blocked off the GVL, waiting to reacquire the GVL, and in GC marking/sweeping phases — each as distinct synthetic frames.
-- **perf-like CLI**: The `sperf stat` command gives you a quick performance overview (like `perf stat`), while `sperf record` + `sperf report` gives you detailed profiling.
-- **Standard output**: sperf outputs pprof protobuf format, compatible with Go's `pprof` tool ecosystem, as well as collapsed stacks for [flame graphs](#cite:gregg2016) and speedscope.
+- **GVL and GC awareness**: In wall mode, sperf tracks time spent blocked off the GVL, waiting to reacquire the GVL, and in GC marking/sweeping phases — each as distinct [synthetic frames](#index:synthetic frames).
+- **perf-like CLI**: The [`sperf stat`](#index:sperf stat) command gives you a quick performance overview (like `perf stat`), while [`sperf record`](#index:sperf record) + [`sperf report`](#index:sperf report) gives you detailed profiling.
+- **Standard output**: sperf outputs [pprof](#index:pprof) protobuf format, compatible with Go's `pprof` tool ecosystem, as well as [collapsed stacks](#index:collapsed stacks) for [flame graphs](#cite:gregg2016) and speedscope.
 - **Low overhead**: Default 1000 Hz sampling adds < 0.2% overhead, suitable for production use.
 
 ## Requirements

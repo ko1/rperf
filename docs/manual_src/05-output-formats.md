@@ -4,7 +4,7 @@ sperf supports three output formats. The format is auto-detected from the file e
 
 ## pprof (default)
 
-The pprof format is a gzip-compressed Protocol Buffers binary. This is the standard format used by Go's pprof tooling and is the default output of sperf.
+The [pprof](#index:pprof) format is a gzip-compressed Protocol Buffers binary. This is the standard format used by Go's pprof tooling and is the default output of sperf.
 
 **Extension convention**: `.pb.gz`
 
@@ -32,7 +32,7 @@ You can also import pprof files into [speedscope](https://www.speedscope.app/) v
 
 ## Collapsed stacks
 
-The collapsed stacks format is a plain text format with one line per unique stack trace. Each line contains a semicolon-separated stack (bottom-to-top) followed by a space and the weight in nanoseconds.
+The [collapsed stacks](#index:collapsed stacks) format is a plain text format with one line per unique stack trace. Each line contains a semicolon-separated stack (bottom-to-top) followed by a space and the weight in nanoseconds.
 
 **Extension convention**: `.collapsed`
 

@@ -4,8 +4,8 @@
 
 Understanding the difference between flat and cumulative time is essential for effective profiling, as described in classic profiling literature [gprof](#cite:graham1982).
 
-- **Flat time**: Time attributed directly to a function — it was the leaf (deepest frame) in the sample. High flat time means the function itself is doing expensive work.
-- **Cumulative time**: Time for all samples where the function appears anywhere in the stack. High cumulative time means the function (or something it calls) is expensive.
+- **[Flat time](#index:flat time)**: Time attributed directly to a function — it was the leaf (deepest frame) in the sample. High flat time means the function itself is doing expensive work.
+- **[Cumulative time](#index:cumulative time)**: Time for all samples where the function appears anywhere in the stack. High cumulative time means the function (or something it calls) is expensive.
 
 ```mermaid
 graph TD
@@ -35,9 +35,9 @@ In addition to normal Ruby frames, sperf records synthetic frames that represent
 
 **Mode**: wall only
 
-Time the thread spent off the GVL — during I/O operations, `sleep`, or C extensions that release the GVL. This time is attributed to the stack captured at the SUSPENDED event (when the thread released the GVL).
+Time the thread spent off the GVL — during I/O operations, `sleep`, or C extensions that release the [GVL](#index:GVL). This is one of the [synthetic frames](#index:synthetic frames). This time is attributed to the stack captured at the SUSPENDED event (when the thread released the GVL).
 
-High `[GVL blocked]` time indicates your program is I/O bound. Look at the cumulative view to find which functions are triggering the I/O.
+High [`[GVL blocked]`](#index:\[GVL blocked\]) time indicates your program is I/O bound. Look at the cumulative view to find which functions are triggering the I/O.
 
 ### [GVL wait]
 
@@ -45,7 +45,7 @@ High `[GVL blocked]` time indicates your program is I/O bound. Look at the cumul
 
 Time the thread spent waiting to reacquire the GVL after becoming ready. This indicates GVL contention — another thread is holding the GVL while this thread wants to run.
 
-High `[GVL wait]` time means your threads are serialized on the GVL. Consider reducing GVL-holding work, using Ractors, or moving work to child processes.
+High [`[GVL wait]`](#index:\[GVL wait\]) time means your threads are serialized on the GVL. Consider reducing GVL-holding work, using Ractors, or moving work to child processes.
 
 ### [GC marking]
 
@@ -53,7 +53,7 @@ High `[GVL wait]` time means your threads are serialized on the GVL. Consider re
 
 Time spent in the GC marking phase. Always measured in wall time. Attributed to the stack that triggered GC.
 
-High `[GC marking]` time means too many live objects. Reduce the number of long-lived allocations.
+High [`[GC marking]`](#index:\[GC marking\]) time means too many live objects. Reduce the number of long-lived allocations.
 
 ### [GC sweeping]
 
@@ -61,7 +61,7 @@ High `[GC marking]` time means too many live objects. Reduce the number of long-
 
 Time spent in the GC sweeping phase. Always measured in wall time. Attributed to the stack that triggered GC.
 
-High `[GC sweeping]` time means too many short-lived objects. Consider reusing objects or using object pools.
+High [`[GC sweeping]`](#index:\[GC sweeping\]) time means too many short-lived objects. Consider reusing objects or using object pools.
 
 ## Diagnosing common problems
 
