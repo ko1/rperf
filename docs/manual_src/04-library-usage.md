@@ -88,16 +88,19 @@ data = Sperf.stop
   frequency: 1000,
   sampling_count: 1234,    # number of timer callbacks
   sampling_time_ns: 56789, # total time spent sampling (overhead)
-  samples: [               # Array of [frames, weight]
-    [frames, weight],      #   frames: [[path, label], ...] deepest-first
+  start_time_ns: 17740..., # CLOCK_REALTIME epoch nanos
+  duration_ns: 10000000,   # profiling duration in nanos
+  samples: [               # Array of [frames, weight, thread_seq]
+    [frames, weight, seq], #   frames: [[path, label], ...] deepest-first
     ...                    #   weight: Integer (nanoseconds)
-  ]
+  ]                        #   seq: Integer (thread sequence, 1-based)
 }
 ```
 
 Each sample has:
 - **frames**: An array of `[path, label]` pairs, ordered deepest-first (leaf frame at index 0)
 - **weight**: Time in nanoseconds attributed to this sample
+- **thread_seq**: Thread sequence number (1-based, assigned per profiling session)
 
 ## Sperf.save
 
@@ -173,7 +176,7 @@ data = Sperf.start(mode: :cpu) { workload }
 
 # Find the hottest function
 flat = Hash.new(0)
-data[:samples].each do |frames, weight|
+data[:samples].each do |frames, weight, thread_seq|
   leaf_label = frames.first&.last  # frames[0] is the leaf
   flat[leaf_label] += weight
 end

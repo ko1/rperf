@@ -29,6 +29,28 @@ You can also import pprof files into [speedscope](https://www.speedscope.app/) v
 
 **Advantages**: Standard format supported by a wide ecosystem of tools. Supports diff comparison between two profiles. Interactive exploration with flame graphs, call graphs, and source annotations.
 
+### Embedded metadata
+
+sperf embeds the following metadata in each pprof profile:
+
+| Field | Description |
+|-------|-------------|
+| `comment` | sperf version, profiling mode, frequency, Ruby version |
+| `time_nanos` | Profile collection start time (epoch nanoseconds) |
+| `duration_nanos` | Profile duration (nanoseconds) |
+| `doc_url` | Link to sperf documentation |
+
+View comments with: `go tool pprof -comments profile.pb.gz`
+
+### Sample labels
+
+Each sample carries a `thread_seq` numeric label — a thread sequence number (1-based) assigned when sperf first sees each thread during a profiling session. This allows per-thread analysis:
+
+```bash
+# Group flame graph by thread
+go tool pprof -tagroot=thread_seq profile.pb.gz
+```
+
 ## Collapsed stacks
 
 The [collapsed stacks](#index:collapsed stacks) format is a plain text format with one line per unique stack trace. Each line contains a semicolon-separated stack (bottom-to-top) followed by a space and the weight in nanoseconds.
