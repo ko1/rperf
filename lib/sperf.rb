@@ -540,7 +540,7 @@ module Sperf
         intern.("frequency: #{frequency}Hz"),
         intern.("ruby: #{RUBY_DESCRIPTION}"),
       ]
-      doc_url_idx = intern.("https://ko1.github.io/sperf/")
+      doc_url_idx = intern.("https://ko1.github.io/sperf/help.html")
 
       # field 6: string_table (repeated string)
       string_table.each do |s|
