@@ -6,6 +6,14 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
+
+#ifdef __linux__
+#define SPERF_USE_TIMER_SIGNAL 1
+#define SPERF_TIMER_SIGNAL_DEFAULT (SIGRTMIN + 8)
+#else
+#define SPERF_USE_TIMER_SIGNAL 0
+#endif
 
 #define SPERF_MAX_STACK_DEPTH 512
 #define SPERF_INITIAL_SAMPLES 1024
@@ -49,6 +57,10 @@ typedef struct sperf_profiler {
     int mode; /* 0 = cpu, 1 = wall */
     volatile int running;
     pthread_t timer_thread;
+#if SPERF_USE_TIMER_SIGNAL
+    timer_t timer_id;
+    int timer_signal;     /* >0: use timer signal, 0: use nanosleep thread */
+#endif
     rb_postponed_job_handle_t pj_handle;
     sperf_sample_t *samples;
     size_t sample_count;
@@ -407,7 +419,15 @@ sperf_sample_job(void *arg)
         (ts_end.tv_nsec - ts_start.tv_nsec);
 }
 
-/* ---- Timer thread ---- */
+/* ---- Timer ---- */
+
+#if SPERF_USE_TIMER_SIGNAL
+static void
+sperf_signal_handler(int sig)
+{
+    rb_postponed_job_trigger(g_profiler.pj_handle);
+}
+#endif
 
 static void *
 sperf_timer_func(void *arg)
@@ -448,6 +468,9 @@ rb_sperf_start(int argc, VALUE *argv, VALUE self)
     VALUE opts;
     int frequency = 1000;
     int mode = 0; /* 0 = cpu, 1 = wall */
+#if SPERF_USE_TIMER_SIGNAL
+    int timer_signal = SPERF_TIMER_SIGNAL_DEFAULT;
+#endif
 
     rb_scan_args(argc, argv, ":", &opts);
     if (!NIL_P(opts)) {
@@ -469,6 +492,21 @@ rb_sperf_start(int argc, VALUE *argv, VALUE self)
                 rb_raise(rb_eArgError, "mode must be :cpu or :wall");
             }
         }
+#if SPERF_USE_TIMER_SIGNAL
+        VALUE vsig = rb_hash_aref(opts, ID2SYM(rb_intern("signal")));
+        if (!NIL_P(vsig)) {
+            if (RTEST(vsig)) {
+                timer_signal = NUM2INT(vsig);
+                if (timer_signal < SIGRTMIN || timer_signal > SIGRTMAX) {
+                    rb_raise(rb_eArgError, "signal must be between SIGRTMIN(%d) and SIGRTMAX(%d)",
+                             SIGRTMIN, SIGRTMAX);
+                }
+            } else {
+                /* signal: false or signal: 0 → use nanosleep thread */
+                timer_signal = 0;
+            }
+        }
+#endif
     }
 
     if (g_profiler.running) {
@@ -534,8 +572,43 @@ rb_sperf_start(int argc, VALUE *argv, VALUE self)
 
     g_profiler.running = 1;
 
-    if (pthread_create(&g_profiler.timer_thread, NULL, sperf_timer_func, &g_profiler) != 0) {
-        g_profiler.running = 0;
+#if SPERF_USE_TIMER_SIGNAL
+    g_profiler.timer_signal = timer_signal;
+
+    if (timer_signal > 0) {
+        struct sigaction sa;
+        struct sigevent sev;
+        struct itimerspec its;
+
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = sperf_signal_handler;
+        sa.sa_flags = SA_RESTART;
+        sigaction(g_profiler.timer_signal, &sa, NULL);
+
+        memset(&sev, 0, sizeof(sev));
+        sev.sigev_notify = SIGEV_SIGNAL;
+        sev.sigev_signo = g_profiler.timer_signal;
+        if (timer_create(CLOCK_MONOTONIC, &sev, &g_profiler.timer_id) != 0) {
+            g_profiler.running = 0;
+            signal(g_profiler.timer_signal, SIG_DFL);
+            goto timer_fail;
+        }
+
+        its.it_value.tv_sec = 0;
+        its.it_value.tv_nsec = 1000000000L / g_profiler.frequency;
+        its.it_interval = its.it_value;
+        timer_settime(g_profiler.timer_id, 0, &its, NULL);
+    } else
+#endif
+    {
+        if (pthread_create(&g_profiler.timer_thread, NULL, sperf_timer_func, &g_profiler) != 0) {
+            g_profiler.running = 0;
+            goto timer_fail;
+        }
+    }
+
+    if (0) {
+timer_fail:
         {
             VALUE cur = rb_thread_current();
             sperf_thread_data_t *td = (sperf_thread_data_t *)rb_internal_thread_specific_get(cur, g_profiler.ts_key);
@@ -550,7 +623,7 @@ rb_sperf_start(int argc, VALUE *argv, VALUE self)
         g_profiler.samples = NULL;
         free(g_profiler.frame_pool);
         g_profiler.frame_pool = NULL;
-        rb_raise(rb_eRuntimeError, "sperf: failed to create timer thread");
+        rb_raise(rb_eRuntimeError, "sperf: failed to create timer");
     }
 
     return Qtrue;
@@ -568,7 +641,15 @@ rb_sperf_stop(VALUE self)
     }
 
     g_profiler.running = 0;
-    pthread_join(g_profiler.timer_thread, NULL);
+#if SPERF_USE_TIMER_SIGNAL
+    if (g_profiler.timer_signal > 0) {
+        timer_delete(g_profiler.timer_id);
+        signal(g_profiler.timer_signal, SIG_DFL);
+    } else
+#endif
+    {
+        pthread_join(g_profiler.timer_thread, NULL);
+    }
 
     if (g_profiler.thread_hook) {
         rb_internal_thread_remove_event_hook(g_profiler.thread_hook);
@@ -657,8 +738,15 @@ sperf_after_fork_child(void)
 {
     if (!g_profiler.running) return;
 
-    /* Mark as not running — timer thread doesn't exist in child */
+    /* Mark as not running — timer doesn't exist in child */
     g_profiler.running = 0;
+
+#if SPERF_USE_TIMER_SIGNAL
+    /* timer_create timers are not inherited across fork; reset signal handler */
+    if (g_profiler.timer_signal > 0) {
+        signal(g_profiler.timer_signal, SIG_DFL);
+    }
+#endif
 
     /* Remove hooks so they don't fire with stale state */
     if (g_profiler.thread_hook) {

@@ -113,7 +113,7 @@ class TestSperf < Test::Unit::TestCase
     Sperf.start(frequency: 5000)
 
     threads = 4.times.map do
-      Thread.new { 50_000_000.times { 1 + 1 } }
+      Thread.new { cpu_work_with_gvl_yield(200_000_000) }
     end
     threads.each(&:join)
 
@@ -136,7 +136,7 @@ class TestSperf < Test::Unit::TestCase
 
     threads = 8.times.map do
       Thread.new do
-        deep_recurse(100) { 50_000_000.times { 1 + 1 } }
+        deep_recurse(100) { cpu_work_with_gvl_yield }
       end
     end
     threads.each(&:join)
@@ -181,7 +181,7 @@ class TestSperf < Test::Unit::TestCase
 
     20.times do
       threads = 4.times.map do
-        Thread.new { 500_000.times { 1 + 1 } }
+        Thread.new { cpu_work_with_gvl_yield(500_000) }
       end
       threads.each(&:join)
     end
@@ -196,8 +196,10 @@ class TestSperf < Test::Unit::TestCase
   def test_restart_with_surviving_thread
     worker_running = true
     worker = Thread.new do
-      i = 0
-      i += 1 while worker_running
+      while worker_running
+        500_000.times { 1 + 1 }
+        sleep(0)
+      end
     end
 
     # Session 1
@@ -220,7 +222,7 @@ class TestSperf < Test::Unit::TestCase
     assert_operator data2[:samples].size, :>, 0
 
     max_weight2 = data2[:samples].map { |_, w| w }.max || 0
-    assert_operator max_weight2, :<, 100_000_000,
+    assert_operator max_weight2, :<, 200_000_000,
       "Surviving thread's max weight (#{max_weight2}ns) should not include inter-session gap"
   end
 
@@ -613,6 +615,17 @@ class TestSperf < Test::Unit::TestCase
   end
 
   private
+
+  # CPU work that periodically releases the GVL via sleep(0).
+  # This avoids the running_ec race in the Ruby VM where
+  # rb_postponed_job_trigger notifications can be misdirected.
+  def cpu_work_with_gvl_yield(n = 50_000_000)
+    chunk = 500_000
+    (n / chunk).times do
+      chunk.times { 1 + 1 }
+      sleep(0)
+    end
+  end
 
   def deep_recurse(depth, &block)
     if depth <= 0

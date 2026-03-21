@@ -10,7 +10,7 @@ sperf is a safepoint-based sampling performance profiler for Ruby. It uses actua
 ## Architecture
 
 ```
-ext/sperf/sperf.c    -- C extension: timer thread, GVL/GC event hooks, sampling
+ext/sperf/sperf.c    -- C extension: timer (signal or thread), GVL/GC event hooks, sampling
 lib/sperf.rb         -- Ruby API: start/stop, encoders (PProf, Collapsed, Text), stat output
 exe/sperf            -- CLI: record, stat, report, diff, help subcommands
 test/test_sperf.rb   -- Unit tests
@@ -56,13 +56,15 @@ See `benchmark/README.md` for full documentation.
 - **Deferred string resolution**: Sampling stores raw frame VALUEs in a pool. String resolution (`rb_profile_frame_full_label`, `rb_profile_frame_path`) happens at stop time, not during sampling. This keeps the hot path allocation-free.
 - **No protobuf dependency**: pprof format is encoded with a hand-written encoder in `lib/sperf.rb` (`Sperf::PProf.encode`). String table is built in Ruby at encode time.
 - **Multiple output formats**: pprof (gzip protobuf), collapsed stacks (FlameGraph/speedscope), text (human/AI-readable report). Format auto-detected from file extension.
-- **Fork safety**: `pthread_atfork` child handler silently stops profiling in the child process. Clears timer thread state, removes event hooks, and frees sample/frame buffers. The child can start a fresh profiling session; the parent continues unaffected.
+- **Timer implementation**: On Linux, defaults to `timer_create` + `SIGEV_SIGNAL` with a `sigaction` handler (SIGRTMIN+8 by default). This gives precise interval timing (median ~1000us at 1000Hz) with no extra thread. The signal number can be changed via `signal:` option. On non-Linux (macOS etc.) or with `signal: false`, falls back to a dedicated pthread + `nanosleep` loop (simpler but ~100us drift per tick).
+- **Fork safety**: `pthread_atfork` child handler silently stops profiling in the child process. Clears timer/signal state, removes event hooks, and frees sample/frame buffers. The child can start a fresh profiling session; the parent continues unaffected.
 - **Two clock modes**: cpu (`CLOCK_THREAD_CPUTIME_ID`) and wall (`CLOCK_MONOTONIC`).
 - **Method-level profiling**: No line numbers. Frame labels use `rb_profile_frame_full_label` for qualified names (e.g., `Integer#times`).
 
 ## Coding Notes
 
 - The C extension uses a single global `sperf_profiler_t`. Only one profiling session at a time.
+- `Sperf.start` accepts `signal:` option (Linux only): `nil`/omitted = timer signal (default), `false`/`0` = nanosleep thread, positive integer = specific RT signal number.
 - C extension exports `_c_start`/`_c_stop`; Ruby wraps them as `Sperf.start`/`Sperf.stop` with output/verbose/block support.
 - Frame pool (`VALUE *frame_pool`, initial ~1MB) stores raw frame VALUEs from `rb_profile_thread_frames`. A TypedData wrapper with `dmark` using `rb_gc_mark_locations` keeps them alive across GC.
 - `rb_profile_thread_frames` writes directly into the frame pool (no intermediate buffer).

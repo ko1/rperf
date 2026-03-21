@@ -17,13 +17,15 @@ module Sperf
   #   .collapsed → collapsed stacks (FlameGraph / speedscope compatible)
   #   .txt       → text report (human/AI readable flat + cumulative table)
   #   otherwise (.pb.gz etc) → pprof protobuf (gzip compressed)
-  def self.start(frequency: 1000, mode: :cpu, output: nil, verbose: false, format: nil, stat: false)
+  def self.start(frequency: 1000, mode: :cpu, output: nil, verbose: false, format: nil, stat: false, signal: nil)
     @verbose = verbose || ENV["SPERF_VERBOSE"] == "1"
     @output = output
     @format = format
     @stat = stat
     @stat_start_mono = Process.clock_gettime(Process::CLOCK_MONOTONIC) if @stat
-    _c_start(frequency: frequency, mode: mode)
+    c_opts = { frequency: frequency, mode: mode }
+    c_opts[:signal] = signal unless signal.nil?
+    _c_start(**c_opts)
 
     if block_given?
       begin
