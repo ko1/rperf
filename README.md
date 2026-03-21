@@ -122,6 +122,7 @@ sperf hooks GVL and GC events to attribute non-CPU time:
 - **Low overhead**: No extra thread on Linux (signal-based timer). Sampling overhead is ~1-5 us per sample.
 - **pprof compatible**: Output works with `go tool pprof`, speedscope, and other standard tools.
 - **No code changes required**: Profile any Ruby program via CLI (`sperf stat ruby app.rb`) or environment variables (`SPERF_ENABLED=1`).
+- **perf-like CLI**: Familiar subcommand interface — `record`, `stat`, `report`, `diff` — inspired by Linux perf.
 
 ### Cons
 
