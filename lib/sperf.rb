@@ -1,9 +1,9 @@
 require "sperf.so"
+require "sperf/version"
 require "zlib"
 require "stringio"
 
 module Sperf
-  VERSION = "0.2.0"
 
   @verbose = false
   @output = nil

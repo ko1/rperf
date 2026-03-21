@@ -1,6 +1,8 @@
+require_relative "lib/sperf/version"
+
 Gem::Specification.new do |spec|
   spec.name          = "sperf"
-  spec.version       = "0.1.0"
+  spec.version       = Sperf::VERSION
   spec.authors       = ["Koichi Sasada"]
   spec.summary       = "Safepoint-based sampling performance profiler for Ruby"
   spec.description   = "A safepoint-based sampling performance profiler that uses thread CPU time deltas as weights to correct safepoint bias. Outputs pprof, collapsed stacks, or text report."
