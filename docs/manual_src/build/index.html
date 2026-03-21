@@ -1,0 +1,3354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sperf guide</title>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="robots" content="noai, noimageai">
+<style>
+/* === Reset & Base === */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --sidebar-width: 280px;
+  --color-bg: #ffffff;
+  --color-text: #1a1a1a;
+  --color-text-muted: #666666;
+  --color-border: #e0e0e0;
+  --color-sidebar-bg: #f5f5f5;
+  --color-sidebar-hover: #e8e8e8;
+  --color-accent: #2563eb;
+  --color-accent-light: #dbeafe;
+  --color-code-bg: #f8f8f8;
+  --color-code-border: #e5e5e5;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-bg);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* === Sidebar === */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--sidebar-width);
+  height: 100vh;
+  background: var(--color-sidebar-bg);
+  border-right: 1px solid var(--color-border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+}
+
+.sidebar-header {
+  padding: 1.5rem 1rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.book-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--color-text);
+}
+
+.book-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.book-title a:hover {
+  color: var(--color-accent);
+}
+
+.book-author {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+}
+
+.search-box {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  position: relative;
+}
+
+.search-box input {
+  width: 100%;
+  padding: 0.4rem 1.8rem 0.4rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-family: var(--font-sans);
+  outline: none;
+}
+
+.search-clear {
+  display: none;
+  position: absolute;
+  right: 0.3rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  line-height: 1;
+}
+
+.search-clear:hover {
+  color: var(--color-text);
+}
+
+.search-box input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-light);
+}
+
+/* TOC */
+.toc {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
+.toc ul {
+  list-style: none;
+}
+
+.toc > ul > li {
+  margin-bottom: 0.25rem;
+}
+
+.toc a {
+  display: block;
+  padding: 0.3rem 1rem;
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: 0.88rem;
+  border-left: 3px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.toc a:hover {
+  background: var(--color-sidebar-hover);
+}
+
+.toc a.toc-h1 {
+  font-weight: 600;
+}
+
+.toc a.toc-h2 {
+  padding-left: 1.8rem;
+  font-size: 0.84rem;
+}
+
+.toc a.toc-h3 {
+  padding-left: 2.6rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.toc-chapter.active > a.toc-h1 {
+  border-left-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-light);
+}
+
+/* Part & Appendix titles in TOC */
+.toc-part-title {
+  font-weight: 700 !important;
+  font-size: 0.9rem !important;
+  color: var(--color-text) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding-top: 0.6rem !important;
+  padding-bottom: 0.3rem !important;
+  border-left-color: transparent !important;
+}
+
+.toc-part > ul {
+  margin-bottom: 0.5rem;
+}
+
+.toc-appendix-title {
+  display: block;
+  padding: 0.6rem 1rem 0.3rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.toc-appendix > ul {
+  margin-bottom: 0.5rem;
+}
+
+/* Sidebar toggle */
+.sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 200;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  font-size: 1.2rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+/* === Main Content === */
+.content {
+  margin-left: var(--sidebar-width);
+  flex: 1;
+  max-width: 800px;
+  padding: 2.5rem 3rem;
+}
+
+.chapter h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.chapter h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.chapter h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.chapter h4,
+.chapter h5,
+.chapter h6 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.chapter p {
+  margin-bottom: 1rem;
+}
+
+.chapter ul,
+.chapter ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+.chapter li {
+  margin-bottom: 0.3rem;
+}
+
+.chapter li > ul,
+.chapter li > ol {
+  margin-top: 0.3rem;
+  margin-bottom: 0;
+}
+
+/* Links */
+.chapter a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.chapter a:hover {
+  text-decoration: underline;
+}
+
+/* Code */
+.chapter code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-code-border);
+  border-radius: 3px;
+  padding: 0.15em 0.35em;
+}
+
+.chapter pre {
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-code-border);
+  border-radius: 6px;
+  padding: 1rem 1.2rem;
+  overflow-x: auto;
+  margin-bottom: 1.2rem;
+  line-height: 1.5;
+}
+
+.chapter pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+/* Tables */
+.chapter table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.2rem;
+  font-size: 0.92rem;
+}
+
+.chapter th,
+.chapter td {
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.chapter th {
+  background: var(--color-sidebar-bg);
+  font-weight: 600;
+}
+
+/* Blockquote */
+.chapter blockquote {
+  border-left: 4px solid var(--color-accent);
+  padding: 0.5rem 1rem;
+  margin-bottom: 1rem;
+  color: var(--color-text-muted);
+  background: var(--color-code-bg);
+  border-radius: 0 4px 4px 0;
+}
+
+.chapter blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* Images */
+.chapter img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 0.5rem 0;
+}
+
+/* Horizontal rule */
+.chapter hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 2rem 0;
+}
+
+/* Task lists */
+.chapter .task-list-item {
+  list-style: none;
+  margin-left: -1.5rem;
+}
+
+.chapter .task-list-item input[type="checkbox"] {
+  margin-right: 0.5rem;
+}
+
+.search-match-count {
+  display: inline-block;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 0.05em 0.45em;
+  border-radius: 8px;
+  margin-left: 0.4em;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+/* Search highlight */
+mark.search-highlight {
+  background: #fef08a;
+  color: inherit;
+  padding: 0.1em 0;
+  border-radius: 2px;
+}
+
+/* === Admonitions === */
+.admonition {
+  border-left: 4px solid;
+  border-radius: 0 4px 4px 0;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.admonition p:last-child {
+  margin-bottom: 0;
+}
+
+.admonition-title {
+  font-weight: 600;
+  margin-bottom: 0.4rem !important;
+}
+
+.admonition-note {
+  border-left-color: #2563eb;
+  background: #eff6ff;
+}
+.admonition-note .admonition-title::before { content: "\2139\FE0F  "; }
+
+.admonition-tip {
+  border-left-color: #16a34a;
+  background: #f0fdf4;
+}
+.admonition-tip .admonition-title::before { content: "\1F4A1  "; }
+
+.admonition-warning {
+  border-left-color: #ca8a04;
+  background: #fefce8;
+}
+.admonition-warning .admonition-title::before { content: "\26A0\FE0F  "; }
+
+.admonition-caution {
+  border-left-color: #dc2626;
+  background: #fef2f2;
+}
+.admonition-caution .admonition-title::before { content: "\1F6D1  "; }
+
+.admonition-important {
+  border-left-color: #9333ea;
+  background: #faf5ff;
+}
+.admonition-important .admonition-title::before { content: "\2757  "; }
+
+/* === Dark Mode === */
+[data-theme="dark"] {
+  --color-bg: #1a1a2e;
+  --color-text: #e0e0e0;
+  --color-text-muted: #a0a0a0;
+  --color-border: #333;
+  --color-sidebar-bg: #16213e;
+  --color-sidebar-hover: #1a1a3a;
+  --color-accent: #4dabf7;
+  --color-accent-light: #1c3a5c;
+  --color-code-bg: #0f172a;
+  --color-code-border: #2d3748;
+  --color-highlight: rgba(255, 243, 205, 0.15);
+}
+
+[data-theme="dark"] .admonition-note {
+  background: #1e2a3a;
+}
+[data-theme="dark"] .admonition-tip {
+  background: #1a2e1a;
+}
+[data-theme="dark"] .admonition-warning {
+  background: #2e2a1a;
+}
+[data-theme="dark"] .admonition-caution {
+  background: #2e1a1a;
+}
+[data-theme="dark"] .admonition-important {
+  background: #2a1a2e;
+}
+
+[data-theme="dark"] .search-box input {
+  background: var(--color-code-bg);
+  color: var(--color-text);
+}
+
+[data-theme="dark"] mark.search-highlight {
+  background: #854d0e;
+  color: #fef08a;
+}
+
+[data-theme="dark"] .hljs {
+  background: var(--color-code-bg) !important;
+  color: #e0e0e0 !important;
+}
+
+/* Theme toggle */
+.sidebar-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.2rem 0.4rem;
+  font-size: 1rem;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  color: var(--color-text);
+  background: var(--color-sidebar-hover);
+}
+
+/* === Part / Appendix TOC === */
+.toc-part {
+  margin-top: 0.5rem;
+}
+
+.toc-part-title {
+  display: block;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+  padding: 0.6rem 1rem 0.3rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.toc-part-title:hover {
+  color: var(--color-text);
+}
+
+.toc-appendix {
+  margin-top: 0.5rem;
+}
+
+.toc-appendix-title {
+  display: block;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+  padding: 0.6rem 1rem 0.3rem;
+  border-top: 1px solid var(--color-border);
+}
+
+/* === Chapter Navigation === */
+.chapter-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+  gap: 1rem;
+}
+
+.nav-prev,
+.nav-next {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  color: var(--color-accent);
+  text-decoration: none;
+  font-size: 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  transition: background 0.15s, border-color 0.15s;
+  max-width: 45%;
+}
+
+.nav-prev:hover,
+.nav-next:hover {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent);
+  text-decoration: none;
+}
+
+.nav-next {
+  text-align: right;
+  margin-left: auto;
+}
+
+/* === Edit Link === */
+.edit-link {
+  margin-top: 2rem;
+  text-align: right;
+}
+
+.edit-link a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.edit-link a:hover {
+  color: var(--color-accent);
+}
+
+/* === Footnotes === */
+.chapter .footnotes {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.88rem;
+}
+
+.chapter .footnotes ol {
+  padding-left: 1.5rem;
+}
+
+.chapter sup a {
+  color: var(--color-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.chapter sup a:hover {
+  text-decoration: underline;
+}
+
+/* === Responsive === */
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-toggle {
+    display: block;
+  }
+
+  .content {
+    margin-left: 0;
+    padding: 2rem 1.5rem;
+    padding-top: 3.5rem;
+  }
+}
+
+/* === Bibliography === */
+.bibliography-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.bibliography-list li {
+  margin-bottom: 0.75rem;
+  padding-left: 1.5rem;
+  text-indent: -1.5rem;
+  line-height: 1.5;
+}
+
+.bibliography-list li a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.bibliography-list li a:hover {
+  text-decoration: underline;
+}
+
+.ligarb-highlight {
+  border-radius: 4px;
+  padding: 4px 6px;
+  animation: ligarb-highlight-fade 3s ease-out forwards;
+}
+
+@keyframes ligarb-highlight-fade {
+  0% { background: var(--color-highlight, #fff3cd); }
+  100% { background: transparent; }
+}
+
+.cite-ref {
+  font-size: 0.8em;
+}
+
+.bib-label {
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-right: 0.3em;
+}
+
+.cite-ref a {
+  color: var(--color-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.cite-ref a:hover {
+  text-decoration: underline;
+}
+
+.cite-missing {
+  color: #d32f2f;
+  background: #ffebee;
+  padding: 0 3px;
+  border-radius: 2px;
+  cursor: help;
+}
+
+[data-theme="dark"] .cite-missing {
+  color: #ef9a9a;
+  background: rgba(211, 47, 47, 0.15);
+}
+
+/* === Index === */
+.index-group {
+  margin-bottom: 1.5rem;
+}
+
+.index-letter {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  border-bottom: 2px solid var(--color-border);
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.index-entries {
+  margin-left: 0;
+}
+
+.index-entries dt {
+  font-weight: 600;
+  margin-top: 0.4rem;
+}
+
+.index-entries dt.index-sub {
+  font-weight: 400;
+  margin-left: 1.5rem;
+}
+
+.index-entries dd {
+  margin-left: 1.5rem;
+  font-size: 0.92rem;
+}
+
+.index-entries dd.index-sub {
+  margin-left: 3rem;
+}
+
+.index-entries dd a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.index-entries dd a:hover {
+  text-decoration: underline;
+}
+
+/* === AI Generated Notice === */
+.ai-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #ca8a04;
+  background: #fefce8;
+  border: 1px solid #facc15;
+  border-radius: 3px;
+  padding: 0.1rem 0.4rem;
+  margin-top: 0.3rem;
+  letter-spacing: 0.03em;
+}
+
+[data-theme="dark"] .ai-badge {
+  color: #fbbf24;
+  background: #2e2a1a;
+  border-color: #854d0e;
+}
+
+.chapter-footer {
+  margin-top: 2rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+}
+
+/* === Print === */
+@media print {
+  .sidebar,
+  .sidebar-toggle,
+  .chapter-nav,
+  .edit-link {
+    display: none !important;
+  }
+
+  html {
+    font-size: 11pt;
+  }
+
+  body {
+    line-height: 1.5;
+  }
+
+  .content {
+    margin-left: 0;
+    max-width: 100%;
+    padding: 0;
+  }
+
+  .chapter {
+    display: block !important;
+    page-break-before: always;
+  }
+
+  .chapter:first-child {
+    page-break-before: avoid;
+  }
+
+  .chapter pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .chapter pre code {
+    font-size: 0.8rem;
+  }
+
+  @page {
+    margin: 20mm 15mm;
+    @bottom-center {
+      content: counter(page);
+      font-size: 9pt;
+      color: #666;
+    }
+  }
+}
+
+/* === Mermaid source toggle === */
+details.mermaid-source {
+  margin-top: 0.3em;
+  font-size: 0.8em;
+}
+details.mermaid-source summary {
+  cursor: pointer;
+  color: #888;
+  user-select: none;
+}
+details.mermaid-source pre {
+  margin-top: 0.3em;
+  padding: 0.5em;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+.dark-mode details.mermaid-source pre {
+  background: #2a2a2a;
+  border-color: #444;
+}
+
+</style>
+<link rel="stylesheet" href="css/highlight.css">
+</head>
+<body>
+
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-header-top">
+      <h1 class="book-title"><a href="#cover" onclick="showChapter('cover'); return false;">sperf guide</a></h1>
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">&#9790;</button>
+    </div>
+    <p class="book-author">sperf project</p>
+    <span class="ai-badge">AI Generated</span>
+  </div>
+  <div class="search-box">
+    <input type="text" id="toc-search" placeholder="Search..." autocomplete="off">
+    <button class="search-clear" id="search-clear" type="button" aria-label="Clear search">&times;</button>
+  </div>
+  <nav class="toc" id="toc">
+    <ul>
+      <li class="toc-part">
+        <a href="#part1" class="toc-part-title" onclick="showChapter('part1')">Getting Started</a>
+        <ul>
+          <li class="toc-chapter" data-chapter="01-introduction">
+            <a href="#01-introduction" class="toc-h1" onclick="showChapter('01-introduction')">1. Introduction</a>
+            <ul>
+              <li>
+                <a href="#01-introduction--what-is-sperf" class="toc-h2" onclick="showChapterAndScroll('01-introduction', '01-introduction--what-is-sperf')">1.1 What is sperf?</a>
+              </li>
+              <li>
+                <a href="#01-introduction--why-another-profiler" class="toc-h2" onclick="showChapterAndScroll('01-introduction', '01-introduction--why-another-profiler')">1.2 Why another profiler?</a>
+              </li>
+              <li>
+                <a href="#01-introduction--the-safepoint-bias-problem" class="toc-h3" onclick="showChapterAndScroll('01-introduction', '01-introduction--the-safepoint-bias-problem')">1.2.1 The safepoint bias problem</a>
+              </li>
+              <li>
+                <a href="#01-introduction--other-advantages" class="toc-h3" onclick="showChapterAndScroll('01-introduction', '01-introduction--other-advantages')">1.2.2 Other advantages</a>
+              </li>
+              <li>
+                <a href="#01-introduction--requirements" class="toc-h2" onclick="showChapterAndScroll('01-introduction', '01-introduction--requirements')">1.3 Requirements</a>
+              </li>
+              <li>
+                <a href="#01-introduction--quick-start" class="toc-h2" onclick="showChapterAndScroll('01-introduction', '01-introduction--quick-start')">1.4 Quick start</a>
+              </li>
+            </ul>
+          </li>
+          <li class="toc-chapter" data-chapter="02-installation">
+            <a href="#02-installation" class="toc-h1" onclick="showChapter('02-installation')">2. Installation</a>
+            <ul>
+              <li>
+                <a href="#02-installation--installing-the-gem" class="toc-h2" onclick="showChapterAndScroll('02-installation', '02-installation--installing-the-gem')">2.1 Installing the gem</a>
+              </li>
+              <li>
+                <a href="#02-installation--verifying-the-installation" class="toc-h2" onclick="showChapterAndScroll('02-installation', '02-installation--verifying-the-installation')">2.2 Verifying the installation</a>
+              </li>
+              <li>
+                <a href="#02-installation--platform-support" class="toc-h2" onclick="showChapterAndScroll('02-installation', '02-installation--platform-support')">2.3 Platform support</a>
+              </li>
+              <li>
+                <a href="#02-installation--optional-go-toolchain" class="toc-h2" onclick="showChapterAndScroll('02-installation', '02-installation--optional-go-toolchain')">2.4 Optional: Go toolchain</a>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li class="toc-part">
+        <a href="#part2" class="toc-part-title" onclick="showChapter('part2')">How to Use</a>
+        <ul>
+          <li class="toc-chapter" data-chapter="03-cli-usage">
+            <a href="#03-cli-usage" class="toc-h1" onclick="showChapter('03-cli-usage')">3. CLI Usage</a>
+            <ul>
+              <li>
+                <a href="#03-cli-usage--sperf-stat" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--sperf-stat')">3.1 sperf stat</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--example-cpu-bound-program" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--example-cpu-bound-program')">3.1.1 Example: CPU-bound program</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--example-mixed-cpu-and-io" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--example-mixed-cpu-and-io')">3.1.2 Example: Mixed CPU and I/O</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--stat-options" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--stat-options')">3.1.3 stat options</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--sperf-record" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--sperf-record')">3.2 sperf record</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--example-recording-a-profile" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--example-recording-a-profile')">3.2.1 Example: Recording a profile</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--choosing-a-profiling-mode" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--choosing-a-profiling-mode')">3.2.2 Choosing a profiling mode</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--choosing-an-output-format" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--choosing-an-output-format')">3.2.3 Choosing an output format</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--example-text-output" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--example-text-output')">3.2.4 Example: Text output</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--example-wall-mode-text-output" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--example-wall-mode-text-output')">3.2.5 Example: Wall mode text output</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--verbose-output" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--verbose-output')">3.2.6 Verbose output</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--record-options" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--record-options')">3.2.7 record options</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--sperf-report" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--sperf-report')">3.3 sperf report</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--report-options" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--report-options')">3.3.1 report options</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--sperf-diff" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--sperf-diff')">3.4 sperf diff</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--workflow-example" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--workflow-example')">3.4.1 Workflow example</a>
+              </li>
+              <li>
+                <a href="#03-cli-usage--sperf-help" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--sperf-help')">3.5 sperf help</a>
+              </li>
+            </ul>
+          </li>
+          <li class="toc-chapter" data-chapter="04-library-usage">
+            <a href="#04-library-usage" class="toc-h1" onclick="showChapter('04-library-usage')">4. Ruby API</a>
+            <ul>
+              <li>
+                <a href="#04-library-usage--basic-usage" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--basic-usage')">4.1 Basic usage</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--block-form-recommended" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--block-form-recommended')">4.1.1 Block form (recommended)</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--example-profiling-a-fibonacci-function" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--example-profiling-a-fibonacci-function')">4.1.2 Example: Profiling a Fibonacci function</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--manual-startstop" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--manual-startstop')">4.1.3 Manual start/stop</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--sperfstart-parameters" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--sperfstart-parameters')">4.2 Sperf.start parameters</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--sperfstop-return-value" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--sperfstop-return-value')">4.3 Sperf.stop return value</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--sperfsave" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--sperfsave')">4.4 Sperf.save</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--practical-examples" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--practical-examples')">4.5 Practical examples</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--profiling-a-web-request-handler" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--profiling-a-web-request-handler')">4.5.1 Profiling a web request handler</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--comparing-cpu-and-wall-profiles" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--comparing-cpu-and-wall-profiles')">4.5.2 Comparing CPU and wall profiles</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--processing-raw-samples" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--processing-raw-samples')">4.5.3 Processing raw samples</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--generating-collapsed-stacks-for-flamegraph" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--generating-collapsed-stacks-for-flamegraph')">4.5.4 Generating collapsed stacks for FlameGraph</a>
+              </li>
+            </ul>
+          </li>
+          <li class="toc-chapter" data-chapter="05-output-formats">
+            <a href="#05-output-formats" class="toc-h1" onclick="showChapter('05-output-formats')">5. Output Formats</a>
+            <ul>
+              <li>
+                <a href="#05-output-formats--pprof-default" class="toc-h2" onclick="showChapterAndScroll('05-output-formats', '05-output-formats--pprof-default')">5.1 pprof (default)</a>
+              </li>
+              <li>
+                <a href="#05-output-formats--collapsed-stacks" class="toc-h2" onclick="showChapterAndScroll('05-output-formats', '05-output-formats--collapsed-stacks')">5.2 Collapsed stacks</a>
+              </li>
+              <li>
+                <a href="#05-output-formats--parsing-collapsed-stacks-programmatically" class="toc-h3" onclick="showChapterAndScroll('05-output-formats', '05-output-formats--parsing-collapsed-stacks-programmatically')">5.2.1 Parsing collapsed stacks programmatically</a>
+              </li>
+              <li>
+                <a href="#05-output-formats--text-report" class="toc-h2" onclick="showChapterAndScroll('05-output-formats', '05-output-formats--text-report')">5.3 Text report</a>
+              </li>
+              <li>
+                <a href="#05-output-formats--format-comparison" class="toc-h2" onclick="showChapterAndScroll('05-output-formats', '05-output-formats--format-comparison')">5.4 Format comparison</a>
+              </li>
+              <li>
+                <a href="#05-output-formats--auto-detection-rules" class="toc-h2" onclick="showChapterAndScroll('05-output-formats', '05-output-formats--auto-detection-rules')">5.5 Auto-detection rules</a>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li class="toc-part">
+        <a href="#part3" class="toc-part-title" onclick="showChapter('part3')">Deep Dive</a>
+        <ul>
+          <li class="toc-chapter" data-chapter="06-interpreting-results">
+            <a href="#06-interpreting-results" class="toc-h1" onclick="showChapter('06-interpreting-results')">6. Interpreting Results</a>
+            <ul>
+              <li>
+                <a href="#06-interpreting-results--flat-vs-cumulative-time" class="toc-h2" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--flat-vs-cumulative-time')">6.1 Flat vs. cumulative time</a>
+              </li>
+              <li>
+                <a href="#06-interpreting-results--weight-unit" class="toc-h2" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--weight-unit')">6.2 Weight unit</a>
+              </li>
+              <li>
+                <a href="#06-interpreting-results--synthetic-frames" class="toc-h2" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--synthetic-frames')">6.3 Synthetic frames</a>
+              </li>
+              <li>
+                <a href="#06-interpreting-results--gvl-blocked" class="toc-h3" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--gvl-blocked')">6.3.1 [GVL blocked]</a>
+              </li>
+              <li>
+                <a href="#06-interpreting-results--gvl-wait" class="toc-h3" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--gvl-wait')">6.3.2 [GVL wait]</a>
+              </li>
+              <li>
+                <a href="#06-interpreting-results--gc-marking" class="toc-h3" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--gc-marking')">6.3.3 [GC marking]</a>
+              </li>
+              <li>
+                <a href="#06-interpreting-results--gc-sweeping" class="toc-h3" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--gc-sweeping')">6.3.4 [GC sweeping]</a>
+              </li>
+              <li>
+                <a href="#06-interpreting-results--diagnosing-common-problems" class="toc-h2" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--diagnosing-common-problems')">6.4 Diagnosing common problems</a>
+              </li>
+              <li>
+                <a href="#06-interpreting-results--high-cpu-usage" class="toc-h3" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--high-cpu-usage')">6.4.1 High CPU usage</a>
+              </li>
+              <li>
+                <a href="#06-interpreting-results--slow-requests-high-latency" class="toc-h3" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--slow-requests-high-latency')">6.4.2 Slow requests / high latency</a>
+              </li>
+              <li>
+                <a href="#06-interpreting-results--gc-pressure" class="toc-h3" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--gc-pressure')">6.4.3 GC pressure</a>
+              </li>
+              <li>
+                <a href="#06-interpreting-results--multithreaded-app-slower-than-expected" class="toc-h3" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--multithreaded-app-slower-than-expected')">6.4.4 Multithreaded app slower than expected</a>
+              </li>
+              <li>
+                <a href="#06-interpreting-results--tips-for-effective-profiling" class="toc-h2" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--tips-for-effective-profiling')">6.5 Tips for effective profiling</a>
+              </li>
+            </ul>
+          </li>
+          <li class="toc-chapter" data-chapter="07-internals">
+            <a href="#07-internals" class="toc-h1" onclick="showChapter('07-internals')">7. Internals</a>
+            <ul>
+              <li>
+                <a href="#07-internals--architecture-overview" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--architecture-overview')">7.1 Architecture overview</a>
+              </li>
+              <li>
+                <a href="#07-internals--global-profiler-state" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--global-profiler-state')">7.2 Global profiler state</a>
+              </li>
+              <li>
+                <a href="#07-internals--timer-implementation" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--timer-implementation')">7.3 Timer implementation</a>
+              </li>
+              <li>
+                <a href="#07-internals--linux-signal-based-timer-default" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--linux-signal-based-timer-default')">7.3.1 Linux: Signal-based timer (default)</a>
+              </li>
+              <li>
+                <a href="#07-internals--fallback-nanosleep-thread" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--fallback-nanosleep-thread')">7.3.2 Fallback: nanosleep thread</a>
+              </li>
+              <li>
+                <a href="#07-internals--sampling-current-thread-only" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--sampling-current-thread-only')">7.4 Sampling: current-thread-only</a>
+              </li>
+              <li>
+                <a href="#07-internals--gvl-event-tracking-wall-mode" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--gvl-event-tracking-wall-mode')">7.5 GVL event tracking (wall mode)</a>
+              </li>
+              <li>
+                <a href="#07-internals--suspended" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--suspended')">7.5.1 SUSPENDED</a>
+              </li>
+              <li>
+                <a href="#07-internals--ready" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--ready')">7.5.2 READY</a>
+              </li>
+              <li>
+                <a href="#07-internals--resumed" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--resumed')">7.5.3 RESUMED</a>
+              </li>
+              <li>
+                <a href="#07-internals--gc-phase-tracking" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--gc-phase-tracking')">7.6 GC phase tracking</a>
+              </li>
+              <li>
+                <a href="#07-internals--deferred-string-resolution" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--deferred-string-resolution')">7.7 Deferred string resolution</a>
+              </li>
+              <li>
+                <a href="#07-internals--frame-pool-and-gc-safety" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--frame-pool-and-gc-safety')">7.8 Frame pool and GC safety</a>
+              </li>
+              <li>
+                <a href="#07-internals--per-thread-data" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--per-thread-data')">7.9 Per-thread data</a>
+              </li>
+              <li>
+                <a href="#07-internals--fork-safety" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--fork-safety')">7.10 Fork safety</a>
+              </li>
+              <li>
+                <a href="#07-internals--pprof-encoder" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--pprof-encoder')">7.11 pprof encoder</a>
+              </li>
+              <li>
+                <a href="#07-internals--known-limitations" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--known-limitations')">7.12 Known limitations</a>
+              </li>
+              <li>
+                <a href="#07-internals--running-ec-race" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--running-ec-race')">7.12.1 Running EC race</a>
+              </li>
+              <li>
+                <a href="#07-internals--single-session" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--single-session')">7.12.2 Single session</a>
+              </li>
+              <li>
+                <a href="#07-internals--method-level-granularity" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--method-level-granularity')">7.12.3 Method-level granularity</a>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li class="toc-appendix">
+        <span class="toc-appendix-title">Appendix</span>
+        <ul>
+          <li class="toc-chapter" data-chapter="a1-reference">
+            <a href="#a1-reference" class="toc-h1" onclick="showChapter('a1-reference')">A. Quick Reference</a>
+            <ul>
+              <li>
+                <a href="#a1-reference--cli-cheat-sheet" class="toc-h2" onclick="showChapterAndScroll('a1-reference', 'a1-reference--cli-cheat-sheet')">A.1 CLI cheat sheet</a>
+              </li>
+              <li>
+                <a href="#a1-reference--ruby-api-cheat-sheet" class="toc-h2" onclick="showChapterAndScroll('a1-reference', 'a1-reference--ruby-api-cheat-sheet')">A.2 Ruby API cheat sheet</a>
+              </li>
+              <li>
+                <a href="#a1-reference--environment-variables" class="toc-h2" onclick="showChapterAndScroll('a1-reference', 'a1-reference--environment-variables')">A.3 Environment variables</a>
+              </li>
+              <li>
+                <a href="#a1-reference--profiling-mode-comparison" class="toc-h2" onclick="showChapterAndScroll('a1-reference', 'a1-reference--profiling-mode-comparison')">A.4 Profiling mode comparison</a>
+              </li>
+              <li>
+                <a href="#a1-reference--output-format-comparison" class="toc-h2" onclick="showChapterAndScroll('a1-reference', 'a1-reference--output-format-comparison')">A.5 Output format comparison</a>
+              </li>
+              <li>
+                <a href="#a1-reference--synthetic-frames" class="toc-h2" onclick="showChapterAndScroll('a1-reference', 'a1-reference--synthetic-frames')">A.6 Synthetic frames</a>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li class="toc-chapter" data-chapter="__bibliography__">
+        <a href="#__bibliography__" class="toc-h1" onclick="showChapter('__bibliography__')">Bibliography</a>
+      </li>
+    </ul>
+  </nav>
+</div>
+
+<button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">&#9776;</button>
+
+<main class="content" id="content">
+  <section class="chapter cover-page" id="chapter-cover" style="display: none;">
+    <h1 id="cover--sperf-guide">sperf guide</h1>
+
+<p>A safepoint-based sampling performance profiler for Ruby.</p>
+
+<p>sperf profiles your Ruby programs by sampling at safepoints and using actual time deltas as weights to correct safepoint bias. It provides a <code>perf</code>-like CLI, a Ruby API, and outputs standard pprof format.</p>
+
+<p><strong>Key features:</strong></p>
+
+<ul>
+  <li>CPU and wall-clock profiling modes</li>
+  <li>Time-weighted sampling that corrects safepoint bias</li>
+  <li>GVL contention and GC phase tracking</li>
+  <li>pprof, collapsed stacks, and text output formats</li>
+  <li>Low overhead (&lt; 0.2% at default 1000 Hz)</li>
+  <li>Requires Ruby &gt;= 3.4.0 on POSIX systems (Linux, macOS)</li>
+</ul>
+
+  </section>
+  <section class="chapter" id="chapter-part1" style="display: none;">
+    <h1 id="part1--getting-started">Getting Started</h1>
+
+    <nav class="chapter-nav">
+      <a href="#" class="nav-prev" onclick="showChapter('cover'); return false;">&larr; sperf guide</a>
+      <a href="#" class="nav-next" onclick="showChapter('01-introduction'); return false;">1. Introduction &rarr;</a>
+    </nav>
+  </section>
+  <section class="chapter" id="chapter-01-introduction" style="display: none;">
+    <h1 id="01-introduction--introduction">1. Introduction</h1>
+
+<h2 id="01-introduction--what-is-sperf">1.1 What is sperf?</h2>
+
+<p>sperf is a safepoint-based sampling performance profiler for Ruby. It helps you find where your Ruby program spends its time — whether that’s CPU computation, I/O waits, GVL contention, or garbage collection.</p>
+
+<p>Unlike traditional sampling profilers that count samples uniformly, sperf uses actual time deltas (in nanoseconds) as weights for each sample. This corrects the safepoint bias problem that affects all Ruby sampling profilers, producing more accurate results.</p>
+
+<p>sperf is inspired by Linux <span id="01-introduction--cite-0">perf<sup class="cite-ref"><a href="#bib-demelo2010" title="Arnaldo Carvalho de Melo. The New Linux perf Tools. 2010." onclick="showChapterAndScroll('__bibliography__', 'bib-demelo2010'); return false;">[Arnaldo, 2010]</a></sup></span>, providing a familiar CLI interface with subcommands like <code>record</code>, <code>stat</code>, and <code>report</code>.</p>
+
+<h2 id="01-introduction--why-another-profiler">1.2 Why another profiler?</h2>
+
+<p>Ruby already has profiling tools like <span id="01-introduction--cite-1">stackprof<sup class="cite-ref"><a href="#bib-stackprof" title="Aman Gupta. stackprof: A sampling call-stack profiler for Ruby 2.2+. 2014." onclick="showChapterAndScroll('__bibliography__', 'bib-stackprof'); return false;">[Aman, 2014]</a></sup></span>. So why sperf?</p>
+
+<h3 id="01-introduction--the-safepoint-bias-problem">1.2.1 The safepoint bias problem</h3>
+
+<p>All Ruby sampling profilers must collect backtraces at safepoints — points where the VM is in a consistent state. When a timer fires between safepoints, the actual sample is delayed until the next safepoint. Traditional profilers count each sample equally (weight = 1), which means a sample that was delayed by a long-running C method gets the same weight as one taken immediately.</p>
+
+<p>This is the <span id="01-introduction--cite-2">safepoint bias<sup class="cite-ref"><a href="#bib-mytkowicz2010" title="Todd Mytkowicz and Amer Diwan and Matthias Hauswirth and Peter F. Sweeney. Evaluating the Accuracy of Java Profilers. ACM. pp. 187--197. 2010." onclick="showChapterAndScroll('__bibliography__', 'bib-mytkowicz2010'); return false;">[Todd, 2010]</a></sup></span> problem: functions that happen to be running when the thread reaches a safepoint appear more often than they should, while functions between safepoints are under-represented.</p>
+
+<div class="mermaid">
+sequenceDiagram
+    participant Timer
+    participant VM
+    participant Profiler
+
+    Timer->>VM: Signal (t=0ms)
+    Note over VM: Running C method...<br/>cannot stop yet
+    VM->>Profiler: Safepoint reached (t=3ms)
+    Note over Profiler: Traditional: weight = 1<br/>sperf: weight = 3ms
+    Timer->>VM: Signal (t=1ms)
+    VM->>Profiler: Safepoint reached (t=1ms)
+    Note over Profiler: Traditional: weight = 1<br/>sperf: weight = 1ms
+</div><details class="mermaid-source"><summary>mermaid source</summary><pre>sequenceDiagram
+    participant Timer
+    participant VM
+    participant Profiler
+
+    Timer-&gt;&gt;VM: Signal (t=0ms)
+    Note over VM: Running C method...&lt;br/&gt;cannot stop yet
+    VM-&gt;&gt;Profiler: Safepoint reached (t=3ms)
+    Note over Profiler: Traditional: weight = 1&lt;br/&gt;sperf: weight = 3ms
+    Timer-&gt;&gt;VM: Signal (t=1ms)
+    VM-&gt;&gt;Profiler: Safepoint reached (t=1ms)
+    Note over Profiler: Traditional: weight = 1&lt;br/&gt;sperf: weight = 1ms
+</pre></details>
+
+<p>sperf solves this by recording <code>clock_now - clock_prev</code> as the weight of each sample. A sample delayed by 3ms gets 3x the weight of a 1ms sample, accurately reflecting where time was actually spent.</p>
+
+<h3 id="01-introduction--other-advantages">1.2.2 Other advantages</h3>
+
+<ul>
+  <li><strong>GVL and GC awareness</strong>: In wall mode, sperf tracks time spent blocked off the GVL, waiting to reacquire the GVL, and in GC marking/sweeping phases — each as distinct synthetic frames.</li>
+  <li><strong>perf-like CLI</strong>: The <code>sperf stat</code> command gives you a quick performance overview (like <code>perf stat</code>), while <code>sperf record</code> + <code>sperf report</code> gives you detailed profiling.</li>
+  <li><strong>Standard output</strong>: sperf outputs pprof protobuf format, compatible with Go’s <code>pprof</code> tool ecosystem, as well as collapsed stacks for <span id="01-introduction--cite-3">flame graphs<sup class="cite-ref"><a href="#bib-gregg2016" title="Brendan Gregg. The Flame Graph. Communications of the ACM. Vol. 59. No. 6. pp. 48--57. 2016." onclick="showChapterAndScroll('__bibliography__', 'bib-gregg2016'); return false;">[Brendan, 2016]</a></sup></span> and speedscope.</li>
+  <li><strong>Low overhead</strong>: Default 1000 Hz sampling adds &lt; 0.2% overhead, suitable for production use.</li>
+</ul>
+
+<h2 id="01-introduction--requirements">1.3 Requirements</h2>
+
+<ul>
+  <li>Ruby &gt;= 3.4.0</li>
+  <li>POSIX system (Linux or macOS)</li>
+  <li>Go (optional, for <code>sperf report</code> and <code>sperf diff</code> subcommands)</li>
+</ul>
+
+<h2 id="01-introduction--quick-start">1.4 Quick start</h2>
+
+<p>Profile a Ruby script and view the results:</p>
+
+<pre><code class="language-bash"># Install sperf
+gem install sperf
+
+# Quick performance overview
+sperf stat ruby my_app.rb
+
+# Record a profile and view it interactively
+sperf record ruby my_app.rb
+sperf report
+</code></pre>
+
+<p>Or use sperf from Ruby code:</p>
+
+<pre><code class="language-ruby">require "sperf"
+
+Sperf.start(output: "profile.pb.gz") do
+  # code to profile
+end
+</code></pre>
+
+    <div class="chapter-footer">This chapter was generated by AI. Accuracy is not guaranteed.</div>
+    <nav class="chapter-nav">
+      <a href="#" class="nav-prev" onclick="showChapter('part1'); return false;">&larr; Getting Started</a>
+      <a href="#" class="nav-next" onclick="showChapter('02-installation'); return false;">2. Installation &rarr;</a>
+    </nav>
+  </section>
+  <section class="chapter" id="chapter-02-installation" style="display: none;">
+    <h1 id="02-installation--installation">2. Installation</h1>
+
+<h2 id="02-installation--installing-the-gem">2.1 Installing the gem</h2>
+
+<p>sperf is distributed as a Ruby gem with a C extension:</p>
+
+<pre><code class="language-bash">gem install sperf
+</code></pre>
+
+<p>Or add it to your Gemfile:</p>
+
+<pre><code class="language-ruby">gem "sperf"
+</code></pre>
+
+<p>Then run:</p>
+
+<pre><code class="language-bash">bundle install
+</code></pre>
+
+<h2 id="02-installation--verifying-the-installation">2.2 Verifying the installation</h2>
+
+<p>Check that sperf is installed correctly:</p>
+
+<pre><code class="language-bash">sperf --help
+</code></pre>
+
+<p>You should see:</p>
+
+<pre><code>Usage: sperf record [options] command [args...]
+       sperf stat [options] command [args...]
+       sperf report [options] [file]
+       sperf diff [options] base.pb.gz target.pb.gz
+       sperf help
+
+Run 'sperf help' for full documentation
+</code></pre>
+
+<h2 id="02-installation--platform-support">2.3 Platform support</h2>
+
+<p>sperf supports POSIX systems:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Platform</th>
+      <th>Timer implementation</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Linux</td>
+      <td><code>timer_create</code> + signal (default)</td>
+      <td>Best precision (~1000us at 1000Hz)</td>
+    </tr>
+    <tr>
+      <td>Linux</td>
+      <td><code>nanosleep</code> thread (with <code>signal: false</code>)</td>
+      <td>Fallback, ~100us drift/tick</td>
+    </tr>
+    <tr>
+      <td>macOS</td>
+      <td><code>nanosleep</code> thread</td>
+      <td>Signal-based timer not available</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>On Linux, sperf uses <code>timer_create</code> with <code>SIGEV_SIGNAL</code> and a <code>sigaction</code> handler by default. This provides precise interval timing with no extra thread. The signal number defaults to <code>SIGRTMIN+8</code> and can be changed via the <code>signal:</code> option.</p>
+
+<p>On macOS (and when <code>signal: false</code> is set on Linux), sperf falls back to a dedicated pthread with a <code>nanosleep</code> loop.</p>
+
+<h2 id="02-installation--optional-go-toolchain">2.4 Optional: Go toolchain</h2>
+
+<p>The <code>sperf report</code> and <code>sperf diff</code> subcommands are thin wrappers around <code>go tool pprof</code>. If you want to use these commands, install Go from <a href="https://go.dev/dl/">go.dev</a>.</p>
+
+<p>Without Go, you can still use all other sperf features. You can view pprof files with other tools like <a href="https://www.speedscope.app/">speedscope</a> or generate text/collapsed output directly.</p>
+
+    <div class="chapter-footer">This chapter was generated by AI. Accuracy is not guaranteed.</div>
+    <nav class="chapter-nav">
+      <a href="#" class="nav-prev" onclick="showChapter('01-introduction'); return false;">&larr; 1. Introduction</a>
+      <a href="#" class="nav-next" onclick="showChapter('part2'); return false;">How to Use &rarr;</a>
+    </nav>
+  </section>
+  <section class="chapter" id="chapter-part2" style="display: none;">
+    <h1 id="part2--how-to-use">How to Use</h1>
+
+    <nav class="chapter-nav">
+      <a href="#" class="nav-prev" onclick="showChapter('02-installation'); return false;">&larr; 2. Installation</a>
+      <a href="#" class="nav-next" onclick="showChapter('03-cli-usage'); return false;">3. CLI Usage &rarr;</a>
+    </nav>
+  </section>
+  <section class="chapter" id="chapter-03-cli-usage" style="display: none;">
+    <h1 id="03-cli-usage--cli-usage">3. CLI Usage</h1>
+
+<p>sperf provides a perf-like command-line interface with four main subcommands: <code>record</code>, <code>stat</code>, <code>report</code>, and <code>diff</code>.</p>
+
+<h2 id="03-cli-usage--sperf-stat">3.1 sperf stat</h2>
+
+<p><code>sperf stat</code> is the quickest way to get a performance overview. It runs your command with wall-mode profiling and prints a summary to stderr.</p>
+
+<pre><code class="language-bash">sperf stat ruby my_app.rb
+</code></pre>
+
+<h3 id="03-cli-usage--example-cpu-bound-program">3.1.1 Example: CPU-bound program</h3>
+
+<p>Here is a simple Fibonacci computation:</p>
+
+<pre><code class="language-ruby"># fib.rb
+def fib(n)
+  return n if n &lt;= 1
+  fib(n - 1) + fib(n - 2)
+end
+fib(35)
+</code></pre>
+
+<p>Running <code>sperf stat</code>:</p>
+
+<pre><code class="language-bash">sperf stat ruby fib.rb
+</code></pre>
+
+<pre><code> Performance stats for 'ruby fib.rb':
+
+           661.9 ms   user
+            24.1 ms   sys
+           602.8 ms   real
+
+           590.1 ms 100.0%  CPU execution
+             9.0 ms         [Ruby] GC time (8 count: 5 minor, 3 major)
+          99,774            [Ruby] allocated objects
+          49,270            [Ruby] freed objects
+              18 MB         [OS] peak memory (maxrss)
+              20            [OS] context switches (4 voluntary, 16 involuntary)
+               0 MB         [OS] disk I/O (0 MB read, 0 MB write)
+
+ Top 1 by flat:
+           590.1 ms 100.0%  Object#fib (fib.rb)
+
+  590 samples (16 unique stacks), 0.2% profiler overhead
+</code></pre>
+
+<p>The output tells you:</p>
+
+<ul>
+  <li><strong>user/sys/real</strong>: Standard timing (like the <code>time</code> command)</li>
+  <li><strong>Time breakdown</strong>: Where wall time was spent — CPU execution, GVL blocked (I/O/sleep), GVL wait (contention), GC marking, GC sweeping</li>
+  <li><strong>Ruby stats</strong>: GC count, allocated/freed objects, YJIT ratio (if enabled)</li>
+  <li><strong>OS stats</strong>: Peak memory, context switches, disk I/O</li>
+  <li><strong>Top functions</strong>: Hottest functions by flat time</li>
+</ul>
+
+<h3 id="03-cli-usage--example-mixed-cpu-and-io">3.1.2 Example: Mixed CPU and I/O</h3>
+
+<pre><code class="language-ruby"># mixed.rb
+def cpu_work(n)
+  sum = 0
+  n.times { |i| sum += i * i }
+  sum
+end
+
+def io_work
+  sleep(0.05)
+end
+
+5.times do
+  cpu_work(500_000)
+  io_work
+end
+</code></pre>
+
+<p>Running <code>sperf stat</code>:</p>
+
+<pre><code class="language-bash">sperf stat ruby mixed.rb
+</code></pre>
+
+<p>Because <code>stat</code> always uses wall mode, you can see how time is divided between CPU and I/O. The <code>[Ruby] GVL blocked</code> line shows time spent sleeping/in I/O, while <code>CPU execution</code> shows compute time.</p>
+
+<h3 id="03-cli-usage--stat-options">3.1.3 stat options</h3>
+
+<pre><code class="language-bash">sperf stat [options] command [args...]
+</code></pre>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>-o PATH</code></td>
+      <td>Also save profile to file (default: none)</td>
+    </tr>
+    <tr>
+      <td><code>-f HZ</code></td>
+      <td>Sampling frequency in Hz (default: 1000)</td>
+    </tr>
+    <tr>
+      <td><code>-v</code></td>
+      <td>Print additional sampling statistics</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="03-cli-usage--sperf-record">3.2 sperf record</h2>
+
+<p><code>sperf record</code> profiles a command and saves the result to a file. This is the primary way to capture profiles for detailed analysis.</p>
+
+<pre><code class="language-bash">sperf record ruby my_app.rb
+</code></pre>
+
+<p>By default, it saves to <code>sperf.data</code> in pprof format with CPU mode.</p>
+
+<h3 id="03-cli-usage--example-recording-a-profile">3.2.1 Example: Recording a profile</h3>
+
+<pre><code class="language-bash">sperf record ruby fib.rb
+</code></pre>
+
+<p>This creates <code>sperf.data</code>. You can then analyze it with <code>sperf report</code> or other pprof-compatible tools.</p>
+
+<h3 id="03-cli-usage--choosing-a-profiling-mode">3.2.2 Choosing a profiling mode</h3>
+
+<p>sperf supports two profiling modes:</p>
+
+<ul>
+  <li><strong>cpu</strong> (default): Measures per-thread CPU time. Best for finding functions that consume CPU cycles. Ignores time spent sleeping, in I/O, or waiting for the GVL.</li>
+  <li><strong>wall</strong>: Measures wall-clock time. Best for finding where wall time goes, including I/O, sleep, and GVL contention.</li>
+</ul>
+
+<pre><code class="language-bash"># CPU mode (default)
+sperf record ruby my_app.rb
+
+# Wall mode
+sperf record -m wall ruby my_app.rb
+</code></pre>
+
+<h3 id="03-cli-usage--choosing-an-output-format">3.2.3 Choosing an output format</h3>
+
+<p>sperf auto-detects the format from the file extension:</p>
+
+<pre><code class="language-bash"># pprof format (default)
+sperf record -o profile.pb.gz ruby my_app.rb
+
+# Collapsed stacks (for FlameGraph / speedscope)
+sperf record -o profile.collapsed ruby my_app.rb
+
+# Human-readable text
+sperf record -o profile.txt ruby my_app.rb
+</code></pre>
+
+<p>You can also force the format explicitly:</p>
+
+<pre><code class="language-bash">sperf record --format text -o profile.dat ruby my_app.rb
+</code></pre>
+
+<h3 id="03-cli-usage--example-text-output">3.2.4 Example: Text output</h3>
+
+<pre><code class="language-bash">sperf record -o profile.txt ruby fib.rb
+</code></pre>
+
+<p>The text output looks like this:</p>
+
+<pre><code>Total: 509.5ms (cpu)
+Samples: 509, Frequency: 1000Hz
+
+Flat:
+     509.5ms 100.0%  Object#fib (fib.rb)
+
+Cumulative:
+     509.5ms 100.0%  Object#fib (fib.rb)
+     509.5ms 100.0%  &lt;main&gt; (fib.rb)
+</code></pre>
+
+<h3 id="03-cli-usage--example-wall-mode-text-output">3.2.5 Example: Wall mode text output</h3>
+
+<pre><code class="language-bash">sperf record -m wall -o wall_profile.txt ruby mixed.rb
+</code></pre>
+
+<pre><code>Total: 311.8ms (wall)
+Samples: 80, Frequency: 1000Hz
+
+Flat:
+     250.6ms  80.4%  [GVL blocked] (&lt;GVL&gt;)
+      44.1ms  14.1%  Object#cpu_work (mixed.rb)
+      13.9ms   4.5%  Integer#times (&lt;internal:numeric&gt;)
+       3.2ms   1.0%  Kernel#sleep (&lt;C method&gt;)
+       0.0ms   0.0%  [GVL wait] (&lt;GVL&gt;)
+
+Cumulative:
+     311.8ms 100.0%  Integer#times (&lt;internal:numeric&gt;)
+     311.8ms 100.0%  block in &lt;main&gt; (mixed.rb)
+     311.8ms 100.0%  &lt;main&gt; (mixed.rb)
+     253.8ms  81.4%  Kernel#sleep (&lt;C method&gt;)
+     253.8ms  81.4%  Object#io_work (mixed.rb)
+     250.6ms  80.4%  [GVL blocked] (&lt;GVL&gt;)
+      58.0ms  18.6%  Object#cpu_work (mixed.rb)
+       0.0ms   0.0%  [GVL wait] (&lt;GVL&gt;)
+</code></pre>
+
+<p>In wall mode, <code>[GVL blocked]</code> appears as the dominant cost — this is the sleep time in <code>io_work</code>. The CPU time for <code>cpu_work</code> is clearly separated.</p>
+
+<h3 id="03-cli-usage--verbose-output">3.2.6 Verbose output</h3>
+
+<p>The <code>-v</code> flag prints sampling statistics to stderr during profiling:</p>
+
+<pre><code class="language-bash">sperf record -v ruby my_app.rb
+</code></pre>
+
+<pre><code>[sperf] mode=cpu frequency=1000Hz
+[sperf] sampling: 98 calls, 0.11ms total, 1.1us/call avg
+[sperf] samples recorded: 904
+[sperf] top 10 by flat:
+[sperf]       53.4ms  50.1%  Object#cpu_work (-e)
+[sperf]       17.0ms  15.9%  Integer#times (&lt;internal:numeric&gt;)
+...
+</code></pre>
+
+<h3 id="03-cli-usage--record-options">3.2.7 record options</h3>
+
+<pre><code class="language-bash">sperf record [options] command [args...]
+</code></pre>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>-o PATH</code></td>
+      <td>Output file (default: <code>sperf.data</code>)</td>
+    </tr>
+    <tr>
+      <td><code>-f HZ</code></td>
+      <td>Sampling frequency in Hz (default: 1000)</td>
+    </tr>
+    <tr>
+      <td><code>-m MODE</code></td>
+      <td><code>cpu</code> or <code>wall</code> (default: <code>cpu</code>)</td>
+    </tr>
+    <tr>
+      <td><code>--format FMT</code></td>
+      <td><code>pprof</code>, <code>collapsed</code>, or <code>text</code> (default: auto from extension)</td>
+    </tr>
+    <tr>
+      <td><code>-v</code></td>
+      <td>Print sampling statistics to stderr</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="03-cli-usage--sperf-report">3.3 sperf report</h2>
+
+<p><code>sperf report</code> opens a pprof profile for analysis. It wraps <code>go tool pprof</code> and requires Go to be installed.</p>
+
+<pre><code class="language-bash"># Open interactive web UI (default)
+sperf report
+
+# Open a specific file
+sperf report profile.pb.gz
+
+# Print top functions
+sperf report --top
+
+# Print text report
+sperf report --text
+</code></pre>
+
+<p>The default behavior opens an interactive web UI in your browser with flame graphs, top function views, and call graph visualizations powered by <span id="03-cli-usage--cite-0">pprof<sup class="cite-ref"><a href="#bib-ren2010" title="Gang Ren and Eric Tune and Tipp Moseley and Yixin Shi and Silvius Rus and Robert Hundt. Google-Wide Profiling: A Continuous Profiling Infrastructure for Data Centers. IEEE Micro. Vol. 30. No. 4. pp. 65--79. 2010." onclick="showChapterAndScroll('__bibliography__', 'bib-ren2010'); return false;">[Gang, 2010]</a></sup></span>.</p>
+
+<h3 id="03-cli-usage--report-options">3.3.1 report options</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>--top</code></td>
+      <td>Print top functions by flat time</td>
+    </tr>
+    <tr>
+      <td><code>--text</code></td>
+      <td>Print text report</td>
+    </tr>
+    <tr>
+      <td>(default)</td>
+      <td>Open interactive web UI in browser</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="03-cli-usage--sperf-diff">3.4 sperf diff</h2>
+
+<p><code>sperf diff</code> compares two pprof profiles, showing the difference (target - base). This is useful for measuring the impact of optimizations.</p>
+
+<pre><code class="language-bash"># Open diff in browser
+sperf diff before.pb.gz after.pb.gz
+
+# Print top functions by diff
+sperf diff --top before.pb.gz after.pb.gz
+
+# Print text diff
+sperf diff --text before.pb.gz after.pb.gz
+</code></pre>
+
+<h3 id="03-cli-usage--workflow-example">3.4.1 Workflow example</h3>
+
+<pre><code class="language-bash"># Profile the baseline
+sperf record -o before.pb.gz ruby my_app.rb
+
+# Make your optimization changes...
+
+# Profile again
+sperf record -o after.pb.gz ruby my_app.rb
+
+# Compare
+sperf diff before.pb.gz after.pb.gz
+</code></pre>
+
+<h2 id="03-cli-usage--sperf-help">3.5 sperf help</h2>
+
+<p><code>sperf help</code> prints the full reference documentation, including profiling modes, output formats, synthetic frames, and diagnostic tips.</p>
+
+<pre><code class="language-bash">sperf help
+</code></pre>
+
+<p>This outputs detailed documentation suitable for both human reading and AI-assisted analysis.</p>
+
+    <div class="chapter-footer">This chapter was generated by AI. Accuracy is not guaranteed.</div>
+    <nav class="chapter-nav">
+      <a href="#" class="nav-prev" onclick="showChapter('part2'); return false;">&larr; How to Use</a>
+      <a href="#" class="nav-next" onclick="showChapter('04-library-usage'); return false;">4. Ruby API &rarr;</a>
+    </nav>
+  </section>
+  <section class="chapter" id="chapter-04-library-usage" style="display: none;">
+    <h1 id="04-library-usage--ruby-api">4. Ruby API</h1>
+
+<p>sperf provides a Ruby API for programmatic profiling. This is useful when you want to profile specific sections of code, integrate profiling into test suites, or build custom profiling workflows.</p>
+
+<h2 id="04-library-usage--basic-usage">4.1 Basic usage</h2>
+
+<h3 id="04-library-usage--block-form-recommended">4.1.1 Block form (recommended)</h3>
+
+<p>The simplest way to use sperf is with the block form of <code>Sperf.start</code>. It profiles the block and returns the profiling data:</p>
+
+<pre><code class="language-ruby">require "sperf"
+
+data = Sperf.start(output: "profile.pb.gz", frequency: 1000, mode: :cpu) do
+  # code to profile
+end
+</code></pre>
+
+<p>When <code>output:</code> is specified, the profile is automatically written to the file when the block finishes. The method also returns the raw data hash for further processing.</p>
+
+<h3 id="04-library-usage--example-profiling-a-fibonacci-function">4.1.2 Example: Profiling a Fibonacci function</h3>
+
+<pre><code class="language-ruby">require "sperf"
+
+def fib(n)
+  return n if n &lt;= 1
+  fib(n - 1) + fib(n - 2)
+end
+
+data = Sperf.start(frequency: 1000, mode: :cpu) do
+  fib(33)
+end
+
+Sperf.save("profile.txt", data)
+</code></pre>
+
+<p>Running this produces:</p>
+
+<pre><code>Total: 192.7ms (cpu)
+Samples: 192, Frequency: 1000Hz
+
+Flat:
+     192.7ms 100.0%  Object#fib (example.rb)
+
+Cumulative:
+     192.7ms 100.0%  Object#fib (example.rb)
+     192.7ms 100.0%  block in &lt;main&gt; (example.rb)
+     192.7ms 100.0%  Sperf.start (lib/sperf.rb)
+     192.7ms 100.0%  &lt;main&gt; (example.rb)
+</code></pre>
+
+<h3 id="04-library-usage--manual-startstop">4.1.3 Manual start/stop</h3>
+
+<p>For cases where block form is awkward, you can manually start and stop profiling:</p>
+
+<pre><code class="language-ruby">require "sperf"
+
+Sperf.start(frequency: 1000, mode: :wall)
+
+# ... code to profile ...
+
+data = Sperf.stop
+</code></pre>
+
+<p><code>Sperf.stop</code> returns the data hash, or <code>nil</code> if the profiler was not running.</p>
+
+<h2 id="04-library-usage--sperfstart-parameters">4.2 Sperf.start parameters</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Parameter</th>
+      <th>Type</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>frequency:</code></td>
+      <td>Integer</td>
+      <td>1000</td>
+      <td>Sampling frequency in Hz</td>
+    </tr>
+    <tr>
+      <td><code>mode:</code></td>
+      <td>Symbol</td>
+      <td><code>:cpu</code></td>
+      <td><code>:cpu</code> or <code>:wall</code></td>
+    </tr>
+    <tr>
+      <td><code>output:</code></td>
+      <td>String</td>
+      <td><code>nil</code></td>
+      <td>File path to write on stop</td>
+    </tr>
+    <tr>
+      <td><code>verbose:</code></td>
+      <td>Boolean</td>
+      <td><code>false</code></td>
+      <td>Print statistics to stderr</td>
+    </tr>
+    <tr>
+      <td><code>format:</code></td>
+      <td>Symbol</td>
+      <td><code>nil</code></td>
+      <td><code>:pprof</code>, <code>:collapsed</code>, <code>:text</code>, or <code>nil</code> (auto-detect from output extension)</td>
+    </tr>
+    <tr>
+      <td><code>signal:</code></td>
+      <td>Integer/Boolean</td>
+      <td><code>nil</code></td>
+      <td>Linux only: <code>nil</code> = timer signal (default), <code>false</code> = nanosleep thread, positive integer = specific RT signal number</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="04-library-usage--sperfstop-return-value">4.3 Sperf.stop return value</h2>
+
+<p><code>Sperf.stop</code> returns <code>nil</code> if the profiler was not running. Otherwise it returns a Hash:</p>
+
+<pre><code class="language-ruby">{
+  mode: :cpu,              # or :wall
+  frequency: 1000,
+  sampling_count: 1234,    # number of timer callbacks
+  sampling_time_ns: 56789, # total time spent sampling (overhead)
+  samples: [               # Array of [frames, weight]
+    [frames, weight],      #   frames: [[path, label], ...] deepest-first
+    ...                    #   weight: Integer (nanoseconds)
+  ]
+}
+</code></pre>
+
+<p>Each sample has:</p>
+<ul>
+  <li><strong>frames</strong>: An array of <code>[path, label]</code> pairs, ordered deepest-first (leaf frame at index 0)</li>
+  <li><strong>weight</strong>: Time in nanoseconds attributed to this sample</li>
+</ul>
+
+<h2 id="04-library-usage--sperfsave">4.4 Sperf.save</h2>
+
+<p><code>Sperf.save</code> writes profiling data to a file in any supported format:</p>
+
+<pre><code class="language-ruby">Sperf.save("profile.pb.gz", data)        # pprof format
+Sperf.save("profile.collapsed", data)    # collapsed stacks
+Sperf.save("profile.txt", data)          # text report
+</code></pre>
+
+<p>The format is auto-detected from the file extension. You can override it with the <code>format:</code> keyword:</p>
+
+<pre><code class="language-ruby">Sperf.save("output.dat", data, format: :text)
+</code></pre>
+
+<h2 id="04-library-usage--practical-examples">4.5 Practical examples</h2>
+
+<h3 id="04-library-usage--profiling-a-web-request-handler">4.5.1 Profiling a web request handler</h3>
+
+<pre><code class="language-ruby">require "sperf"
+
+class ApplicationController
+  def profile_action
+    data = Sperf.start(mode: :wall) do
+      # Simulate a typical request
+      users = User.where(active: true).limit(100)
+      result = users.map { |u| serialize_user(u) }
+      render json: result
+    end
+
+    Sperf.save("request_profile.txt", data)
+  end
+end
+</code></pre>
+
+<p>Using wall mode here captures not just CPU time but also database I/O and any GVL contention.</p>
+
+<h3 id="04-library-usage--comparing-cpu-and-wall-profiles">4.5.2 Comparing CPU and wall profiles</h3>
+
+<pre><code class="language-ruby">require "sperf"
+
+def workload
+  # Mix of CPU and I/O
+  100.times do
+    compute_something
+    sleep(0.001)
+  end
+end
+
+# CPU profile: shows where CPU cycles go
+cpu_data = Sperf.start(mode: :cpu) { workload }
+Sperf.save("cpu.txt", cpu_data)
+
+# Wall profile: shows where wall time goes
+wall_data = Sperf.start(mode: :wall) { workload }
+Sperf.save("wall.txt", wall_data)
+</code></pre>
+
+<p>The CPU profile will focus on <code>compute_something</code>, while the wall profile will show the <code>sleep</code> calls as <code>[GVL blocked]</code> time.</p>
+
+<h3 id="04-library-usage--processing-raw-samples">4.5.3 Processing raw samples</h3>
+
+<p>You can work with the raw sample data programmatically:</p>
+
+<pre><code class="language-ruby">require "sperf"
+
+data = Sperf.start(mode: :cpu) { workload }
+
+# Find the hottest function
+flat = Hash.new(0)
+data[:samples].each do |frames, weight|
+  leaf_label = frames.first&amp;.last  # frames[0] is the leaf
+  flat[leaf_label] += weight
+end
+
+top = flat.sort_by { |_, w| -w }.first(5)
+top.each do |label, weight_ns|
+  puts "#{label}: #{weight_ns / 1_000_000.0}ms"
+end
+</code></pre>
+
+<h3 id="04-library-usage--generating-collapsed-stacks-for-flamegraph">4.5.4 Generating collapsed stacks for FlameGraph</h3>
+
+<pre><code class="language-ruby">require "sperf"
+
+data = Sperf.start(mode: :cpu) { workload }
+Sperf.save("profile.collapsed", data)
+</code></pre>
+
+<p>The collapsed format is one line per unique stack, compatible with Brendan Gregg’s <span id="04-library-usage--cite-0">FlameGraph<sup class="cite-ref"><a href="#bib-gregg2016" title="Brendan Gregg. The Flame Graph. Communications of the ACM. Vol. 59. No. 6. pp. 48--57. 2016." onclick="showChapterAndScroll('__bibliography__', 'bib-gregg2016'); return false;">[Brendan, 2016]</a></sup></span> tools and speedscope:</p>
+
+<pre><code>frame1;frame2;...;leaf weight_ns
+</code></pre>
+
+<p>You can generate a flame graph SVG:</p>
+
+<pre><code class="language-bash">flamegraph.pl profile.collapsed &gt; flamegraph.svg
+</code></pre>
+
+<p>Or open the <code>.collapsed</code> file directly in <a href="https://www.speedscope.app/">speedscope</a>.</p>
+
+    <div class="chapter-footer">This chapter was generated by AI. Accuracy is not guaranteed.</div>
+    <nav class="chapter-nav">
+      <a href="#" class="nav-prev" onclick="showChapter('03-cli-usage'); return false;">&larr; 3. CLI Usage</a>
+      <a href="#" class="nav-next" onclick="showChapter('05-output-formats'); return false;">5. Output Formats &rarr;</a>
+    </nav>
+  </section>
+  <section class="chapter" id="chapter-05-output-formats" style="display: none;">
+    <h1 id="05-output-formats--output-formats">5. Output Formats</h1>
+
+<p>sperf supports three output formats. The format is auto-detected from the file extension, or can be set explicitly with the <code>--format</code> flag (CLI) or <code>format:</code> parameter (API).</p>
+
+<h2 id="05-output-formats--pprof-default">5.1 pprof (default)</h2>
+
+<p>The pprof format is a gzip-compressed Protocol Buffers binary. This is the standard format used by Go’s pprof tooling and is the default output of sperf.</p>
+
+<p><strong>Extension convention</strong>: <code>.pb.gz</code></p>
+
+<p><strong>How to view</strong>:</p>
+
+<pre><code class="language-bash"># Interactive web UI (requires Go)
+sperf report profile.pb.gz
+
+# Top functions
+sperf report --top profile.pb.gz
+
+# Text report
+sperf report --text profile.pb.gz
+
+# Or use go tool pprof directly
+go tool pprof -http=:8080 profile.pb.gz
+go tool pprof -top profile.pb.gz
+go tool pprof -flame profile.pb.gz
+</code></pre>
+
+<p>You can also import pprof files into <a href="https://www.speedscope.app/">speedscope</a> via its web interface.</p>
+
+<p><strong>Advantages</strong>: Standard format supported by a wide ecosystem of tools. Supports diff comparison between two profiles. Interactive exploration with flame graphs, call graphs, and source annotations.</p>
+
+<h2 id="05-output-formats--collapsed-stacks">5.2 Collapsed stacks</h2>
+
+<p>The collapsed stacks format is a plain text format with one line per unique stack trace. Each line contains a semicolon-separated stack (bottom-to-top) followed by a space and the weight in nanoseconds.</p>
+
+<p><strong>Extension convention</strong>: <code>.collapsed</code></p>
+
+<p><strong>Format</strong>:</p>
+
+<pre><code>bottom_frame;...;top_frame weight_ns
+</code></pre>
+
+<p><strong>Example output</strong>:</p>
+
+<pre><code>&lt;main&gt;;Integer#times;block in &lt;main&gt;;Object#cpu_work;Integer#times;Object#cpu_work 53419170
+&lt;main&gt;;Integer#times;block in &lt;main&gt;;Object#cpu_work;Integer#times 16962309
+&lt;main&gt;;Integer#times;block in &lt;main&gt;;Object#io_work;Kernel#sleep 2335151
+</code></pre>
+
+<p><strong>How to use</strong>:</p>
+
+<pre><code class="language-bash"># Generate a FlameGraph SVG
+sperf record -o profile.collapsed ruby my_app.rb
+flamegraph.pl profile.collapsed &gt; flamegraph.svg
+
+# Open in speedscope (drag-and-drop the file)
+open https://www.speedscope.app/
+</code></pre>
+
+<p><strong>Advantages</strong>: Simple text format, easy to process with command-line tools. Compatible with Brendan Gregg’s <span id="05-output-formats--cite-0">FlameGraph<sup class="cite-ref"><a href="#bib-gregg2016" title="Brendan Gregg. The Flame Graph. Communications of the ACM. Vol. 59. No. 6. pp. 48--57. 2016." onclick="showChapterAndScroll('__bibliography__', 'bib-gregg2016'); return false;">[Brendan, 2016]</a></sup></span> tools and speedscope.</p>
+
+<h3 id="05-output-formats--parsing-collapsed-stacks-programmatically">5.2.1 Parsing collapsed stacks programmatically</h3>
+
+<pre><code class="language-ruby">File.readlines("profile.collapsed").each do |line|
+  stack, weight = line.rpartition(" ").then { |s, _, w| [s, w.to_i] }
+  frames = stack.split(";")
+  # frames[0] is bottom (main), frames[-1] is leaf (hot)
+  puts "#{frames.last}: #{weight / 1_000_000.0}ms"
+end
+</code></pre>
+
+<h2 id="05-output-formats--text-report">5.3 Text report</h2>
+
+<p>The text format is a human-readable (and AI-readable) report showing flat and cumulative top-N tables.</p>
+
+<p><strong>Extension convention</strong>: <code>.txt</code></p>
+
+<p><strong>Example output</strong>:</p>
+
+<pre><code>Total: 509.5ms (cpu)
+Samples: 509, Frequency: 1000Hz
+
+Flat:
+     509.5ms 100.0%  Object#fib (fib.rb)
+
+Cumulative:
+     509.5ms 100.0%  Object#fib (fib.rb)
+     509.5ms 100.0%  &lt;main&gt; (fib.rb)
+</code></pre>
+
+<p><strong>Sections</strong>:</p>
+
+<ul>
+  <li><strong>Header</strong>: Total profiled time, sample count, and frequency</li>
+  <li><strong>Flat table</strong>: Functions sorted by self time (the function was the leaf/deepest frame)</li>
+  <li><strong>Cumulative table</strong>: Functions sorted by total time (the function appeared anywhere in the stack)</li>
+</ul>
+
+<p><strong>Advantages</strong>: No tooling required — readable with <code>cat</code>. Top 50 entries per table by default. Good for quick analysis, sharing in issue reports, or feeding to AI assistants.</p>
+
+<h2 id="05-output-formats--format-comparison">5.4 Format comparison</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Feature</th>
+      <th>pprof</th>
+      <th>collapsed</th>
+      <th>text</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>File size</td>
+      <td>Small (binary + gzip)</td>
+      <td>Medium (text)</td>
+      <td>Small (text)</td>
+    </tr>
+    <tr>
+      <td>Flame graph</td>
+      <td>Yes (via pprof web UI)</td>
+      <td>Yes (via flamegraph.pl)</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>Call graph</td>
+      <td>Yes</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>Diff comparison</td>
+      <td>Yes (<code>sperf diff</code>)</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>No tools needed</td>
+      <td>No (requires Go)</td>
+      <td>No (requires flamegraph.pl)</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Programmatic parsing</td>
+      <td>Complex (protobuf)</td>
+      <td>Simple</td>
+      <td>Simple</td>
+    </tr>
+    <tr>
+      <td>AI-friendly</td>
+      <td>No</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="05-output-formats--auto-detection-rules">5.5 Auto-detection rules</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>File extension</th>
+      <th>Format</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>.collapsed</code></td>
+      <td>Collapsed stacks</td>
+    </tr>
+    <tr>
+      <td><code>.txt</code></td>
+      <td>Text report</td>
+    </tr>
+    <tr>
+      <td>Anything else</td>
+      <td>pprof</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The default output file (<code>sperf.data</code>) uses pprof format.</p>
+
+    <div class="chapter-footer">This chapter was generated by AI. Accuracy is not guaranteed.</div>
+    <nav class="chapter-nav">
+      <a href="#" class="nav-prev" onclick="showChapter('04-library-usage'); return false;">&larr; 4. Ruby API</a>
+      <a href="#" class="nav-next" onclick="showChapter('part3'); return false;">Deep Dive &rarr;</a>
+    </nav>
+  </section>
+  <section class="chapter" id="chapter-part3" style="display: none;">
+    <h1 id="part3--deep-dive">Deep Dive</h1>
+
+    <nav class="chapter-nav">
+      <a href="#" class="nav-prev" onclick="showChapter('05-output-formats'); return false;">&larr; 5. Output Formats</a>
+      <a href="#" class="nav-next" onclick="showChapter('06-interpreting-results'); return false;">6. Interpreting Results &rarr;</a>
+    </nav>
+  </section>
+  <section class="chapter" id="chapter-06-interpreting-results" style="display: none;">
+    <h1 id="06-interpreting-results--interpreting-results">6. Interpreting Results</h1>
+
+<h2 id="06-interpreting-results--flat-vs-cumulative-time">6.1 Flat vs. cumulative time</h2>
+
+<p>Understanding the difference between flat and cumulative time is essential for effective profiling, as described in classic profiling literature <span id="06-interpreting-results--cite-0">gprof<sup class="cite-ref"><a href="#bib-graham1982" title="Susan L. Graham and Peter B. Kessler and Marshall K. McKusick. gprof: A Call Graph Execution Profiler. ACM. pp. 120--126. 1982." onclick="showChapterAndScroll('__bibliography__', 'bib-graham1982'); return false;">[Susan, 1982]</a></sup></span>.</p>
+
+<ul>
+  <li><strong>Flat time</strong>: Time attributed directly to a function — it was the leaf (deepest frame) in the sample. High flat time means the function itself is doing expensive work.</li>
+  <li><strong>Cumulative time</strong>: Time for all samples where the function appears anywhere in the stack. High cumulative time means the function (or something it calls) is expensive.</li>
+</ul>
+
+<div class="mermaid">
+graph TD
+    A["main()"] -->|calls| B["process()"]
+    B -->|calls| C["compute()"]
+    B -->|calls| D["format()"]
+
+    style C fill:#ff6b6b,color:#fff
+    style D fill:#ffa07a,color:#fff
+</div><details class="mermaid-source"><summary>mermaid source</summary><pre>graph TD
+    A["main()"] --&gt;|calls| B["process()"]
+    B --&gt;|calls| C["compute()"]
+    B --&gt;|calls| D["format()"]
+
+    style C fill:#ff6b6b,color:#fff
+    style D fill:#ffa07a,color:#fff
+</pre></details>
+
+<p>If <code>compute()</code> has high flat time, optimize <code>compute()</code> itself. If <code>process()</code> has high cumulative but low flat time, the cost is in its children (<code>compute()</code> and <code>format()</code>).</p>
+
+<h2 id="06-interpreting-results--weight-unit">6.2 Weight unit</h2>
+
+<p>All weights in sperf are in <strong>nanoseconds</strong>, regardless of profiling mode:</p>
+
+<ul>
+  <li>1,000 ns = 1 us (microsecond)</li>
+  <li>1,000,000 ns = 1 ms (millisecond)</li>
+  <li>1,000,000,000 ns = 1 s (second)</li>
+</ul>
+
+<h2 id="06-interpreting-results--synthetic-frames">6.3 Synthetic frames</h2>
+
+<p>In addition to normal Ruby frames, sperf records synthetic frames that represent non-CPU activity. These always appear as the leaf (deepest) frame in a sample.</p>
+
+<h3 id="06-interpreting-results--gvl-blocked">6.3.1 [GVL blocked]</h3>
+
+<p><strong>Mode</strong>: wall only</p>
+
+<p>Time the thread spent off the GVL — during I/O operations, <code>sleep</code>, or C extensions that release the GVL. This time is attributed to the stack captured at the SUSPENDED event (when the thread released the GVL).</p>
+
+<p>High <code>[GVL blocked]</code> time indicates your program is I/O bound. Look at the cumulative view to find which functions are triggering the I/O.</p>
+
+<h3 id="06-interpreting-results--gvl-wait">6.3.2 [GVL wait]</h3>
+
+<p><strong>Mode</strong>: wall only</p>
+
+<p>Time the thread spent waiting to reacquire the GVL after becoming ready. This indicates GVL contention — another thread is holding the GVL while this thread wants to run.</p>
+
+<p>High <code>[GVL wait]</code> time means your threads are serialized on the GVL. Consider reducing GVL-holding work, using Ractors, or moving work to child processes.</p>
+
+<h3 id="06-interpreting-results--gc-marking">6.3.3 [GC marking]</h3>
+
+<p><strong>Mode</strong>: cpu and wall</p>
+
+<p>Time spent in the GC marking phase. Always measured in wall time. Attributed to the stack that triggered GC.</p>
+
+<p>High <code>[GC marking]</code> time means too many live objects. Reduce the number of long-lived allocations.</p>
+
+<h3 id="06-interpreting-results--gc-sweeping">6.3.4 [GC sweeping]</h3>
+
+<p><strong>Mode</strong>: cpu and wall</p>
+
+<p>Time spent in the GC sweeping phase. Always measured in wall time. Attributed to the stack that triggered GC.</p>
+
+<p>High <code>[GC sweeping]</code> time means too many short-lived objects. Consider reusing objects or using object pools.</p>
+
+<h2 id="06-interpreting-results--diagnosing-common-problems">6.4 Diagnosing common problems</h2>
+
+<h3 id="06-interpreting-results--high-cpu-usage">6.4.1 High CPU usage</h3>
+
+<p><strong>Mode</strong>: cpu</p>
+
+<p>Look for functions with high flat CPU time. These are the functions consuming CPU cycles.</p>
+
+<p><strong>Action</strong>: Optimize the hot function (better algorithm, caching) or call it less frequently.</p>
+
+<h3 id="06-interpreting-results--slow-requests-high-latency">6.4.2 Slow requests / high latency</h3>
+
+<p><strong>Mode</strong>: wall</p>
+
+<p>Look for functions with high cumulative wall time.</p>
+
+<ul>
+  <li>If <code>[GVL blocked]</code> is dominant: I/O or sleep is the bottleneck. Check database queries, HTTP calls, file I/O.</li>
+  <li>If <code>[GVL wait]</code> is dominant: GVL contention. Reduce GVL-holding work or move to Ractors/child processes.</li>
+</ul>
+
+<h3 id="06-interpreting-results--gc-pressure">6.4.3 GC pressure</h3>
+
+<p><strong>Mode</strong>: cpu or wall</p>
+
+<p>Look for <code>[GC marking]</code> and <code>[GC sweeping]</code> samples.</p>
+
+<ul>
+  <li>High <code>[GC marking]</code>: Too many live objects. Reduce allocations of long-lived objects.</li>
+  <li>High <code>[GC sweeping]</code>: Too many short-lived objects. Reuse or pool objects.</li>
+</ul>
+
+<p>The <code>sperf stat</code> output also shows GC counts and allocated/freed object counts, which can help diagnose allocation-heavy code.</p>
+
+<h3 id="06-interpreting-results--multithreaded-app-slower-than-expected">6.4.4 Multithreaded app slower than expected</h3>
+
+<p><strong>Mode</strong>: wall</p>
+
+<p>Look for <code>[GVL wait]</code> time across threads.</p>
+
+<pre><code class="language-bash">sperf stat ruby threaded_app.rb
+</code></pre>
+
+<p>Example output for a GVL-contended workload:</p>
+
+<pre><code> Performance stats for 'ruby threaded_app.rb':
+
+            89.9 ms   user
+            14.0 ms   sys
+            41.2 ms   real
+
+             0.5 ms   1.2%  CPU execution
+             9.8 ms  23.8%  [Ruby] GVL blocked (I/O, sleep)
+            30.8 ms  75.0%  [Ruby] GVL wait (contention)
+</code></pre>
+
+<p>Here, 75% of wall time is GVL contention. The four threads are fighting for the GVL, serializing their CPU work.</p>
+
+<h2 id="06-interpreting-results--tips-for-effective-profiling">6.5 Tips for effective profiling</h2>
+
+<ul>
+  <li><strong>Default frequency (1000 Hz) works well</strong> for most cases. For long-running production profiling, 100-500 Hz reduces overhead further.</li>
+  <li><strong>Profile representative workloads</strong>, not micro-benchmarks. Profiling a real request or batch job gives more actionable results than profiling a tight loop.</li>
+  <li><strong>Compare cpu and wall profiles</strong> to distinguish CPU-bound from I/O-bound code. If a function is hot in wall mode but not in CPU mode, it’s blocked on I/O.</li>
+  <li><strong>Use <code>sperf diff</code></strong> to measure the impact of optimizations. Profile before and after, then compare.</li>
+  <li><strong>Use the verbose flag</strong> (<code>-v</code>) to check profiler overhead and see top functions immediately.</li>
+</ul>
+
+    <div class="chapter-footer">This chapter was generated by AI. Accuracy is not guaranteed.</div>
+    <nav class="chapter-nav">
+      <a href="#" class="nav-prev" onclick="showChapter('part3'); return false;">&larr; Deep Dive</a>
+      <a href="#" class="nav-next" onclick="showChapter('07-internals'); return false;">7. Internals &rarr;</a>
+    </nav>
+  </section>
+  <section class="chapter" id="chapter-07-internals" style="display: none;">
+    <h1 id="07-internals--internals">7. Internals</h1>
+
+<p>This chapter describes how sperf works under the hood. Understanding the internals helps you interpret edge cases in profiling results and appreciate the design trade-offs.</p>
+
+<h2 id="07-internals--architecture-overview">7.1 Architecture overview</h2>
+
+<p>sperf consists of a C extension and a Ruby wrapper:</p>
+
+<div class="mermaid">
+graph TD
+    subgraph "C Extension (ext/sperf/sperf.c)"
+        Timer["Timer<br/>(signal or nanosleep)"]
+        PJ["rb_postponed_job_trigger"]
+        Sample["Sample callback<br/>(sperf_sample_job)"]
+        ThreadHook["Thread event hook<br/>(SUSPENDED/READY/RESUMED/EXITED)"]
+        GCHook["GC event hook<br/>(ENTER/EXIT/START/END_MARK/END_SWEEP)"]
+        SampleBuf["Sample buffer"]
+        FramePool["Frame pool"]
+    end
+
+    subgraph "Ruby (lib/sperf.rb)"
+        API["Sperf.start / Sperf.stop"]
+        Encoders["Encoders<br/>(PProf / Collapsed / Text)"]
+        StatOut["stat output"]
+    end
+
+    Timer -->|triggers| PJ
+    PJ -->|at safepoint| Sample
+    Sample -->|writes| SampleBuf
+    Sample -->|writes| FramePool
+    ThreadHook -->|writes| SampleBuf
+    GCHook -->|writes| SampleBuf
+    API -->|calls| Sample
+    SampleBuf -->|read at stop| Encoders
+    FramePool -->|resolved at stop| Encoders
+    Encoders --> StatOut
+</div><details class="mermaid-source"><summary>mermaid source</summary><pre>graph TD
+    subgraph "C Extension (ext/sperf/sperf.c)"
+        Timer["Timer&lt;br/&gt;(signal or nanosleep)"]
+        PJ["rb_postponed_job_trigger"]
+        Sample["Sample callback&lt;br/&gt;(sperf_sample_job)"]
+        ThreadHook["Thread event hook&lt;br/&gt;(SUSPENDED/READY/RESUMED/EXITED)"]
+        GCHook["GC event hook&lt;br/&gt;(ENTER/EXIT/START/END_MARK/END_SWEEP)"]
+        SampleBuf["Sample buffer"]
+        FramePool["Frame pool"]
+    end
+
+    subgraph "Ruby (lib/sperf.rb)"
+        API["Sperf.start / Sperf.stop"]
+        Encoders["Encoders&lt;br/&gt;(PProf / Collapsed / Text)"]
+        StatOut["stat output"]
+    end
+
+    Timer --&gt;|triggers| PJ
+    PJ --&gt;|at safepoint| Sample
+    Sample --&gt;|writes| SampleBuf
+    Sample --&gt;|writes| FramePool
+    ThreadHook --&gt;|writes| SampleBuf
+    GCHook --&gt;|writes| SampleBuf
+    API --&gt;|calls| Sample
+    SampleBuf --&gt;|read at stop| Encoders
+    FramePool --&gt;|resolved at stop| Encoders
+    Encoders --&gt; StatOut
+</pre></details>
+
+<h2 id="07-internals--global-profiler-state">7.2 Global profiler state</h2>
+
+<p>sperf uses a single global <code>sperf_profiler_t</code> struct. Only one profiling session can be active at a time. The struct holds:</p>
+
+<ul>
+  <li>Timer configuration (frequency, mode, signal number)</li>
+  <li>Sample buffer (dynamically growing array)</li>
+  <li>Frame pool (dynamically growing VALUE array)</li>
+  <li>Thread-specific key for per-thread data</li>
+  <li>GC phase tracking state</li>
+  <li>Sampling overhead counters</li>
+</ul>
+
+<h2 id="07-internals--timer-implementation">7.3 Timer implementation</h2>
+
+<p>sperf uses a timer to periodically trigger sampling. The timer implementation depends on the platform:</p>
+
+<h3 id="07-internals--linux-signal-based-timer-default">7.3.1 Linux: Signal-based timer (default)</h3>
+
+<p>On Linux, sperf uses <code>timer_create</code> with <code>SIGEV_SIGNAL</code> to deliver a real-time signal (default: <code>SIGRTMIN+8</code>) at the configured frequency. A <code>sigaction</code> handler calls <code>rb_postponed_job_trigger</code> to schedule the sampling callback.</p>
+
+<div class="mermaid">
+sequenceDiagram
+    participant Kernel as Linux Kernel
+    participant Signal as Signal Handler
+    participant VM as Ruby VM
+    participant Job as Postponed Job
+
+    Kernel->>Signal: SIGRTMIN+8 (every 1ms at 1000Hz)
+    Signal->>VM: rb_postponed_job_trigger()
+    Note over VM: Continues until safepoint...
+    VM->>Job: sperf_sample_job()
+    Job->>Job: rb_profile_frames() + record sample
+</div><details class="mermaid-source"><summary>mermaid source</summary><pre>sequenceDiagram
+    participant Kernel as Linux Kernel
+    participant Signal as Signal Handler
+    participant VM as Ruby VM
+    participant Job as Postponed Job
+
+    Kernel-&gt;&gt;Signal: SIGRTMIN+8 (every 1ms at 1000Hz)
+    Signal-&gt;&gt;VM: rb_postponed_job_trigger()
+    Note over VM: Continues until safepoint...
+    VM-&gt;&gt;Job: sperf_sample_job()
+    Job-&gt;&gt;Job: rb_profile_frames() + record sample
+</pre></details>
+
+<p>This approach provides precise timing (~1000us median interval at 1000Hz) with no extra thread.</p>
+
+<h3 id="07-internals--fallback-nanosleep-thread">7.3.2 Fallback: nanosleep thread</h3>
+
+<p>On macOS, or when <code>signal: false</code> is set on Linux, sperf creates a dedicated pthread that loops with <code>nanosleep</code>:</p>
+
+<pre><code class="language-c">while (prof-&gt;running) {
+    rb_postponed_job_trigger(prof-&gt;pj_handle);
+    nanosleep(&amp;interval, NULL);
+}
+</code></pre>
+
+<p>This is simpler but has ~100us drift per tick due to nanosleep’s imprecision.</p>
+
+<h2 id="07-internals--sampling-current-thread-only">7.4 Sampling: current-thread-only</h2>
+
+<p>When the postponed job fires, <code>sperf_sample_job</code> runs on whatever thread currently holds the GVL. It only samples that thread using <code>rb_thread_current()</code>.</p>
+
+<p>This is a deliberate design choice:</p>
+
+<ol>
+  <li><code>rb_profile_frames</code> can only capture the current thread’s stack</li>
+  <li>There’s no need to iterate <code>Thread.list</code> — combined with GVL event hooks, sperf gets complete coverage of all threads</li>
+</ol>
+
+<p>The sampling callback:</p>
+
+<ol>
+  <li>Gets or creates per-thread data (<code>sperf_thread_data_t</code>)</li>
+  <li>Reads the current clock (<code>CLOCK_THREAD_CPUTIME_ID</code> for CPU mode, <code>CLOCK_MONOTONIC</code> for wall mode)</li>
+  <li>Computes weight as <code>time_now - prev_time</code></li>
+  <li>Captures the backtrace with <code>rb_profile_frames</code> directly into the frame pool</li>
+  <li>Records the sample (frame start index, depth, weight, type)</li>
+  <li>Updates <code>prev_time</code></li>
+</ol>
+
+<h2 id="07-internals--gvl-event-tracking-wall-mode">7.5 GVL event tracking (wall mode)</h2>
+
+<p>In wall mode, sperf hooks into Ruby’s thread event API to track GVL transitions. This captures time that sampling alone would miss — time spent off the GVL.</p>
+
+<div class="mermaid">
+stateDiagram-v2
+    [*] --> Running: Thread holds GVL
+    Running --> Suspended: SUSPENDED event<br/>(capture backtrace + timestamp)
+    Suspended --> Ready: READY event<br/>(record wall timestamp)
+    Ready --> Running: RESUMED event<br/>(record GVL blocked + wait samples)
+    Running --> [*]: EXITED event<br/>(cleanup thread data)
+</div><details class="mermaid-source"><summary>mermaid source</summary><pre>stateDiagram-v2
+    [*] --&gt; Running: Thread holds GVL
+    Running --&gt; Suspended: SUSPENDED event&lt;br/&gt;(capture backtrace + timestamp)
+    Suspended --&gt; Ready: READY event&lt;br/&gt;(record wall timestamp)
+    Ready --&gt; Running: RESUMED event&lt;br/&gt;(record GVL blocked + wait samples)
+    Running --&gt; [*]: EXITED event&lt;br/&gt;(cleanup thread data)
+</pre></details>
+
+<h3 id="07-internals--suspended">7.5.1 SUSPENDED</h3>
+
+<p>When a thread releases the GVL (e.g., before I/O):</p>
+
+<ol>
+  <li>Capture the current backtrace into the frame pool</li>
+  <li>Record a normal sample (time since last sample)</li>
+  <li>Save the backtrace and wall timestamp for later use</li>
+</ol>
+
+<h3 id="07-internals--ready">7.5.2 READY</h3>
+
+<p>When a thread becomes ready to run (e.g., I/O completed):</p>
+
+<ol>
+  <li>Record the wall timestamp (no GVL needed — only simple C operations)</li>
+</ol>
+
+<h3 id="07-internals--resumed">7.5.3 RESUMED</h3>
+
+<p>When a thread reacquires the GVL:</p>
+
+<ol>
+  <li>Record a <code>[GVL blocked]</code> sample: weight = <code>ready_at - suspended_at</code> (off-GVL time)</li>
+  <li>Record a <code>[GVL wait]</code> sample: weight = <code>resumed_at - ready_at</code> (GVL contention time)</li>
+  <li>Both samples reuse the backtrace captured at SUSPENDED</li>
+</ol>
+
+<p>This way, off-GVL time and GVL contention are accurately attributed to the code that triggered them, even though no timer-based sampling can occur while the thread is off the GVL.</p>
+
+<h2 id="07-internals--gc-phase-tracking">7.6 GC phase tracking</h2>
+
+<p>sperf hooks into Ruby’s internal GC events to track garbage collection time:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Event</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>GC_START</code></td>
+      <td>Set phase to marking</td>
+    </tr>
+    <tr>
+      <td><code>GC_END_MARK</code></td>
+      <td>Set phase to sweeping</td>
+    </tr>
+    <tr>
+      <td><code>GC_END_SWEEP</code></td>
+      <td>Clear phase</td>
+    </tr>
+    <tr>
+      <td><code>GC_ENTER</code></td>
+      <td>Capture backtrace + wall timestamp</td>
+    </tr>
+    <tr>
+      <td><code>GC_EXIT</code></td>
+      <td>Record <code>[GC marking]</code> or <code>[GC sweeping]</code> sample</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>GC samples always use wall time regardless of the profiling mode, because GC time is real elapsed time that affects application latency.</p>
+
+<h2 id="07-internals--deferred-string-resolution">7.7 Deferred string resolution</h2>
+
+<p>During sampling, sperf stores raw frame <code>VALUE</code>s (Ruby internal object references) in the frame pool — not strings. This keeps the hot path allocation-free and fast.</p>
+
+<p>String resolution happens at stop time:</p>
+
+<ol>
+  <li><code>Sperf.stop</code> calls <code>_c_stop</code> which returns raw data</li>
+  <li>For each frame VALUE, <code>rb_profile_frame_full_label</code> and <code>rb_profile_frame_path</code> are called to get human-readable strings</li>
+  <li>These strings are then passed to the Ruby encoders</li>
+</ol>
+
+<p>This means sampling only writes integers (VALUE pointers and timestamps) to pre-allocated buffers. No Ruby objects are created, no GC pressure is added during profiling.</p>
+
+<h2 id="07-internals--frame-pool-and-gc-safety">7.8 Frame pool and GC safety</h2>
+
+<p>The frame pool is a contiguous array of <code>VALUE</code>s that stores raw frame references from <code>rb_profile_frames</code>. Since these are Ruby object references, they must be protected from garbage collection.</p>
+
+<p>sperf wraps the profiler struct in a <code>TypedData</code> object with a custom <code>dmark</code> function that calls <code>rb_gc_mark_locations</code> on the entire frame pool. This tells the GC that all VALUEs in the pool are reachable and must not be collected.</p>
+
+<p>The frame pool starts at ~1MB and doubles in size via <code>realloc</code> when needed. Similarly, the sample buffer starts with 1024 entries and grows by 2x.</p>
+
+<h2 id="07-internals--per-thread-data">7.9 Per-thread data</h2>
+
+<p>Each thread gets a <code>sperf_thread_data_t</code> struct stored via Ruby’s thread-specific data API (<code>rb_internal_thread_specific_set</code>). This tracks:</p>
+
+<ul>
+  <li><code>prev_cpu_ns</code>: Previous CPU time reading (for computing weight)</li>
+  <li><code>prev_wall_ns</code>: Previous wall time reading</li>
+  <li><code>suspended_at_ns</code>: Wall timestamp when thread was suspended</li>
+  <li><code>ready_at_ns</code>: Wall timestamp when thread became ready</li>
+  <li><code>suspended_frame_start</code>/<code>depth</code>: Saved backtrace from SUSPENDED event</li>
+</ul>
+
+<p>Thread data is created lazily on first encounter and freed on the <code>EXITED</code> event or at profiler stop.</p>
+
+<h2 id="07-internals--fork-safety">7.10 Fork safety</h2>
+
+<p>sperf registers a <code>pthread_atfork</code> child handler that silently stops profiling in the forked child process:</p>
+
+<ul>
+  <li>Clears the timer/signal state</li>
+  <li>Removes event hooks</li>
+  <li>Frees sample and frame buffers</li>
+</ul>
+
+<p>The parent process continues profiling unaffected. The child can start a fresh profiling session if needed.</p>
+
+<h2 id="07-internals--pprof-encoder">7.11 pprof encoder</h2>
+
+<p>sperf encodes the <span id="07-internals--cite-0">pprof<sup class="cite-ref"><a href="#bib-ren2010" title="Gang Ren and Eric Tune and Tipp Moseley and Yixin Shi and Silvius Rus and Robert Hundt. Google-Wide Profiling: A Continuous Profiling Infrastructure for Data Centers. IEEE Micro. Vol. 30. No. 4. pp. 65--79. 2010." onclick="showChapterAndScroll('__bibliography__', 'bib-ren2010'); return false;">[Gang, 2010]</a></sup></span> protobuf format entirely in Ruby, with no protobuf gem dependency. The encoder in <code>Sperf::PProf.encode</code>:</p>
+
+<ol>
+  <li>Builds a string table (index 0 is always the empty string)</li>
+  <li>Converts string frames to index frames and merges identical stacks</li>
+  <li>Builds location and function tables</li>
+  <li>Encodes the Profile protobuf message field by field</li>
+</ol>
+
+<p>This hand-written encoder is simple (~100 lines) and only runs once at stop time, so performance is not a concern.</p>
+
+<h2 id="07-internals--known-limitations">7.12 Known limitations</h2>
+
+<h3 id="07-internals--running-ec-race">7.12.1 Running EC race</h3>
+
+<p>There is a known race condition in the Ruby VM where <code>rb_postponed_job_trigger</code> from the timer thread may set the interrupt flag on the wrong thread’s execution context. This happens when a new thread’s native thread starts before acquiring the GVL. The result is that timer samples may miss threads doing C busy-wait, with their CPU time leaking into the next SUSPENDED event’s stack.</p>
+
+<p>This is a Ruby VM bug, not a sperf bug, and affects all postponed-job-based profilers.</p>
+
+<h3 id="07-internals--single-session">7.12.2 Single session</h3>
+
+<p>Only one profiling session can be active at a time due to the global profiler state. Calling <code>Sperf.start</code> while already profiling is not supported.</p>
+
+<h3 id="07-internals--method-level-granularity">7.12.3 Method-level granularity</h3>
+
+<p>sperf profiles at the method level, not the line level. Frame labels use <code>rb_profile_frame_full_label</code> for qualified names (e.g., <code>Integer#times</code>, <code>MyClass#method_name</code>). Line numbers are not included.</p>
+
+    <div class="chapter-footer">This chapter was generated by AI. Accuracy is not guaranteed.</div>
+    <nav class="chapter-nav">
+      <a href="#" class="nav-prev" onclick="showChapter('06-interpreting-results'); return false;">&larr; 6. Interpreting Results</a>
+      <a href="#" class="nav-next" onclick="showChapter('a1-reference'); return false;">A. Quick Reference &rarr;</a>
+    </nav>
+  </section>
+  <section class="chapter" id="chapter-a1-reference" style="display: none;">
+    <h1 id="a1-reference--quick-reference">A. Quick Reference</h1>
+
+<h2 id="a1-reference--cli-cheat-sheet">A.1 CLI cheat sheet</h2>
+
+<pre><code class="language-bash"># Quick performance overview
+sperf stat ruby my_app.rb
+
+# Record to default file (sperf.data, pprof format, cpu mode)
+sperf record ruby my_app.rb
+
+# Record with options
+sperf record -m wall -f 500 -o profile.pb.gz ruby my_app.rb
+
+# Record to text format
+sperf record -o profile.txt ruby my_app.rb
+
+# Record to collapsed stacks
+sperf record -o profile.collapsed ruby my_app.rb
+
+# View profile in browser (requires Go)
+sperf report
+
+# Print top functions
+sperf report --top profile.pb.gz
+
+# Compare two profiles
+sperf diff before.pb.gz after.pb.gz
+
+# Full documentation
+sperf help
+</code></pre>
+
+<h2 id="a1-reference--ruby-api-cheat-sheet">A.2 Ruby API cheat sheet</h2>
+
+<pre><code class="language-ruby">require "sperf"
+
+# Block form
+data = Sperf.start(output: "profile.pb.gz", mode: :cpu) do
+  # code to profile
+end
+
+# Manual form
+Sperf.start(frequency: 1000, mode: :wall)
+# ...
+data = Sperf.stop
+
+# Save to file
+Sperf.save("profile.pb.gz", data)
+Sperf.save("profile.collapsed", data)
+Sperf.save("profile.txt", data)
+</code></pre>
+
+<h2 id="a1-reference--environment-variables">A.3 Environment variables</h2>
+
+<p>These are used internally by the CLI to configure the auto-started profiler:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Variable</th>
+      <th>Values</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>SPERF_ENABLED</code></td>
+      <td><code>1</code></td>
+      <td>Enable auto-start on require</td>
+    </tr>
+    <tr>
+      <td><code>SPERF_OUTPUT</code></td>
+      <td>path</td>
+      <td>Output file path</td>
+    </tr>
+    <tr>
+      <td><code>SPERF_FREQUENCY</code></td>
+      <td>integer</td>
+      <td>Sampling frequency in Hz</td>
+    </tr>
+    <tr>
+      <td><code>SPERF_MODE</code></td>
+      <td><code>cpu</code>, <code>wall</code></td>
+      <td>Profiling mode</td>
+    </tr>
+    <tr>
+      <td><code>SPERF_FORMAT</code></td>
+      <td><code>pprof</code>, <code>collapsed</code>, <code>text</code></td>
+      <td>Output format</td>
+    </tr>
+    <tr>
+      <td><code>SPERF_VERBOSE</code></td>
+      <td><code>1</code></td>
+      <td>Print statistics to stderr</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="a1-reference--profiling-mode-comparison">A.4 Profiling mode comparison</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Aspect</th>
+      <th>cpu</th>
+      <th>wall</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Clock</td>
+      <td><code>CLOCK_THREAD_CPUTIME_ID</code></td>
+      <td><code>CLOCK_MONOTONIC</code></td>
+    </tr>
+    <tr>
+      <td>I/O time</td>
+      <td>Not measured</td>
+      <td><code>[GVL blocked]</code></td>
+    </tr>
+    <tr>
+      <td>Sleep time</td>
+      <td>Not measured</td>
+      <td><code>[GVL blocked]</code></td>
+    </tr>
+    <tr>
+      <td>GVL contention</td>
+      <td>Not measured</td>
+      <td><code>[GVL wait]</code></td>
+    </tr>
+    <tr>
+      <td>GC time</td>
+      <td><code>[GC marking]</code>, <code>[GC sweeping]</code></td>
+      <td><code>[GC marking]</code>, <code>[GC sweeping]</code></td>
+    </tr>
+    <tr>
+      <td>Best for</td>
+      <td>CPU hotspots</td>
+      <td>Latency analysis</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="a1-reference--output-format-comparison">A.5 Output format comparison</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Extension</th>
+      <th>Format</th>
+      <th>Tooling required</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>.pb.gz</code> (default)</td>
+      <td>pprof protobuf</td>
+      <td>Go (<code>sperf report</code>)</td>
+    </tr>
+    <tr>
+      <td><code>.collapsed</code></td>
+      <td>Collapsed stacks</td>
+      <td>flamegraph.pl or speedscope</td>
+    </tr>
+    <tr>
+      <td><code>.txt</code></td>
+      <td>Text report</td>
+      <td>None</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="a1-reference--synthetic-frames">A.6 Synthetic frames</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Frame</th>
+      <th>Mode</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>[GVL blocked]</code></td>
+      <td>wall</td>
+      <td>Thread off-GVL (I/O, sleep, C ext)</td>
+    </tr>
+    <tr>
+      <td><code>[GVL wait]</code></td>
+      <td>wall</td>
+      <td>Thread waiting for GVL (contention)</td>
+    </tr>
+    <tr>
+      <td><code>[GC marking]</code></td>
+      <td>both</td>
+      <td>GC marking phase (wall time)</td>
+    </tr>
+    <tr>
+      <td><code>[GC sweeping]</code></td>
+      <td>both</td>
+      <td>GC sweeping phase (wall time)</td>
+    </tr>
+  </tbody>
+</table>
+
+    <div class="chapter-footer">This chapter was generated by AI. Accuracy is not guaranteed.</div>
+    <nav class="chapter-nav">
+      <a href="#" class="nav-prev" onclick="showChapter('07-internals'); return false;">&larr; 7. Internals</a>
+    </nav>
+  </section>
+  <section class="chapter bibliography-chapter" id="chapter-__bibliography__" style="display: none;">
+    <h1>Bibliography</h1>
+    <ul class="bibliography-list">
+      <li id="bib-stackprof"><span class="bib-label">[Aman, 2014]</span> Aman Gupta. <em><a href="https://github.com/tmm1/stackprof" target="_blank" rel="noopener">stackprof: A sampling call-stack profiler for Ruby 2.2+</a></em>. 2014.</li>
+      <li id="bib-demelo2010"><span class="bib-label">[Arnaldo, 2010]</span> Arnaldo Carvalho de Melo. <em><a href="http://oldvger.kernel.org/~acme/perf/lk2010-perf-paper.pdf" target="_blank" rel="noopener">The New Linux perf Tools</a></em>. 2010.</li>
+      <li id="bib-gregg2016"><span class="bib-label">[Brendan, 2016]</span> Brendan Gregg. "The Flame Graph". <em>Communications of the ACM</em>, 59(6), pp. 48--57. 2016. <a href="https://doi.org/10.1145/2909476" target="_blank" rel="noopener">DOI</a></li>
+      <li id="bib-ren2010"><span class="bib-label">[Gang, 2010]</span> Gang Ren and Eric Tune and Tipp Moseley and Yixin Shi and Silvius Rus and Robert Hundt. "Google-Wide Profiling: A Continuous Profiling Infrastructure for Data Centers". <em>IEEE Micro</em>, 30(4), pp. 65--79. 2010. <a href="https://doi.org/10.1109/MM.2010.68" target="_blank" rel="noopener">DOI</a></li>
+      <li id="bib-graham1982"><span class="bib-label">[Susan, 1982]</span> Susan L. Graham and Peter B. Kessler and Marshall K. McKusick. "gprof: A Call Graph Execution Profiler". In <em>Proceedings of the SIGPLAN '82 Symposium on Compiler Construction</em>, pp. 120--126. 1982. <a href="https://doi.org/10.1145/800230.806987" target="_blank" rel="noopener">DOI</a></li>
+      <li id="bib-mytkowicz2010"><span class="bib-label">[Todd, 2010]</span> Todd Mytkowicz and Amer Diwan and Matthias Hauswirth and Peter F. Sweeney. "Evaluating the Accuracy of Java Profilers". In <em>Proceedings of the 31st ACM SIGPLAN Conference on Programming Language Design and Implementation (PLDI '10)</em>, pp. 187--197. 2010. <a href="https://doi.org/10.1145/1806596.1806618" target="_blank" rel="noopener">DOI</a></li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(function() {
+  var chapters = ["cover", "part1", "01-introduction", "02-installation", "part2", "03-cli-usage", "04-library-usage", "05-output-formats", "part3", "06-interpreting-results", "07-internals", "a1-reference", "__bibliography__"];
+  var currentChapter = null;
+
+  var navigating = false; // flag to suppress pushState during popstate/initial load
+
+  function showChapter(slug, hash) {
+    chapters.forEach(function(ch) {
+      var el = document.getElementById('chapter-' + ch);
+      if (el) el.style.display = (ch === slug) ? 'block' : 'none';
+    });
+
+    // Update active state in TOC and scroll sidebar to show active item
+    var tocItems = document.querySelectorAll('.toc-chapter');
+    var activeItem = null;
+    tocItems.forEach(function(item) {
+      if (item.dataset.chapter === slug) {
+        item.classList.add('active');
+        activeItem = item;
+      } else {
+        item.classList.remove('active');
+      }
+    });
+    if (activeItem) {
+      var tocNav = document.getElementById('toc');
+      var itemRect = activeItem.getBoundingClientRect();
+      var tocRect = tocNav.getBoundingClientRect();
+      if (itemRect.top < tocRect.top || itemRect.bottom > tocRect.bottom) {
+        activeItem.scrollIntoView({ block: 'center' });
+      }
+    }
+
+    currentChapter = slug;
+    var newHash = '#' + (hash || slug);
+    if (!navigating) {
+      history.pushState(null, '', newHash);
+    }
+    window.scrollTo(0, 0);
+
+    // Re-apply highlight if search is active
+    if (searchInput && searchInput.value) {
+      highlightContent(searchInput.value);
+    }
+
+    // Render mermaid/KaTeX in newly visible chapter if not yet rendered
+    renderSpecialBlocks(slug);
+  }
+
+  function renderSpecialBlocks(slug) {
+    var section = document.getElementById('chapter-' + slug);
+    if (!section) return;
+    if (typeof mermaid !== 'undefined') {
+      var unrendered = section.querySelectorAll('.mermaid:not([data-processed])');
+      if (unrendered.length > 0) {
+        // Save original source for error recovery
+        var sources = {};
+        unrendered.forEach(function(el) { sources[el.id || el.textContent.slice(0, 50)] = el.textContent; });
+        mermaid.run({nodes: unrendered, suppressErrors: true}).catch(function() {}).finally(function() {
+          unrendered.forEach(function(el) {
+            // mermaid sets data-processed; if it's still text-only (no SVG), it failed
+            if (!el.querySelector('svg')) {
+              var src = sources[el.id || el.textContent.slice(0, 50)] || el.textContent;
+              el.innerHTML = '<pre style="color:#c00;border:1px solid #c00;padding:0.5em;white-space:pre-wrap">mermaid エラー:\n' +
+                src.replace(/</g, '&lt;') + '</pre>';
+            }
+          });
+        });
+      }
+    }
+    if (typeof katex !== 'undefined') {
+      section.querySelectorAll('.math-block[data-math]').forEach(function(el) {
+        if (el.childNodes.length === 0) {
+          try { katex.render(el.getAttribute('data-math'), el, {displayMode: true, throwOnError: false}); }
+          catch(e) { el.textContent = el.getAttribute('data-math'); }
+        }
+      });
+      section.querySelectorAll('.math-inline[data-math]').forEach(function(el) {
+        if (el.childNodes.length === 0) {
+          try { katex.render(el.getAttribute('data-math'), el, {displayMode: false, throwOnError: false}); }
+          catch(e) { el.textContent = el.getAttribute('data-math'); }
+        }
+      });
+    }
+    if (typeof functionPlot !== 'undefined') {
+      section.querySelectorAll('.functionplot[data-plot]').forEach(function(el) {
+        if (el.childNodes.length > 0) return;
+        try {
+          var spec = el.getAttribute('data-plot');
+          var opts = parseFunctionPlotSpec(spec);
+          opts.target = el;
+          functionPlot(opts);
+        } catch(e) {
+          el.textContent = 'Error rendering plot: ' + e.message;
+          el.style.color = 'red';
+        }
+      });
+    }
+  }
+
+  // Parse functionplot spec: lines of "y = expr" and "key: value" options
+  function parseFunctionPlotSpec(spec) {
+    var lines = spec.split('\n');
+    var fns = [];
+    var opts = {width: 600, height: 400};
+    lines.forEach(function(line) {
+      line = line.trim();
+      if (!line) return;
+      // Option lines: key: value
+      var optMatch = line.match(/^(xrange|yrange|range|width|height|title|grid)\s*:\s*(.+)$/i);
+      if (optMatch) {
+        var key = optMatch[1].toLowerCase();
+        var val = optMatch[2].trim();
+        if (key === 'range' || key === 'xrange') {
+          opts.xAxis = {domain: parseRange(val)};
+        } else if (key === 'yrange') {
+          opts.yAxis = {domain: parseRange(val)};
+        } else if (key === 'width') {
+          opts.width = parseInt(val, 10);
+        } else if (key === 'height') {
+          opts.height = parseInt(val, 10);
+        } else if (key === 'title') {
+          opts.title = val;
+        } else if (key === 'grid') {
+          opts.grid = val === 'true';
+        }
+        return;
+      }
+      // Function lines: y = expr, r = expr (polar), x = expr (implicit), or bare expr
+      var fnMatch = line.match(/^y\s*=\s*(.+)$/);
+      if (fnMatch) { fns.push({fn: fnMatch[1].trim()}); return; }
+      var polarMatch = line.match(/^r\s*=\s*(.+)$/);
+      if (polarMatch) { fns.push({r: polarMatch[1].trim(), fnType: 'polar', graphType: 'polyline'}); return; }
+      var paramMatch = line.match(/^parametric\s*:\s*(.+?)\s*,\s*(.+)$/);
+      if (paramMatch) { fns.push({x: paramMatch[1].trim(), y: paramMatch[2].trim(), fnType: 'parametric', graphType: 'polyline'}); return; }
+      // Bare expression treated as y = expr
+      fns.push({fn: line});
+    });
+    opts.data = fns;
+    return opts;
+  }
+
+  function parseRange(str) {
+    var m = str.match(/\[?\s*(-?[\d.eE+piPI*\/]+)\s*,\s*(-?[\d.eE+piPI*\/]+)\s*\]?/);
+    if (!m) return [-10, 10];
+    return [evalRangeNum(m[1]), evalRangeNum(m[2])];
+  }
+
+  function evalRangeNum(s) {
+    s = s.replace(/pi/gi, String(Math.PI));
+    try { return Function('"use strict"; return (' + s + ')')(); }
+    catch(e) { return parseFloat(s) || 0; }
+  }
+
+  function showChapterAndScroll(slug, headingId) {
+    showChapter(slug, headingId);
+    setTimeout(function() {
+      var target = document.getElementById(headingId);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth' });
+        highlightElement(target);
+      }
+    }, 50);
+  }
+
+  function highlightElement(el) {
+    var prev = document.querySelector('.ligarb-highlight');
+    if (prev) prev.classList.remove('ligarb-highlight');
+    el.classList.add('ligarb-highlight');
+  }
+
+  // Navigate to chapter/heading based on current URL hash
+  function handleHash() {
+    navigating = true;
+    var hash = location.hash.replace('#', '');
+    if (!hash) {
+      if (chapters.length > 0) showChapter(chapters[0]);
+      navigating = false;
+      return;
+    }
+
+    // Check if hash matches a chapter slug directly
+    if (chapters.indexOf(hash) !== -1) {
+      showChapter(hash);
+      navigating = false;
+      return;
+    }
+
+    // Check for bibliography entry (bib-KEY)
+    var bibMatch = hash.match(/^bib-(.+)/);
+    if (bibMatch) {
+      showChapter('__bibliography__', hash);
+      setTimeout(function() {
+        var target = document.getElementById(hash);
+        if (target) target.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+      navigating = false;
+      return;
+    }
+
+    // Check for footnote links (fn: or fnref:)
+    var fnMatch = hash.match(/^(?:fn|fnref):(.+?)--/);
+    if (fnMatch) {
+      var fnChSlug = fnMatch[1];
+      if (chapters.indexOf(fnChSlug) !== -1) {
+        if (currentChapter !== fnChSlug) showChapter(fnChSlug, hash);
+        var fnTarget = document.getElementById(hash);
+        if (fnTarget) fnTarget.scrollIntoView({ behavior: 'smooth' });
+        navigating = false;
+        return;
+      }
+    }
+
+    // Check for deep link (chapter--heading)
+    var parts = hash.split('--');
+    if (parts.length >= 2) {
+      var chSlug = parts[0];
+      if (chapters.indexOf(chSlug) !== -1) {
+        showChapterAndScroll(chSlug, hash);
+        navigating = false;
+        return;
+      }
+    }
+
+    // Fallback
+    if (chapters.length > 0) showChapter(chapters[0]);
+    navigating = false;
+  }
+
+  // TOC search + content highlight
+  var searchInput = document.getElementById('toc-search');
+  var clearBtn = document.getElementById('search-clear');
+
+  // Build text cache for full-text search (lazy, built on first search)
+  var chapterTextCache = null;
+  function buildTextCache() {
+    if (chapterTextCache) return;
+    chapterTextCache = {};
+    chapters.forEach(function(slug) {
+      var section = document.getElementById('chapter-' + slug);
+      if (section) {
+        chapterTextCache[slug] = section.textContent.toLowerCase();
+      }
+    });
+  }
+
+  function countMatches(text, query) {
+    var count = 0;
+    var idx = text.indexOf(query);
+    while (idx !== -1) {
+      count++;
+      idx = text.indexOf(query, idx + query.length);
+    }
+    return count;
+  }
+
+  function updateSearch() {
+    var query = searchInput.value.toLowerCase();
+    clearBtn.style.display = query ? 'block' : 'none';
+
+    // Remove existing match count badges
+    document.querySelectorAll('.search-match-count').forEach(function(el) { el.remove(); });
+
+    var items = document.querySelectorAll('.toc-chapter');
+    var partItems = document.querySelectorAll('.toc-part, .toc-appendix');
+
+    if (!query || query.length < 2) {
+      // Show all items when query is too short
+      items.forEach(function(item) { item.style.display = ''; });
+      partItems.forEach(function(item) { item.style.display = ''; });
+      highlightContent('');
+      return;
+    }
+
+    buildTextCache();
+
+    // Track which chapters match (content or TOC text)
+    var matchingSlugs = {};
+    items.forEach(function(item) {
+      var slug = item.dataset.chapter;
+      var tocText = item.textContent.toLowerCase();
+      var contentText = chapterTextCache[slug] || '';
+      var tocMatch = tocText.indexOf(query) !== -1;
+      var contentMatch = contentText.indexOf(query) !== -1;
+
+      if (tocMatch || contentMatch) {
+        item.style.display = '';
+        matchingSlugs[slug] = true;
+        // Show match count badge for content matches
+        if (contentMatch) {
+          var count = countMatches(contentText, query);
+          var badge = document.createElement('span');
+          badge.className = 'search-match-count';
+          badge.textContent = count;
+          var link = item.querySelector('a');
+          if (link) link.appendChild(badge);
+        }
+      } else {
+        item.style.display = 'none';
+      }
+    });
+
+    // Show/hide part and appendix headers based on whether they have visible children
+    partItems.forEach(function(item) {
+      var children = item.querySelectorAll('.toc-chapter');
+      var hasVisible = Array.prototype.some.call(children, function(ch) {
+        return ch.style.display !== 'none';
+      });
+      item.style.display = hasVisible ? '' : 'none';
+    });
+
+    highlightContent(searchInput.value);
+  }
+
+  searchInput.addEventListener('input', updateSearch);
+
+  clearBtn.addEventListener('click', function() {
+    searchInput.value = '';
+    updateSearch();
+    searchInput.focus();
+  });
+
+  // Content highlight
+  function highlightContent(query) {
+    // Remove existing highlights
+    var marks = document.querySelectorAll('mark.search-highlight');
+    marks.forEach(function(mark) {
+      var parent = mark.parentNode;
+      parent.replaceChild(document.createTextNode(mark.textContent), mark);
+      parent.normalize();
+    });
+
+    if (!query || query.length < 2) return;
+
+    // Highlight in current chapter
+    if (!currentChapter) return;
+    var section = document.getElementById('chapter-' + currentChapter);
+    if (!section) return;
+
+    highlightInNode(section, query.toLowerCase());
+  }
+
+  function highlightInNode(node, query) {
+    if (node.nodeType === 3) { // Text node
+      var text = node.textContent;
+      var lower = text.toLowerCase();
+      var idx = lower.indexOf(query);
+      if (idx === -1) return;
+
+      var frag = document.createDocumentFragment();
+      var lastIdx = 0;
+      while (idx !== -1) {
+        frag.appendChild(document.createTextNode(text.substring(lastIdx, idx)));
+        var mark = document.createElement('mark');
+        mark.className = 'search-highlight';
+        mark.textContent = text.substring(idx, idx + query.length);
+        frag.appendChild(mark);
+        lastIdx = idx + query.length;
+        idx = lower.indexOf(query, lastIdx);
+      }
+      frag.appendChild(document.createTextNode(text.substring(lastIdx)));
+      node.parentNode.replaceChild(frag, node);
+    } else if (node.nodeType === 1 && node.tagName !== 'SCRIPT' && node.tagName !== 'STYLE' && node.tagName !== 'MARK' && node.tagName !== 'PRE') {
+      // Collect children into array first (live NodeList changes during iteration)
+      var children = Array.prototype.slice.call(node.childNodes);
+      children.forEach(function(child) { highlightInNode(child, query); });
+    }
+  }
+
+  // Sidebar toggle for mobile
+  var toggle = document.getElementById('sidebar-toggle');
+  var sidebar = document.getElementById('sidebar');
+  toggle.addEventListener('click', function() {
+    sidebar.classList.toggle('open');
+  });
+
+  // Close sidebar when clicking a link on mobile
+  var tocLinks = document.querySelectorAll('.toc a');
+  tocLinks.forEach(function(link) {
+    link.addEventListener('click', function() {
+      if (window.innerWidth <= 768) {
+        sidebar.classList.remove('open');
+      }
+    });
+  });
+
+  // Dark mode toggle
+  var themeToggle = document.getElementById('theme-toggle');
+  var savedTheme = localStorage.getItem('ligarb-theme');
+  if (savedTheme) {
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  }
+  themeToggle.addEventListener('click', function() {
+    var current = document.documentElement.getAttribute('data-theme');
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('ligarb-theme', next);
+  });
+
+  // Footnote link click handler — scroll within current chapter without triggering chapter switch
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('a[href^="#fn:"], a[href^="#fnref:"]');
+    if (!link) return;
+    var targetId = link.getAttribute('href').substring(1);
+    var target = document.getElementById(targetId);
+    if (target) {
+      e.preventDefault();
+      history.replaceState(null, '', '#' + targetId);
+      target.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+
+  // Add title attribute to footnote references for hover preview
+  document.querySelectorAll('sup a[href^="#fn:"]').forEach(function(link) {
+    var targetId = link.getAttribute('href').substring(1);
+    var footnoteLi = document.getElementById(targetId);
+    if (footnoteLi) {
+      // Clone to strip the back-reference link, then get text
+      var clone = footnoteLi.cloneNode(true);
+      var backlinks = clone.querySelectorAll('a[href^="#fnref:"]');
+      backlinks.forEach(function(bl) { bl.remove(); });
+      link.title = clone.textContent.trim();
+    }
+  });
+
+  // Expose to onclick handlers and external scripts
+  window.showChapter = showChapter;
+  window.showChapterAndScroll = showChapterAndScroll;
+  window.renderSpecialBlocks = function() { if (currentChapter) renderSpecialBlocks(currentChapter); };
+
+  // Initialize (replace initial entry so first back goes to previous page, not same page)
+  navigating = true;
+  handleHash();
+  history.replaceState(null, '', location.hash || '#' + (chapters[0] || ''));
+  navigating = false;
+  window.addEventListener('popstate', handleHash);
+})();
+</script>
+<script src="js/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="js/mermaid.min.js"></script>
+<script>
+mermaid.initialize({startOnLoad: false});
+renderSpecialBlocks();
+</script>
+</body>
+</html>

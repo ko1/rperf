@@ -1,0 +1,22 @@
+title: "sperf guide"
+author: "sperf project"
+language: "en"
+ai_generated: true
+bibliography: references.bib
+chapters:
+  - cover: cover.md
+  - part: part1.md
+    chapters:
+      - 01-introduction.md
+      - 02-installation.md
+  - part: part2.md
+    chapters:
+      - 03-cli-usage.md
+      - 04-library-usage.md
+      - 05-output-formats.md
+  - part: part3.md
+    chapters:
+      - 06-interpreting-results.md
+      - 07-internals.md
+  - appendix:
+    - a1-reference.md

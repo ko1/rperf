@@ -1,0 +1,16 @@
+# brief.yml - Book brief for ligarb write
+title: "sperf gudie"
+language: en
+audience: "Ordinal Ruby programmer"
+build_dir: ../manual
+notes: |
+  Describe sperf completely in the following order.
+  * general introduction for first users.
+  * how to use
+    * CLI
+    * Library
+  * sperf internal
+    * intenral implementations
+  
+  "how to use" contents should contain real example.
+  Run the program and put output on the book if possible.
