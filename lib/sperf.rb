@@ -44,15 +44,7 @@ module Sperf
     print_stat(data) if @stat
 
     if @output
-      fmt = detect_format(@output, @format)
-      case fmt
-      when :collapsed
-        File.write(@output, Collapsed.encode(data))
-      when :text
-        File.write(@output, Text.encode(data))
-      else
-        File.binwrite(@output, gzip(PProf.encode(data)))
-      end
+      write_data(@output, data, @format)
       @output = nil
       @format = nil
     end
@@ -66,6 +58,10 @@ module Sperf
   #   .txt       → text report (human/AI readable flat + cumulative table)
   #   otherwise (.pb.gz etc) → pprof protobuf (gzip compressed)
   def self.save(path, data, format: nil)
+    write_data(path, data, format)
+  end
+
+  def self.write_data(path, data, format)
     fmt = detect_format(path, format)
     case fmt
     when :collapsed
@@ -76,6 +72,7 @@ module Sperf
       File.binwrite(path, gzip(PProf.encode(data)))
     end
   end
+  private_class_method :write_data
 
   def self.detect_format(path, format)
     return format.to_sym if format
@@ -115,11 +112,9 @@ module Sperf
 
   TOP_N = 10
 
-  # Samples from C are now [[path_str, label_str], ...], weight]
-  def self.print_top(data)
-    samples_raw = data[:samples]
-    return if !samples_raw || samples_raw.empty?
-
+  # Compute flat and cumulative weight tables from raw samples.
+  # Returns { flat: Hash, cum: Hash, total_weight: Integer }
+  def self.compute_flat_cum(samples_raw)
     flat = Hash.new(0)
     cum = Hash.new(0)
     total_weight = 0
@@ -141,10 +136,20 @@ module Sperf
       end
     end
 
-    return if cum.empty?
+    { flat: flat, cum: cum, total_weight: total_weight }
+  end
+  private_class_method :compute_flat_cum
 
-    print_top_table("flat", flat, total_weight)
-    print_top_table("cum", cum, total_weight)
+  # Samples from C are now [[path_str, label_str], ...], weight]
+  def self.print_top(data)
+    samples_raw = data[:samples]
+    return if !samples_raw || samples_raw.empty?
+
+    result = compute_flat_cum(samples_raw)
+    return if result[:cum].empty?
+
+    print_top_table("flat", result[:flat], result[:total_weight])
+    print_top_table("cum", result[:cum], result[:total_weight])
   end
 
   def self.print_top_table(kind, table, total_weight)
@@ -159,6 +164,15 @@ module Sperf
     end
   end
 
+  # Column formatters for stat output
+  STAT_PCT_LINE  = ->(val, unit, pct, label) {
+    format("  %14s %-2s %5.1f%%  %s", val, unit, pct, label)
+  }
+  STAT_LINE = ->(val, unit, label) {
+    format("  %14s %-2s         %s", val, unit, label)
+  }
+  private_constant :STAT_PCT_LINE, :STAT_LINE
+
   def self.print_stat(data)
     samples_raw = data[:samples] || []
     real_ns = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - @stat_start_mono) * 1_000_000_000).to_i
@@ -171,130 +185,137 @@ module Sperf
     $stderr.puts
     $stderr.puts " Performance stats for '#{command}':"
     $stderr.puts
-
-    # user / sys / real
     $stderr.puts format("  %14s ms   user", format_ms(user_ns))
     $stderr.puts format("  %14s ms   sys", format_ms(sys_ns))
     $stderr.puts format("  %14s ms   real", format_ms(real_ns))
 
-    # Time breakdown from samples
     if samples_raw.size > 0
-      breakdown = Hash.new(0)
-      total_weight = 0
-
-      samples_raw.each do |frames, weight|
-        total_weight += weight
-        leaf_label = frames.first&.last || ""
-        category = case leaf_label
-                   when "[GVL blocked]" then :gvl_blocked
-                   when "[GVL wait]"    then :gvl_wait
-                   when "[GC marking]"  then :gc_marking
-                   when "[GC sweeping]" then :gc_sweeping
-                   else :cpu_execution
-                   end
-        breakdown[category] += weight
-      end
-
-      # Column layout: "  %14s %2s %6s  label"
-      #   value(14) + unit(2) + pct(6) + gap(2) + label
-      pct_line  = ->(val, unit, pct, label) {
-        format("  %14s %-2s %5.1f%%  %s", val, unit, pct, label)
-      }
-      stat_line = ->(val, unit, label) {
-        format("  %14s %-2s         %s", val, unit, label)
-      }
-
-      $stderr.puts
-
-      [
-        [:cpu_execution, "CPU execution"],
-        [:gvl_blocked,   "[Ruby] GVL blocked (I/O, sleep)"],
-        [:gvl_wait,      "[Ruby] GVL wait (contention)"],
-        [:gc_marking,    "[Ruby] GC marking"],
-        [:gc_sweeping,   "[Ruby] GC sweeping"],
-      ].each do |key, label|
-        w = breakdown[key]
-        next if w == 0
-        pct = total_weight > 0 ? w * 100.0 / total_weight : 0.0
-        $stderr.puts pct_line.call(format_ms(w), "ms", pct, label)
-      end
-
-      # GC statistics (cumulative since process start)
-      gc = GC.stat
-      $stderr.puts stat_line.call(format_ms(gc[:time] * 1_000_000), "ms",
-                                  "[Ruby] GC time (%s count: %s minor, %s major)" % [
-                                    format_integer(gc[:count]),
-                                    format_integer(gc[:minor_gc_count]),
-                                    format_integer(gc[:major_gc_count])])
-      $stderr.puts stat_line.call(format_integer(gc[:total_allocated_objects]), "  ", "[Ruby] allocated objects")
-      $stderr.puts stat_line.call(format_integer(gc[:total_freed_objects]), "  ", "[Ruby] freed objects")
-      if defined?(RubyVM::YJIT) && RubyVM::YJIT.enabled?
-        yjit = RubyVM::YJIT.runtime_stats
-        if yjit[:ratio_in_yjit]
-          $stderr.puts stat_line.call(format("%.1f%%", yjit[:ratio_in_yjit] * 100), "  ", "[Ruby] YJIT code execution ratio")
-        end
-      end
-
-      # System resources
-      sys_stats = get_system_stats
-      maxrss_kb = sys_stats[:maxrss_kb]
-      if maxrss_kb
-        $stderr.puts stat_line.call(format_integer((maxrss_kb / 1024.0).round), "MB", "[OS] peak memory (maxrss)")
-      end
-      if sys_stats[:ctx_voluntary]
-        $stderr.puts stat_line.call(
-          format_integer(sys_stats[:ctx_voluntary] + sys_stats[:ctx_involuntary]), "  ",
-          "[OS] context switches (%s voluntary, %s involuntary)" % [
-            format_integer(sys_stats[:ctx_voluntary]),
-            format_integer(sys_stats[:ctx_involuntary])])
-      end
-      if sys_stats[:io_read_bytes]
-        r = sys_stats[:io_read_bytes]
-        w = sys_stats[:io_write_bytes]
-        $stderr.puts stat_line.call(
-          format_integer(((r + w) / 1024.0 / 1024.0).round), "MB",
-          "[OS] disk I/O (%s MB read, %s MB write)" % [
-            format_integer((r / 1024.0 / 1024.0).round),
-            format_integer((w / 1024.0 / 1024.0).round)])
-      end
-
-      # Top N by flat
-      flat = Hash.new(0)
-      samples_raw.each do |frames, weight|
-        frames.each_with_index do |frame, i|
-          if i == 0
-            _, label = frame
-            next if SYNTHETIC_LABELS.include?(label)
-            flat[[label, frame[0]]] += weight
-          end
-        end
-      end
-
-      unless flat.empty?
-        top = flat.sort_by { |_, w| -w }.first(STAT_TOP_N)
-        $stderr.puts
-        $stderr.puts " Top #{top.size} by flat:"
-        top.each do |key, weight|
-          label, path = key
-          pct = total_weight > 0 ? weight * 100.0 / total_weight : 0.0
-          loc = path.empty? ? "" : " (#{path})"
-          $stderr.puts pct_line.call(format_ms(weight), "ms", pct, "#{label}#{loc}")
-        end
-      end
-
-    end
-
-    # Footer
-    if samples_raw.size > 0
-      unique_stacks = samples_raw.map { |frames, _| frames }.uniq.size
-      overhead_pct = real_ns > 0 ? (data[:sampling_time_ns] || 0) * 100.0 / real_ns : 0.0
-      $stderr.puts
-      $stderr.puts format("  %d samples (%d unique stacks), %.1f%% profiler overhead",
-                          samples_raw.size, unique_stacks, overhead_pct)
+      breakdown, total_weight = compute_stat_breakdown(samples_raw)
+      print_stat_breakdown(breakdown, total_weight)
+      print_stat_runtime_info
+      print_stat_system_info
+      print_stat_top(samples_raw, total_weight)
+      print_stat_footer(samples_raw, real_ns, data)
     end
 
     $stderr.puts
   end
+
+  def self.compute_stat_breakdown(samples_raw)
+    breakdown = Hash.new(0)
+    total_weight = 0
+
+    samples_raw.each do |frames, weight|
+      total_weight += weight
+      leaf_label = frames.first&.last || ""
+      category = case leaf_label
+                 when "[GVL blocked]" then :gvl_blocked
+                 when "[GVL wait]"    then :gvl_wait
+                 when "[GC marking]"  then :gc_marking
+                 when "[GC sweeping]" then :gc_sweeping
+                 else :cpu_execution
+                 end
+      breakdown[category] += weight
+    end
+
+    [breakdown, total_weight]
+  end
+  private_class_method :compute_stat_breakdown
+
+  def self.print_stat_breakdown(breakdown, total_weight)
+    $stderr.puts
+
+    [
+      [:cpu_execution, "CPU execution"],
+      [:gvl_blocked,   "[Ruby] GVL blocked (I/O, sleep)"],
+      [:gvl_wait,      "[Ruby] GVL wait (contention)"],
+      [:gc_marking,    "[Ruby] GC marking"],
+      [:gc_sweeping,   "[Ruby] GC sweeping"],
+    ].each do |key, label|
+      w = breakdown[key]
+      next if w == 0
+      pct = total_weight > 0 ? w * 100.0 / total_weight : 0.0
+      $stderr.puts STAT_PCT_LINE.call(format_ms(w), "ms", pct, label)
+    end
+  end
+  private_class_method :print_stat_breakdown
+
+  def self.print_stat_runtime_info
+    gc = GC.stat
+    $stderr.puts STAT_LINE.call(format_ms(gc[:time] * 1_000_000), "ms",
+                                "[Ruby] GC time (%s count: %s minor, %s major)" % [
+                                  format_integer(gc[:count]),
+                                  format_integer(gc[:minor_gc_count]),
+                                  format_integer(gc[:major_gc_count])])
+    $stderr.puts STAT_LINE.call(format_integer(gc[:total_allocated_objects]), "  ", "[Ruby] allocated objects")
+    $stderr.puts STAT_LINE.call(format_integer(gc[:total_freed_objects]), "  ", "[Ruby] freed objects")
+    if defined?(RubyVM::YJIT) && RubyVM::YJIT.enabled?
+      yjit = RubyVM::YJIT.runtime_stats
+      if yjit[:ratio_in_yjit]
+        $stderr.puts STAT_LINE.call(format("%.1f%%", yjit[:ratio_in_yjit] * 100), "  ", "[Ruby] YJIT code execution ratio")
+      end
+    end
+  end
+  private_class_method :print_stat_runtime_info
+
+  def self.print_stat_system_info
+    sys_stats = get_system_stats
+    maxrss_kb = sys_stats[:maxrss_kb]
+    if maxrss_kb
+      $stderr.puts STAT_LINE.call(format_integer((maxrss_kb / 1024.0).round), "MB", "[OS] peak memory (maxrss)")
+    end
+    if sys_stats[:ctx_voluntary]
+      $stderr.puts STAT_LINE.call(
+        format_integer(sys_stats[:ctx_voluntary] + sys_stats[:ctx_involuntary]), "  ",
+        "[OS] context switches (%s voluntary, %s involuntary)" % [
+          format_integer(sys_stats[:ctx_voluntary]),
+          format_integer(sys_stats[:ctx_involuntary])])
+    end
+    if sys_stats[:io_read_bytes]
+      r = sys_stats[:io_read_bytes]
+      w = sys_stats[:io_write_bytes]
+      $stderr.puts STAT_LINE.call(
+        format_integer(((r + w) / 1024.0 / 1024.0).round), "MB",
+        "[OS] disk I/O (%s MB read, %s MB write)" % [
+          format_integer((r / 1024.0 / 1024.0).round),
+          format_integer((w / 1024.0 / 1024.0).round)])
+    end
+  end
+  private_class_method :print_stat_system_info
+
+  def self.print_stat_top(samples_raw, total_weight)
+    flat = Hash.new(0)
+    samples_raw.each do |frames, weight|
+      leaf = frames.first
+      if leaf
+        _, label = leaf
+        next if SYNTHETIC_LABELS.include?(label)
+        flat[[label, leaf[0]]] += weight
+      end
+    end
+
+    return if flat.empty?
+
+    top = flat.sort_by { |_, w| -w }.first(STAT_TOP_N)
+    $stderr.puts
+    $stderr.puts " Top #{top.size} by flat:"
+    top.each do |key, weight|
+      label, path = key
+      pct = total_weight > 0 ? weight * 100.0 / total_weight : 0.0
+      loc = path.empty? ? "" : " (#{path})"
+      $stderr.puts STAT_PCT_LINE.call(format_ms(weight), "ms", pct, "#{label}#{loc}")
+    end
+  end
+  private_class_method :print_stat_top
+
+  def self.print_stat_footer(samples_raw, real_ns, data)
+    unique_stacks = samples_raw.map { |frames, _| frames }.uniq.size
+    overhead_pct = real_ns > 0 ? (data[:sampling_time_ns] || 0) * 100.0 / real_ns : 0.0
+    $stderr.puts
+    $stderr.puts format("  %d samples (%d unique stacks), %.1f%% profiler overhead",
+                        samples_raw.size, unique_stacks, overhead_pct)
+  end
+  private_class_method :print_stat_footer
 
   def self.format_integer(n)
     n.to_s.reverse.gsub(/(\d{3})(?=\d)/, '\\1,').reverse
@@ -385,34 +406,16 @@ module Sperf
 
       return "No samples recorded.\n" if !samples_raw || samples_raw.empty?
 
-      flat = Hash.new(0)
-      cum = Hash.new(0)
-      total_weight = 0
-
-      samples_raw.each do |frames, weight|
-        total_weight += weight
-        seen = {}
-
-        frames.each_with_index do |frame, i|
-          path, label = frame
-          key = [label, path]
-          flat[key] += weight if i == 0
-
-          unless seen[key]
-            cum[key] += weight
-            seen[key] = true
-          end
-        end
-      end
+      result = Sperf.send(:compute_flat_cum, samples_raw)
 
       out = String.new
-      total_ms = total_weight / 1_000_000.0
+      total_ms = result[:total_weight] / 1_000_000.0
       out << "Total: #{"%.1f" % total_ms}ms (#{mode})\n"
       out << "Samples: #{samples_raw.size}, Frequency: #{frequency}Hz\n"
       out << "\n"
-      out << format_table("Flat", flat, total_weight, top_n)
+      out << format_table("Flat", result[:flat], result[:total_weight], top_n)
       out << "\n"
-      out << format_table("Cumulative", cum, total_weight, top_n)
+      out << format_table("Cumulative", result[:cum], result[:total_weight], top_n)
       out
     end
 
@@ -523,9 +526,28 @@ module Sperf
         buf << encode_message(5, func_buf)
       end
 
+      # Intern comment and doc_url strings before encoding string_table
+      comment_indices = [
+        intern.("sperf #{Sperf::VERSION}"),
+        intern.("mode: #{mode}"),
+        intern.("frequency: #{frequency}Hz"),
+        intern.("ruby: #{RUBY_DESCRIPTION}"),
+      ]
+      doc_url_idx = intern.("https://ko1.github.io/sperf/")
+
       # field 6: string_table (repeated string)
       string_table.each do |s|
         buf << encode_bytes(6, s.encode("UTF-8"))
+      end
+
+      # field 9: time_nanos (int64)
+      if data[:start_time_ns]
+        buf << encode_int64(9, data[:start_time_ns])
+      end
+
+      # field 10: duration_nanos (int64)
+      if data[:duration_ns]
+        buf << encode_int64(10, data[:duration_ns])
       end
 
       # field 11: period_type (ValueType)
@@ -533,6 +555,12 @@ module Sperf
 
       # field 12: period (int64)
       buf << encode_int64(12, interval_ns)
+
+      # field 13: comment (repeated int64 = string_table index)
+      comment_indices.each { |idx| buf << encode_int64(13, idx) }
+
+      # field 15: doc_url (int64 = string_table index)
+      buf << encode_int64(15, doc_url_idx)
 
       buf
     end

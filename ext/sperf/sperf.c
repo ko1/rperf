@@ -75,6 +75,9 @@ typedef struct sperf_profiler {
     int64_t gc_enter_ns;         /* wall time at GC_ENTER */
     size_t gc_frame_start;       /* saved stack at GC_ENTER */
     int gc_frame_depth;          /* saved stack depth */
+    /* Timing metadata for pprof */
+    struct timespec start_realtime;   /* CLOCK_REALTIME at start */
+    struct timespec start_monotonic;  /* CLOCK_MONOTONIC at start */
     /* Sampling overhead stats */
     size_t sampling_count;
     int64_t sampling_total_ns;
@@ -570,6 +573,9 @@ rb_sperf_start(int argc, VALUE *argv, VALUE self)
         }
     }
 
+    clock_gettime(CLOCK_REALTIME, &g_profiler.start_realtime);
+    clock_gettime(CLOCK_MONOTONIC, &g_profiler.start_monotonic);
+
     g_profiler.running = 1;
 
 #if SPERF_USE_TIMER_SIGNAL
@@ -687,6 +693,19 @@ rb_sperf_stop(VALUE self)
     /* sampling_count, sampling_time_ns */
     rb_hash_aset(result, ID2SYM(rb_intern("sampling_count")), SIZET2NUM(g_profiler.sampling_count));
     rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LONG2NUM(g_profiler.sampling_total_ns));
+
+    /* start_time_ns (CLOCK_REALTIME epoch nanos), duration_ns (CLOCK_MONOTONIC delta) */
+    {
+        struct timespec stop_monotonic;
+        int64_t start_ns, duration_ns;
+        clock_gettime(CLOCK_MONOTONIC, &stop_monotonic);
+        start_ns = (int64_t)g_profiler.start_realtime.tv_sec * 1000000000LL
+                 + (int64_t)g_profiler.start_realtime.tv_nsec;
+        duration_ns = ((int64_t)stop_monotonic.tv_sec - (int64_t)g_profiler.start_monotonic.tv_sec) * 1000000000LL
+                    + ((int64_t)stop_monotonic.tv_nsec - (int64_t)g_profiler.start_monotonic.tv_nsec);
+        rb_hash_aset(result, ID2SYM(rb_intern("start_time_ns")), LONG2NUM(start_ns));
+        rb_hash_aset(result, ID2SYM(rb_intern("duration_ns")), LONG2NUM(duration_ns));
+    }
 
     /* samples: array of [frames_array, weight]
      * Each frame is [path_string, label_string]
