@@ -117,7 +117,7 @@ sperf hooks GVL and GC events to attribute non-CPU time:
 
 ### Pros
 
-- **Safepoint-based, but accurate**: Like other Ruby profilers, sperf can only sample at safepoints. However, it uses actual time deltas as sample weights to correct for safepoint delays — so the profiling results faithfully reflect where time is actually spent.
+- **Safepoint-based, but accurate**: Unlike signal-based profilers (e.g., stackprof), sperf samples at safepoints. This means sampling timing is less precise, but sperf compensates by using actual time deltas as sample weights — so the profiling results faithfully reflect where time is actually spent.
 - **GVL & GC visibility** (wall mode): Attributes off-GVL time, GVL contention, and GC phases to the responsible call stacks with synthetic frames.
 - **Low overhead**: No extra thread on Linux (signal-based timer). Sampling overhead is ~1-5 us per sample.
 - **pprof compatible**: Output works with `go tool pprof`, speedscope, and other standard tools.
