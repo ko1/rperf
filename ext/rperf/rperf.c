@@ -874,6 +874,7 @@ rperf_worker_nanosleep_func(void *arg)
     CHECKED(pthread_mutex_lock(&prof->worker_mutex));
     while (prof->running) {
         int ret = pthread_cond_timedwait(&prof->worker_cond, &prof->worker_mutex, &deadline);
+        assert(ret == 0 || ret == ETIMEDOUT);
         if (ret == ETIMEDOUT) {
             prof->trigger_count++;
             rb_postponed_job_trigger(prof->pj_handle);
