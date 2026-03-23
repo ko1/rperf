@@ -122,7 +122,7 @@ class TestRperf < Test::Unit::TestCase
 
     # Must have crossed initial capacity of 1024
     assert_operator samples.size, :>, 1024,
-      "Expected >1024 samples to exercise realloc (got #{samples.size})"
+      "Expected >1024 samples to exercise realloc (got #{samples.size}, trigger_count=#{data[:trigger_count]}, sampling_count=#{data[:sampling_count]})"
 
     # Verify all samples have valid data
     assert_valid_samples(samples)
@@ -585,8 +585,8 @@ class TestRperf < Test::Unit::TestCase
 
   def busy_wait(seconds)
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
-    while Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
-      1000.times { 1 + 1 }
+    loop do
+      break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
     end
   end
 

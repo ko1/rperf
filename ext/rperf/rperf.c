@@ -84,6 +84,7 @@ typedef struct rperf_profiler {
     /* Thread sequence counter */
     int next_thread_seq;
     /* Sampling overhead stats */
+    size_t trigger_count;
     size_t sampling_count;
     int64_t sampling_total_ns;
 } rperf_profiler_t;
@@ -442,6 +443,7 @@ rperf_sample_job(void *arg)
 static void
 rperf_signal_handler(int sig)
 {
+    g_profiler.trigger_count++;
     rb_postponed_job_trigger(g_profiler.pj_handle);
 }
 #endif
@@ -455,6 +457,7 @@ rperf_timer_func(void *arg)
     interval.tv_nsec = 1000000000L / prof->frequency;
 
     while (prof->running) {
+        prof->trigger_count++;
         rb_postponed_job_trigger(prof->pj_handle);
         nanosleep(&interval, NULL);
     }
@@ -705,7 +708,8 @@ rb_rperf_stop(VALUE self)
     /* frequency */
     rb_hash_aset(result, ID2SYM(rb_intern("frequency")), INT2NUM(g_profiler.frequency));
 
-    /* sampling_count, sampling_time_ns */
+    /* trigger_count, sampling_count, sampling_time_ns */
+    rb_hash_aset(result, ID2SYM(rb_intern("trigger_count")), SIZET2NUM(g_profiler.trigger_count));
     rb_hash_aset(result, ID2SYM(rb_intern("sampling_count")), SIZET2NUM(g_profiler.sampling_count));
     rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LONG2NUM(g_profiler.sampling_total_ns));
 
