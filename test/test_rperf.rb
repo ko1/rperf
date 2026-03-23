@@ -112,9 +112,9 @@ class TestRperf < Test::Unit::TestCase
   def test_sample_buffer_realloc
     Rperf.start(frequency: 5000)
 
-    # At 5000Hz, 1 second gives ~5000 samples, well over the initial
-    # capacity of 1024. Time-based loop avoids machine-speed sensitivity.
-    busy_wait(1.0)
+    # At 5000Hz with safepoint-based sampling, macOS arm64 yields ~950
+    # samples/sec. 2 seconds gives ~1900, safely over initial capacity of 1024.
+    busy_wait(2.0)
 
     data = Rperf.stop
     assert_not_nil data
