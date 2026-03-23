@@ -3,4 +3,4 @@ call_counts = {"rw136" => 407484, "rw428" => 332640, "rw726" => 773389, "rw289" 
 calls = []
 call_counts.each { |name, count| count.times { calls << name } }
 calls.shuffle!
-calls.each { |name| SperfWorkload.send(name, 0) }
+calls.each { |name| RperfWorkload.send(name, 0) }

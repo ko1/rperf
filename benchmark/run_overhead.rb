@@ -14,8 +14,8 @@ TMP_OUT = File.join(__dir__, "tmp", "overhead_out")
 
 CONFIGS = [
   { profiler: "none",     mode: "wall" },
-  { profiler: "sperf",    mode: "cpu"  },
-  { profiler: "sperf",    mode: "wall" },
+  { profiler: "rperf",    mode: "cpu"  },
+  { profiler: "rperf",    mode: "wall" },
   { profiler: "stackprof", mode: "cpu"  },
   { profiler: "stackprof", mode: "wall" },
   { profiler: "vernier",  mode: "wall" },

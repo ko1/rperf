@@ -1,12 +1,12 @@
-# Sperf Accuracy Benchmark
+# Rperf Accuracy Benchmark
 
-A benchmark suite for quantitatively verifying sperf's profiling accuracy.
+A benchmark suite for quantitatively verifying rperf's profiling accuracy.
 It profiles workloads with known execution times and compares the output against expected values.
 Accuracy comparisons with other profilers (stackprof, vernier, pf2) are also supported.
 
 ## Purpose
 
-- Verify that CPU time / wall time reported by sperf matches actual time consumed
+- Verify that CPU time / wall time reported by rperf matches actual time consumed
 - Check accuracy across workload types: Ruby busy-wait, C busy-wait, sleep, GVL-released sleep
 - Confirm that wall mode is affected by CPU contention while cpu mode is not
 - Compare accuracy against other profilers under identical conditions
@@ -18,8 +18,8 @@ Different numbers appear as distinct functions in profiler output, allowing per-
 
 | Prefix | Defined in | Behavior | GVL | CPU time | Wall time |
 |--------|-----------|----------|-----|----------|-----------|
-| `rw`   | `lib/sperf_workload_methods.rb` | Ruby busy-wait (`CLOCK_THREAD_CPUTIME_ID`) | Held | usec consumed | usec consumed |
-| `cw`   | `ext/sperf_workload/sperf_workload.c` | C busy-wait (`CLOCK_THREAD_CPUTIME_ID`) | Held | usec consumed | usec consumed |
+| `rw`   | `lib/rperf_workload_methods.rb` | Ruby busy-wait (`CLOCK_THREAD_CPUTIME_ID`) | Held | usec consumed | usec consumed |
+| `cw`   | `ext/rperf_workload/rperf_workload.c` | C busy-wait (`CLOCK_THREAD_CPUTIME_ID`) | Held | usec consumed | usec consumed |
 | `csleep` | same | `nanosleep` (GVL held) | Held | 0 | usec consumed |
 | `cwait` | same | `nanosleep` (`rb_thread_call_without_gvl`) | Released | 0 | usec consumed |
 
@@ -88,19 +88,19 @@ ruby profrun.rb [options] SCRIPT
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `-P, --profiler NAME` | `sperf` | Profiler: `sperf`, `stackprof`, `vernier`, `pf2`, `none` |
+| `-P, --profiler NAME` | `rperf` | Profiler: `rperf`, `stackprof`, `vernier`, `pf2`, `none` |
 | `-m, --mode MODE` | `cpu` | Profiling mode: `cpu` or `wall` |
 | `-F, --frequency HZ` | `1000` | Sampling frequency in Hz |
 | `-o, --output FILE` | (none) | Profiler output file path |
 
 Output to stdout (key=value format):
 - `elapsed_ms=<time>` — total elapsed time (all profilers)
-- `sampling_count=<count>` — number of sampling callbacks (sperf only)
-- `sampling_time_ns=<ns>` — total time spent in sampling callbacks (sperf only)
+- `sampling_count=<count>` — number of sampling callbacks (rperf only)
+- `sampling_time_ns=<ns>` — total time spent in sampling callbacks (rperf only)
 
 Examples:
 ```bash
-ruby profrun.rb scripts/rw_0.rb                           # sperf, cpu, 1000Hz, no output
+ruby profrun.rb scripts/rw_0.rb                           # rperf, cpu, 1000Hz, no output
 ruby profrun.rb -P stackprof -m wall -o out.dump scripts/rw_0.rb  # stackprof, wall, save output
 ruby profrun.rb -P none scripts/ratio_1.rb                # baseline (no profiler)
 ```
@@ -110,7 +110,7 @@ ruby profrun.rb -P none scripts/ratio_1.rb                # baseline (no profile
 Runs scenarios via `profrun.rb` and compares profiler output against expected values, reporting PASS/FAIL.
 
 ```bash
-ruby check_accuracy.rb                                    # sperf, scenarios_mixed.json, cpu mode
+ruby check_accuracy.rb                                    # rperf, scenarios_mixed.json, cpu mode
 ruby check_accuracy.rb -f scenarios_rw.json               # specify scenario file
 ruby check_accuracy.rb -m wall                            # wall mode
 ruby check_accuracy.rb -m cpu -t 5                        # set tolerance to 5%
@@ -133,7 +133,7 @@ ruby check_accuracy.rb --help                             # show all options
 | `-m, --mode MODE` | `cpu` | Profiling mode (`cpu` / `wall`) |
 | `-t, --tolerance PCT` | `20` | Pass tolerance (%) |
 | `-F, --frequency HZ` | `1000` | Sampling frequency in Hz |
-| `-P, --profiler NAME` | `sperf` | Profiler (`sperf` / `stackprof` / `vernier` / `pf2`) |
+| `-P, --profiler NAME` | `rperf` | Profiler (`rperf` / `stackprof` / `vernier` / `pf2`) |
 | `-l, --load` | off | Spawn CPU-hogging processes on all cores |
 | `-v, --verbose` | off | Show per-method detail and raw profiler output for all scenarios |
 | `-h, --help` | | Show help |
@@ -141,7 +141,7 @@ ruby check_accuracy.rb --help                             # show all options
 How it works:
 1. Resolves the workload script from `scripts/` (e.g., `scripts/mixed_0.rb` for `scenarios_mixed.json` scenario #0)
 2. Executes the script via `profrun.rb` with the specified profiler, mode, and frequency
-3. Parses the output using the appropriate method (sperf/pf2: `go tool pprof`, stackprof: `stackprof --text`, vernier: Firefox Profiler JSON)
+3. Parses the output using the appropriate method (rperf/pf2: `go tool pprof`, stackprof: `stackprof --text`, vernier: Firefox Profiler JSON)
 4. For time-accuracy scenarios: compares actual vs expected time per method
 5. For ratio scenarios: converts profiler output to ratios and compares against expected call-frequency ratios
 6. PASS if average error is within tolerance
@@ -159,7 +159,7 @@ How it works:
 
 ## Expected Results
 
-### sperf (normal, no load)
+### rperf (normal, no load)
 
 All scenarios pass in both modes. Typical error is 1-2%.
 
@@ -177,7 +177,7 @@ Overall average error: 1.0%
 PASS (< 20%)
 ```
 
-### sperf (under CPU load)
+### rperf (under CPU load)
 
 With `-l`, all cores are saturated with busy processes. Results differ by mode:
 
@@ -204,7 +204,7 @@ Accuracy on mixed scenario #0 (tolerance 20%):
 
 | Profiler | cpu mode | wall mode |
 |----------|----------|-----------|
-| **sperf** | PASS (0.2%) | PASS (0.8%) |
+| **rperf** | PASS (0.2%) | PASS (0.8%) |
 | stackprof | FAIL (38%) | FAIL (82%) |
 | vernier | FAIL (64%) | FAIL (35%) |
 | pf2 | FAIL (64%) | FAIL (48%) |
@@ -230,16 +230,16 @@ Tests whether profilers correctly reflect relative call frequency (not absolute 
 $ ruby check_accuracy.rb -f scenarios_ratio.json -P vernier -m wall -F 10000 0
 Scenario #0     PASS (6.5%)
 
-$ ruby check_accuracy.rb -f scenarios_ratio.json -P sperf -m cpu -F 10000 0
+$ ruby check_accuracy.rb -f scenarios_ratio.json -P rperf -m cpu -F 10000 0
 --- Scenario #0     FAIL (avg error: 21.9%) ---
 ```
 
-Uniform-weight profilers (vernier, stackprof) perform better here because tiny time deltas are noisy, while uniform counting (1 sample = 1 count) averages out cleanly. This is not a fundamental limitation of time-delta weighting -- with enough samples or longer runtime, sperf's ratios should converge as well, since accumulated time is proportional to call count when per-call time is uniform.
+Uniform-weight profilers (vernier, stackprof) perform better here because tiny time deltas are noisy, while uniform counting (1 sample = 1 count) averages out cleanly. This is not a fundamental limitation of time-delta weighting -- with enough samples or longer runtime, rperf's ratios should converge as well, since accumulated time is proportional to call count when per-call time is uniform.
 
 See `report.md` for detailed results and analysis.
 
 ## Prerequisites
 
-- `go tool pprof` in PATH (required for parsing sperf and pf2 results)
+- `go tool pprof` in PATH (required for parsing rperf and pf2 results)
 - Benchmark C extension built via `rake compile`
 - For other profilers: `gem install stackprof vernier pf2`

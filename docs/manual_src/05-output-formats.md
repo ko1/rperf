@@ -1,10 +1,10 @@
 # Output Formats
 
-sperf supports three output formats. The format is auto-detected from the file extension, or can be set explicitly with the `--format` flag (CLI) or `format:` parameter (API).
+rperf supports three output formats. The format is auto-detected from the file extension, or can be set explicitly with the `--format` flag (CLI) or `format:` parameter (API).
 
 ## pprof (default)
 
-The [pprof](#index:pprof) format is a gzip-compressed Protocol Buffers binary. This is the standard format used by Go's pprof tooling and is the default output of sperf.
+The [pprof](#index:pprof) format is a gzip-compressed Protocol Buffers binary. This is the standard format used by Go's pprof tooling and is the default output of rperf.
 
 **Extension convention**: `.pb.gz`
 
@@ -12,13 +12,13 @@ The [pprof](#index:pprof) format is a gzip-compressed Protocol Buffers binary. T
 
 ```bash
 # Interactive web UI (requires Go)
-sperf report profile.pb.gz
+rperf report profile.pb.gz
 
 # Top functions
-sperf report --top profile.pb.gz
+rperf report --top profile.pb.gz
 
 # Text report
-sperf report --text profile.pb.gz
+rperf report --text profile.pb.gz
 
 # Or use go tool pprof directly
 go tool pprof -http=:8080 profile.pb.gz
@@ -31,20 +31,20 @@ You can also import pprof files into [speedscope](https://www.speedscope.app/) v
 
 ### Embedded metadata
 
-sperf embeds the following metadata in each pprof profile:
+rperf embeds the following metadata in each pprof profile:
 
 | Field | Description |
 |-------|-------------|
-| `comment` | sperf version, profiling mode, frequency, Ruby version |
+| `comment` | rperf version, profiling mode, frequency, Ruby version |
 | `time_nanos` | Profile collection start time (epoch nanoseconds) |
 | `duration_nanos` | Profile duration (nanoseconds) |
-| `doc_url` | Link to sperf documentation |
+| `doc_url` | Link to rperf documentation |
 
 View comments with: `go tool pprof -comments profile.pb.gz`
 
 ### Sample labels
 
-Each sample carries a `thread_seq` numeric label — a thread sequence number (1-based) assigned when sperf first sees each thread during a profiling session. This allows per-thread analysis:
+Each sample carries a `thread_seq` numeric label — a thread sequence number (1-based) assigned when rperf first sees each thread during a profiling session. This allows per-thread analysis:
 
 ```bash
 # Group flame graph by thread
@@ -75,7 +75,7 @@ bottom_frame;...;top_frame weight_ns
 
 ```bash
 # Generate a FlameGraph SVG
-sperf record -o profile.collapsed ruby my_app.rb
+rperf record -o profile.collapsed ruby my_app.rb
 flamegraph.pl profile.collapsed > flamegraph.svg
 
 # Open in speedscope (drag-and-drop the .collapsed file)
@@ -131,7 +131,7 @@ Cumulative:
 | File size | Small (binary + gzip) | Medium (text) | Small (text) |
 | Flame graph | Yes (via pprof web UI) | Yes (via flamegraph.pl) | No |
 | Call graph | Yes | No | No |
-| Diff comparison | Yes (`sperf diff`) | No | No |
+| Diff comparison | Yes (`rperf diff`) | No | No |
 | No tools needed | No (requires Go) | No (requires flamegraph.pl) | Yes |
 | Programmatic parsing | Complex (protobuf) | Simple | Simple |
 | AI-friendly | No | Yes | Yes |
@@ -144,4 +144,4 @@ Cumulative:
 | `.txt` | Text report |
 | Anything else | pprof |
 
-The default output file (`sperf.data`) uses pprof format.
+The default output file (`rperf.data`) uses pprof format.

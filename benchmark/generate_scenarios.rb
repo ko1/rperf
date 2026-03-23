@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Unified scenario generator for sperf accuracy benchmarks.
+# Unified scenario generator for rperf accuracy benchmarks.
 #
 # Usage:
 #   ruby generate_scenarios.rb                        # default: mixed, 10 scenarios
@@ -140,11 +140,11 @@ scenarios.each do |scenario|
     lines << "calls = []"
     lines << 'call_counts.each { |name, count| count.times { calls << name } }'
     lines << "calls.shuffle!"
-    lines << 'calls.each { |name| SperfWorkload.send(name, 0) }'
+    lines << 'calls.each { |name| RperfWorkload.send(name, 0) }'
     File.write(script_path, lines.join("\n") + "\n")
   else
     # Normal scenario: enumerate method calls directly
-    lines = scenario["calls"].map { |name, usec| "SperfWorkload.#{name}(#{usec})" }
+    lines = scenario["calls"].map { |name, usec| "RperfWorkload.#{name}(#{usec})" }
     File.write(script_path, lines.join("\n") + "\n")
   end
 end

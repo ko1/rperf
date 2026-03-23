@@ -1,6 +1,6 @@
 require "rake/extensiontask"
 
-Rake::ExtensionTask.new("sperf_workload") do |ext|
-  ext.ext_dir = "ext/sperf_workload"
+Rake::ExtensionTask.new("rperf_workload") do |ext|
+  ext.ext_dir = "ext/rperf_workload"
   ext.lib_dir = "lib"
 end

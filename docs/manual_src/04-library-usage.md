@@ -1,17 +1,17 @@
 # Ruby API
 
-sperf provides a Ruby API for programmatic profiling. This is useful when you want to profile specific sections of code, integrate profiling into test suites, or build custom profiling workflows.
+rperf provides a Ruby API for programmatic profiling. This is useful when you want to profile specific sections of code, integrate profiling into test suites, or build custom profiling workflows.
 
 ## Basic usage
 
 ### Block form (recommended)
 
-The simplest way to use sperf is with the block form of [`Sperf.start`](#index:Sperf.start). It profiles the block and returns the profiling data:
+The simplest way to use rperf is with the block form of [`Rperf.start`](#index:Rperf.start). It profiles the block and returns the profiling data:
 
 ```ruby
-require "sperf"
+require "rperf"
 
-data = Sperf.start(output: "profile.pb.gz", frequency: 1000, mode: :cpu) do
+data = Rperf.start(output: "profile.pb.gz", frequency: 1000, mode: :cpu) do
   # code to profile
 end
 ```
@@ -21,18 +21,18 @@ When `output:` is specified, the profile is automatically written to the file wh
 ### Example: Profiling a Fibonacci function
 
 ```ruby
-require "sperf"
+require "rperf"
 
 def fib(n)
   return n if n <= 1
   fib(n - 1) + fib(n - 2)
 end
 
-data = Sperf.start(frequency: 1000, mode: :cpu) do
+data = Rperf.start(frequency: 1000, mode: :cpu) do
   fib(33)
 end
 
-Sperf.save("profile.txt", data)
+Rperf.save("profile.txt", data)
 ```
 
 Running this produces:
@@ -47,7 +47,7 @@ Flat:
 Cumulative:
      192.7ms 100.0%  Object#fib (example.rb)
      192.7ms 100.0%  block in <main> (example.rb)
-     192.7ms 100.0%  Sperf.start (lib/sperf.rb)
+     192.7ms 100.0%  Rperf.start (lib/rperf.rb)
      192.7ms 100.0%  <main> (example.rb)
 ```
 
@@ -56,18 +56,18 @@ Cumulative:
 For cases where block form is awkward, you can manually start and stop profiling:
 
 ```ruby
-require "sperf"
+require "rperf"
 
-Sperf.start(frequency: 1000, mode: :wall)
+Rperf.start(frequency: 1000, mode: :wall)
 
 # ... code to profile ...
 
-data = Sperf.stop
+data = Rperf.stop
 ```
 
-[`Sperf.stop`](#index:Sperf.stop) returns the data hash, or `nil` if the profiler was not running.
+[`Rperf.stop`](#index:Rperf.stop) returns the data hash, or `nil` if the profiler was not running.
 
-## Sperf.start parameters
+## Rperf.start parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -78,9 +78,9 @@ data = Sperf.stop
 | `format:` | Symbol | `nil` | `:pprof`, `:collapsed`, `:text`, or `nil` (auto-detect from output extension) |
 | `signal:` | Integer/Boolean | `nil` | Linux only: `nil` = timer signal (default), `false` = nanosleep thread, positive integer = specific RT signal number |
 
-## Sperf.stop return value
+## Rperf.stop return value
 
-`Sperf.stop` returns `nil` if the profiler was not running. Otherwise it returns a Hash:
+`Rperf.stop` returns `nil` if the profiler was not running. Otherwise it returns a Hash:
 
 ```ruby
 {
@@ -102,20 +102,20 @@ Each sample has:
 - **weight**: Time in nanoseconds attributed to this sample
 - **thread_seq**: Thread sequence number (1-based, assigned per profiling session)
 
-## Sperf.save
+## Rperf.save
 
-[`Sperf.save`](#index:Sperf.save) writes profiling data to a file in any supported format:
+[`Rperf.save`](#index:Rperf.save) writes profiling data to a file in any supported format:
 
 ```ruby
-Sperf.save("profile.pb.gz", data)        # pprof format
-Sperf.save("profile.collapsed", data)    # collapsed stacks
-Sperf.save("profile.txt", data)          # text report
+Rperf.save("profile.pb.gz", data)        # pprof format
+Rperf.save("profile.collapsed", data)    # collapsed stacks
+Rperf.save("profile.txt", data)          # text report
 ```
 
 The format is auto-detected from the file extension. You can override it with the `format:` keyword:
 
 ```ruby
-Sperf.save("output.dat", data, format: :text)
+Rperf.save("output.dat", data, format: :text)
 ```
 
 ## Practical examples
@@ -123,18 +123,18 @@ Sperf.save("output.dat", data, format: :text)
 ### Profiling a web request handler
 
 ```ruby
-require "sperf"
+require "rperf"
 
 class ApplicationController
   def profile_action
-    data = Sperf.start(mode: :wall) do
+    data = Rperf.start(mode: :wall) do
       # Simulate a typical request
       users = User.where(active: true).limit(100)
       result = users.map { |u| serialize_user(u) }
       render json: result
     end
 
-    Sperf.save("request_profile.txt", data)
+    Rperf.save("request_profile.txt", data)
   end
 end
 ```
@@ -144,7 +144,7 @@ Using wall mode here captures not just CPU time but also database I/O and any GV
 ### Comparing CPU and wall profiles
 
 ```ruby
-require "sperf"
+require "rperf"
 
 def workload
   # Mix of CPU and I/O
@@ -155,12 +155,12 @@ def workload
 end
 
 # CPU profile: shows where CPU cycles go
-cpu_data = Sperf.start(mode: :cpu) { workload }
-Sperf.save("cpu.txt", cpu_data)
+cpu_data = Rperf.start(mode: :cpu) { workload }
+Rperf.save("cpu.txt", cpu_data)
 
 # Wall profile: shows where wall time goes
-wall_data = Sperf.start(mode: :wall) { workload }
-Sperf.save("wall.txt", wall_data)
+wall_data = Rperf.start(mode: :wall) { workload }
+Rperf.save("wall.txt", wall_data)
 ```
 
 The CPU profile will focus on `compute_something`, while the wall profile will show the `sleep` calls as `[GVL blocked]` time.
@@ -170,9 +170,9 @@ The CPU profile will focus on `compute_something`, while the wall profile will s
 You can work with the raw sample data programmatically:
 
 ```ruby
-require "sperf"
+require "rperf"
 
-data = Sperf.start(mode: :cpu) { workload }
+data = Rperf.start(mode: :cpu) { workload }
 
 # Find the hottest function
 flat = Hash.new(0)
@@ -190,10 +190,10 @@ end
 ### Generating collapsed stacks for FlameGraph
 
 ```ruby
-require "sperf"
+require "rperf"
 
-data = Sperf.start(mode: :cpu) { workload }
-Sperf.save("profile.collapsed", data)
+data = Rperf.start(mode: :cpu) { workload }
+Rperf.save("profile.collapsed", data)
 ```
 
 The collapsed format is one line per unique stack, compatible with Brendan Gregg's [FlameGraph](#cite:gregg2016) tools and speedscope:

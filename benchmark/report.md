@@ -26,7 +26,7 @@ Scenarios used: rw#9, cw#9, csleep#9, cwait#9 (baseline ~8.5s each), mixed#6 (ba
 
 | Profiler | Sampling mechanism | Output format |
 |----------|--------------------|---------------|
-| sperf | Postponed job + time-delta weight | pprof protobuf |
+| rperf | Postponed job + time-delta weight | pprof protobuf |
 | stackprof | Signal-based (not safepoint-based), uniform sample count | Custom marshal |
 | vernier | Signal-based, wall only | Firefox Profiler JSON |
 | pf2 | Async signal, native + Ruby stack | pprof protobuf |
@@ -40,10 +40,10 @@ Vernier does not support CPU-time sampling. Only wall mode results are shown for
 All tests were run via `check_accuracy.rb` and `profrun.rb` in the `benchmark/` directory. Example:
 
 ```bash
-ruby check_accuracy.rb -f scenarios_rw.json -P sperf -m cpu -F 100 9     # rw#9, sperf, cpu, 100Hz
+ruby check_accuracy.rb -f scenarios_rw.json -P rperf -m cpu -F 100 9     # rw#9, rperf, cpu, 100Hz
 ruby check_accuracy.rb -f scenarios_mixed.json -P pf2 -m wall -F 1000 6  # mixed#6, pf2, wall, 1000Hz
-ruby check_accuracy.rb -f scenarios_rw.json -P sperf -m cpu -F 100 -l 9  # same with CPU load
-ruby profrun.rb -P sperf -m wall -F 1000 -o /tmp/out scripts/ratio_1.rb  # overhead test
+ruby check_accuracy.rb -f scenarios_rw.json -P rperf -m cpu -F 100 -l 9  # same with CPU load
+ruby profrun.rb -P rperf -m wall -F 1000 -o /tmp/out scripts/ratio_1.rb  # overhead test
 ```
 
 ---
@@ -56,12 +56,12 @@ Ruby methods calling `Process.clock_gettime` in a loop. Frequent safepoints.
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **sperf** | **8.3%** | **7.0%** | **1.0%** | **1.0%** |
+| **rperf** | **8.3%** | **7.0%** | **1.0%** | **1.0%** |
 | stackprof | 44.7% | 41.2% | 84.5% | 38.5% |
 | vernier | - | ~~90.2%~~ | - | **1.5%** |
 | pf2 | **9.7%** | **7.5%** | **2.6%** | **0.7%** |
 
-- sperf and pf2 perform well across all combinations.
+- rperf and pf2 perform well across all combinations.
 - stackprof shows high error (41-85%) on this shorter scenario (#9, ~8.5s). With fewer samples, stackprof's TOTAL-based accounting amplifies error. At 1000Hz cpu (84.5%), `clock_gettime` dominates leaf frames.
 - vernier 1000Hz wall (1.5%) is excellent; 100Hz wall (90.2%) fails due to insufficient samples for the short scenario.
 
@@ -71,12 +71,12 @@ C functions spinning in `clock_gettime` loop. No safepoints during the loop body
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **sperf** | **0.0%** | **0.0%** | **0.1%** | **0.0%** |
+| **rperf** | **0.0%** | **0.0%** | **0.1%** | **0.0%** |
 | stackprof | 85.6% | 85.6% | ~~98.6%~~ | ~~98.6%~~ |
 | vernier | - | ~~90.1%~~ | - | **2.0%** |
 | pf2 | **8.1%** | **7.8%** | **5.7%** | **0.7%** |
 
-- **sperf excels** (0.0-0.1% across all combinations) because time-delta weighting correctly attributes the long safepoint-free intervals.
+- **rperf excels** (0.0-0.1% across all combinations) because time-delta weighting correctly attributes the long safepoint-free intervals.
 - **stackprof completely fails** (86-99%): C busy-wait runs without safepoints, so signal-based sampling captures very few samples during these methods.
 - vernier 1000Hz wall (2.0%) works because wall sampling can observe the thread spending time in C code.
 - pf2 handles cw well (<8%) via native stack collection.
@@ -87,13 +87,13 @@ The thread sleeps via `nanosleep()` while holding the GVL. CPU time = 0, wall ti
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **sperf** | **0.0%** | **0.6%** | **0.0%** | **0.4%** |
+| **rperf** | **0.0%** | **0.6%** | **0.0%** | **0.4%** |
 | stackprof | **0.0%** | 85.6% | **0.0%** | ~~98.6%~~ |
 | vernier | - | ~~97.6%~~ | - | ~~97.6%~~ |
 | pf2 | **0.0%** | 75.8% | **0.0%** | ~~97.5%~~ |
 
 - All profilers correctly report 0 CPU time (trivially correct since nanosleep consumes no CPU).
-- **sperf is the only profiler that accurately measures csleep wall time** (<1% error). The postponed job fires during sleep and the wall-time delta captures the elapsed time.
+- **rperf is the only profiler that accurately measures csleep wall time** (<1% error). The postponed job fires during sleep and the wall-time delta captures the elapsed time.
 - stackprof/vernier/pf2 all report near-zero wall time for csleep (76-99% error) because no samples are collected while the thread is sleeping inside `nanosleep()`.
 
 ### cwait (nanosleep, GVL released)
@@ -102,13 +102,13 @@ The thread sleeps via `rb_thread_call_without_gvl` + `nanosleep()`. GVL is relea
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **sperf** | **0.0%** | **0.7%** | **0.0%** | **0.6%** |
+| **rperf** | **0.0%** | **0.7%** | **0.0%** | **0.6%** |
 | stackprof | **0.0%** | 85.6% | **0.0%** | ~~98.6%~~ |
 | vernier | - | ~~90.0%~~ | - | **0.8%** |
 | pf2 | **0.0%** | 75.8% | **0.0%** | ~~97.6%~~ |
 
 - All profilers correctly report 0 CPU time.
-- **sperf** accurately measures cwait wall time (<1% error).
+- **rperf** accurately measures cwait wall time (<1% error).
 - **vernier 1000Hz wall (0.8%)** also works well: when the GVL is released, vernier can observe the thread state change.
 - stackprof and pf2 fail to capture cwait wall time (76-99% error).
 
@@ -118,12 +118,12 @@ The most realistic scenario: rw, cw, csleep, and cwait methods mixed together.
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **sperf** | **5.2%** | **7.1%** | **0.7%** | **0.8%** |
+| **rperf** | **5.2%** | **7.1%** | **0.7%** | **0.8%** |
 | stackprof | 32.7% | 80.7% | 49.4% | 76.8% |
 | vernier | - | ~~91.4%~~ | - | 18.7% |
 | pf2 | 30.9% | 36.2% | 31.3% | 44.6% |
 
-- **sperf is the only profiler that passes in all combinations.** Even in the toughest test (mixed workloads), sperf achieves <8% error at 100Hz and <1% at 1000Hz.
+- **rperf is the only profiler that passes in all combinations.** Even in the toughest test (mixed workloads), rperf achieves <8% error at 100Hz and <1% at 1000Hz.
 - stackprof's errors combine cw blindness (cpu) and csleep/cwait blindness (wall).
 - vernier 1000Hz wall (18.7%) is moderate -- it handles rw/cw/cwait but misses csleep entirely.
 - pf2's cumulative accounting inflates values in mixed scenarios (31-45% error).
@@ -134,13 +134,13 @@ The most realistic scenario: rw, cw, csleep, and cwait methods mixed together.
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **sperf** | 11.7% | 16.8% | **9.3%** | **8.2%** |
+| **rperf** | 11.7% | 16.8% | **9.3%** | **8.2%** |
 | stackprof | 29.8% | 26.7% | 18.0% | **7.7%** |
 | vernier | - | 17.8% | - | **7.5%** |
 | pf2 | 33.1% | 20.5% | **8.8%** | 10.5% |
 
 - All profilers achieve usable ratio accuracy at 1000Hz.
-- Uniform-weight profilers (stackprof 7.7%, vernier 7.5%) have a slight edge over sperf (8.2%) at 1000Hz wall because time-delta variance adds noise to ratio estimation.
+- Uniform-weight profilers (stackprof 7.7%, vernier 7.5%) have a slight edge over rperf (8.2%) at 1000Hz wall because time-delta variance adds noise to ratio estimation.
 - At 100Hz, all profilers show higher error (12-33%) due to fewer samples.
 
 ---
@@ -153,70 +153,70 @@ All 20 cores saturated with busy-loop processes. This tests whether profilers co
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **sperf** | **8.5%** | 16.1% | **0.6%** | 15.3% |
+| **rperf** | **8.5%** | 16.1% | **0.6%** | 15.3% |
 | stackprof | 41.4% | 44.7% | 85.0% | 42.7% |
 | vernier | - | ~~89.3%~~ | - | **3.3%** |
 | pf2 | 12.4% | 10.0% | 13.3% | *crash* |
 
-- sperf cpu is stable under load (8.3% -> 8.5% at 100Hz, 1.0% -> 0.6% at 1000Hz).
-- sperf wall degrades as expected (7.0% -> 16.1%) because busy-wait takes longer in wall time under CPU contention.
+- rperf cpu is stable under load (8.3% -> 8.5% at 100Hz, 1.0% -> 0.6% at 1000Hz).
+- rperf wall degrades as expected (7.0% -> 16.1%) because busy-wait takes longer in wall time under CPU contention.
 - pf2 1000Hz wall crashed with `[BUG] frame2iseq: unreachable`.
 
 ### cw (C busy-wait)
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **sperf** | **6.8%** | 11.8% | **6.5%** | 16.4% |
+| **rperf** | **6.8%** | 11.8% | **6.5%** | 16.4% |
 | stackprof | 85.6% | 84.9% | ~~98.6%~~ | ~~98.6%~~ |
 | vernier | - | ~~89.8%~~ | - | 33.7% |
 | pf2 | 15.9% | 12.6% | 17.1% | 18.3% |
 
-- **sperf cpu remains accurate** (6.8% at 100Hz, 6.5% at 1000Hz). Slightly higher than no-load (0.0%) due to scheduling noise, but the per-thread CPU clock keeps it well under 10%.
-- sperf wall degrades as expected: C busy-wait takes longer in wall time when CPU is contested.
+- **rperf cpu remains accurate** (6.8% at 100Hz, 6.5% at 1000Hz). Slightly higher than no-load (0.0%) due to scheduling noise, but the per-thread CPU clock keeps it well under 10%.
+- rperf wall degrades as expected: C busy-wait takes longer in wall time when CPU is contested.
 - stackprof remains completely blind to cw regardless of load.
 
 ### csleep (nanosleep, GVL held)
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **sperf** | **0.0%** | **8.0%** | **0.0%** | **5.7%** |
+| **rperf** | **0.0%** | **8.0%** | **0.0%** | **5.7%** |
 | stackprof | **0.0%** | 85.6% | **0.0%** | ~~98.6%~~ |
 | vernier | - | ~~97.6%~~ | - | ~~97.6%~~ |
 | pf2 | **0.0%** | 75.8% | **0.0%** | ~~97.3%~~ |
 
 - csleep is pure sleep time -- CPU contention does not affect `nanosleep` duration, and CPU time remains 0.
-- sperf wall slightly increases under load (0.6% -> 8.0% at 100Hz, 0.4% -> 5.7% at 1000Hz) but remains the only profiler that captures csleep wall time.
+- rperf wall slightly increases under load (0.6% -> 8.0% at 100Hz, 0.4% -> 5.7% at 1000Hz) but remains the only profiler that captures csleep wall time.
 
 ### cwait (nanosleep, GVL released)
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **sperf** | **0.0%** | **1.8%** | **0.0%** | **3.2%** |
+| **rperf** | **0.0%** | **1.8%** | **0.0%** | **3.2%** |
 | stackprof | **0.0%** | 85.6% | **0.0%** | ~~98.6%~~ |
 | vernier | - | ~~89.9%~~ | - | 44.5% |
 | pf2 | **0.0%** | 75.8% | **0.0%** | ~~99.3%~~ |
 
-- sperf wall slightly increases (0.7% -> 1.8%, 0.6% -> 3.2%) but remains accurate.
+- rperf wall slightly increases (0.7% -> 1.8%, 0.6% -> 3.2%) but remains accurate.
 - vernier 1000Hz wall degrades significantly (0.8% -> 44.5%) under load, suggesting its GVL-released detection is affected by CPU contention.
 
 ### mixed (all workload types combined)
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **sperf** | **3.9%** | 37.7% | **1.5%** | 32.1% |
+| **rperf** | **3.9%** | 37.7% | **1.5%** | 32.1% |
 | stackprof | 33.2% | 85.9% | 50.7% | 78.4% |
 | vernier | - | ~~88.3%~~ | - | 39.7% |
 | pf2 | 66.2% | 56.1% | 59.4% | 67.8% |
 
-- **sperf cpu is unaffected by load** (5.2% -> 3.9% at 100Hz, 0.7% -> 1.5% at 1000Hz). The per-thread CPU clock correctly excludes scheduling delays.
-- **sperf wall degrades as expected** (7.1% -> 37.7%): busy-wait methods take longer in wall time under CPU contention. This is correct behavior.
+- **rperf cpu is unaffected by load** (5.2% -> 3.9% at 100Hz, 0.7% -> 1.5% at 1000Hz). The per-thread CPU clock correctly excludes scheduling delays.
+- **rperf wall degrades as expected** (7.1% -> 37.7%): busy-wait methods take longer in wall time under CPU contention. This is correct behavior.
 - pf2 cpu degrades heavily under load (30.9% -> 66.2% at 100Hz), suggesting it does not use true per-thread CPU clocks.
 
 ### ratio (call-frequency test)
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **sperf** | **8.7%** | 15.1% | **6.4%** | 16.0% |
+| **rperf** | **8.7%** | 15.1% | **6.4%** | 16.0% |
 | stackprof | 15.5% | 12.9% | **8.2%** | **3.4%** |
 | vernier | - | 10.9% | - | **1.6%** |
 | pf2 | **7.2%** | 10.5% | **7.6%** | *crash* |
@@ -233,7 +233,7 @@ Average error (%). Bold = <10%. ~~Struck~~ = >90%.
 
 ### CPU mode, no load
 
-| Scenario | sperf 100 | sperf 1K | stackprof 100 | stackprof 1K | pf2 100 | pf2 1K |
+| Scenario | rperf 100 | rperf 1K | stackprof 100 | stackprof 1K | pf2 100 | pf2 1K |
 |----------|-----------|----------|---------------|--------------|---------|--------|
 | rw | **8.3** | **1.0** | 44.7 | 84.5 | **9.7** | **2.6** |
 | cw | **0.0** | **0.1** | 85.6 | ~~98.6~~ | **8.1** | **5.7** |
@@ -244,7 +244,7 @@ Average error (%). Bold = <10%. ~~Struck~~ = >90%.
 
 ### Wall mode, no load
 
-| Scenario | sperf 100 | sperf 1K | stackprof 100 | stackprof 1K | vernier 100 | vernier 1K | pf2 100 | pf2 1K |
+| Scenario | rperf 100 | rperf 1K | stackprof 100 | stackprof 1K | vernier 100 | vernier 1K | pf2 100 | pf2 1K |
 |----------|-----------|----------|---------------|--------------|-------------|------------|---------|--------|
 | rw | **7.0** | **1.0** | 41.2 | 38.5 | ~~90.2~~ | **1.5** | **7.5** | **0.7** |
 | cw | **0.0** | **0.0** | 85.6 | ~~98.6~~ | ~~90.1~~ | **2.0** | **7.8** | **0.7** |
@@ -255,7 +255,7 @@ Average error (%). Bold = <10%. ~~Struck~~ = >90%.
 
 ### CPU mode, under load
 
-| Scenario | sperf 100 | sperf 1K | stackprof 100 | stackprof 1K | pf2 100 | pf2 1K |
+| Scenario | rperf 100 | rperf 1K | stackprof 100 | stackprof 1K | pf2 100 | pf2 1K |
 |----------|-----------|----------|---------------|--------------|---------|--------|
 | rw | **8.5** | **0.6** | 41.4 | 85.0 | 12.4 | 13.3 |
 | cw | **6.8** | **6.5** | 85.6 | ~~98.6~~ | 15.9 | 17.1 |
@@ -277,46 +277,46 @@ ruby run_overhead.rb   # runs all configurations 10 times each, saves to data/
 | Profiler | Mode | Elapsed (median) | Overhead | Sampling count | Sampling time |
 |----------|------|-------------------|----------|----------------|---------------|
 | *(none)* | wall | 2487ms | - | - | - |
-| **sperf** | cpu | 2492ms | ~0% | 2293 | 2.1ms (0.1%) |
-| **sperf** | wall | 2715ms | ~9% | 2487 | 2.1ms (0.1%) |
+| **rperf** | cpu | 2492ms | ~0% | 2293 | 2.1ms (0.1%) |
+| **rperf** | wall | 2715ms | ~9% | 2487 | 2.1ms (0.1%) |
 | stackprof | cpu | 2610ms | ~5% | - | - |
 | stackprof | wall | 2709ms | ~9% | - | - |
 | vernier | wall | 2639ms | ~6% | - | - |
 | pf2 | cpu | 3114ms | ~25% | - | - |
 | pf2 | wall | 3174ms | ~28% | - | - |
 
-- sperf cpu mode has negligible overhead (~0%). Wall mode adds ~9%, comparable to stackprof/vernier wall.
+- rperf cpu mode has negligible overhead (~0%). Wall mode adds ~9%, comparable to stackprof/vernier wall.
 - pf2 has significant overhead (25-28%), likely due to native stack collection on every sample.
-- sperf's sampling overhead is negligible: ~2300 callbacks took ~2.1ms total (~0.9us/call) in both modes.
+- rperf's sampling overhead is negligible: ~2300 callbacks took ~2.1ms total (~0.9us/call) in both modes.
 - The baseline has high variance (2.2-3.1s range across 10 runs, median 2487ms) due to WSL2 scheduling noise.
 
 ---
 
 ## Key Findings
 
-### 1. sperf is accurate across all workload types
+### 1. rperf is accurate across all workload types
 
-sperf is the only profiler that achieves <10% error for every workload type in both cpu and wall mode. Its time-delta weighting eliminates safepoint bias, and per-thread CPU clocks provide true CPU-time measurement. At 1000Hz, sperf achieves <1% error for time-accuracy scenarios.
+rperf is the only profiler that achieves <10% error for every workload type in both cpu and wall mode. Its time-delta weighting eliminates safepoint bias, and per-thread CPU clocks provide true CPU-time measurement. At 1000Hz, rperf achieves <1% error for time-accuracy scenarios.
 
 ### 2. csleep is a unique differentiator for wall mode
 
-GVL-held `nanosleep` (csleep) is invisible to all profilers except sperf in wall mode. stackprof, vernier, and pf2 all report near-zero wall time (76-99% error) because they cannot sample during the sleep. sperf's postponed-job mechanism fires during the sleep and the wall-time delta captures the elapsed duration (<1% error).
+GVL-held `nanosleep` (csleep) is invisible to all profilers except rperf in wall mode. stackprof, vernier, and pf2 all report near-zero wall time (76-99% error) because they cannot sample during the sleep. rperf's postponed-job mechanism fires during the sleep and the wall-time delta captures the elapsed duration (<1% error).
 
 ### 3. C busy-wait (cw) exposes safepoint bias
 
-stackprof's signal-based sampling completely fails for C busy-wait (86-99% error) because signals are deferred until the next safepoint, which never comes during the C loop. sperf's time-delta weighting handles this correctly (0.0-0.1% error). pf2 handles cw via native stack collection (0.7-8.1%).
+stackprof's signal-based sampling completely fails for C busy-wait (86-99% error) because signals are deferred until the next safepoint, which never comes during the C loop. rperf's time-delta weighting handles this correctly (0.0-0.1% error). pf2 handles cw via native stack collection (0.7-8.1%).
 
-### 4. CPU-time measurement is stable under load (sperf only)
+### 4. CPU-time measurement is stable under load (rperf only)
 
-Under full CPU saturation, sperf's cpu mode error is unchanged (3.9-1.5% for mixed). pf2's cpu mode degrades heavily (30.9% -> 66.2% at 100Hz for mixed), suggesting it may be using wall time internally. stackprof's cpu mode is already inaccurate, so load makes little difference.
+Under full CPU saturation, rperf's cpu mode error is unchanged (3.9-1.5% for mixed). pf2's cpu mode degrades heavily (30.9% -> 66.2% at 100Hz for mixed), suggesting it may be using wall time internally. stackprof's cpu mode is already inaccurate, so load makes little difference.
 
-### 5. 100Hz is sufficient for sperf
+### 5. 100Hz is sufficient for rperf
 
-At 100Hz, sperf achieves <9% error in all time-accuracy scenarios (cpu mode) and <8% in most wall scenarios. The time-delta weighting compensates for the lower sample rate by assigning correct weights to each sample. Other profilers generally need 1000Hz for comparable accuracy on favorable workloads.
+At 100Hz, rperf achieves <9% error in all time-accuracy scenarios (cpu mode) and <8% in most wall scenarios. The time-delta weighting compensates for the lower sample rate by assigning correct weights to each sample. Other profilers generally need 1000Hz for comparable accuracy on favorable workloads.
 
 ### 6. Each profiler has a niche
 
 - **stackprof**: Best for call-ratio analysis in wall mode at 1000Hz (7.7%). Signal-based sampling with uniform weighting gives low-variance ratio estimates.
 - **vernier**: Accurate for wall-mode profiling of Ruby and GVL-released code at 1000Hz (0.8-2.0%). Cannot measure csleep or CPU time.
 - **pf2**: Handles cw via native stack collection (0.7-8.1%). Degrades in mixed scenarios and under load. Occasional crashes under high load.
-- **sperf**: Accurate for all workload types, both modes, both frequencies, with and without load. Near-zero overhead.
+- **rperf**: Accurate for all workload types, both modes, both frequencies, with and without load. Near-zero overhead.

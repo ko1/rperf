@@ -21,7 +21,7 @@ If `compute()` has high flat time, optimize `compute()` itself. If `process()` h
 
 ## Weight unit
 
-All weights in sperf are in **nanoseconds**, regardless of profiling mode:
+All weights in rperf are in **nanoseconds**, regardless of profiling mode:
 
 - 1,000 ns = 1 us (microsecond)
 - 1,000,000 ns = 1 ms (millisecond)
@@ -29,7 +29,7 @@ All weights in sperf are in **nanoseconds**, regardless of profiling mode:
 
 ## Synthetic frames
 
-In addition to normal Ruby frames, sperf records synthetic frames that represent non-CPU activity. These always appear as the leaf (deepest) frame in a sample.
+In addition to normal Ruby frames, rperf records synthetic frames that represent non-CPU activity. These always appear as the leaf (deepest) frame in a sample.
 
 ### [GVL blocked]
 
@@ -91,7 +91,7 @@ Look for `[GC marking]` and `[GC sweeping]` samples.
 - High `[GC marking]`: Too many live objects. Reduce allocations of long-lived objects.
 - High `[GC sweeping]`: Too many short-lived objects. Reuse or pool objects.
 
-The `sperf stat` output also shows GC counts and allocated/freed object counts, which can help diagnose allocation-heavy code.
+The `rperf stat` output also shows GC counts and allocated/freed object counts, which can help diagnose allocation-heavy code.
 
 ### Multithreaded app slower than expected
 
@@ -100,7 +100,7 @@ The `sperf stat` output also shows GC counts and allocated/freed object counts, 
 Look for `[GVL wait]` time across threads.
 
 ```bash
-sperf stat ruby threaded_app.rb
+rperf stat ruby threaded_app.rb
 ```
 
 Example output for a GVL-contended workload:
@@ -124,5 +124,5 @@ Here, 75% of wall time is GVL contention. The four threads are fighting for the 
 - **Default frequency (1000 Hz) works well** for most cases. For long-running production profiling, 100-500 Hz reduces overhead further.
 - **Profile representative workloads**, not micro-benchmarks. Profiling a real request or batch job gives more actionable results than profiling a tight loop.
 - **Compare cpu and wall profiles** to distinguish CPU-bound from I/O-bound code. If a function is hot in wall mode but not in CPU mode, it's blocked on I/O.
-- **Use `sperf diff`** to measure the impact of optimizations. Profile before and after, then compare.
+- **Use `rperf diff`** to measure the impact of optimizations. Profile before and after, then compare.
 - **Use the verbose flag** (`-v`) to check profiler overhead and see top functions immediately.

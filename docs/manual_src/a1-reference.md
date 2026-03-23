@@ -4,52 +4,52 @@
 
 ```bash
 # Quick performance overview
-sperf stat ruby my_app.rb
+rperf stat ruby my_app.rb
 
-# Record to default file (sperf.data, pprof format, cpu mode)
-sperf record ruby my_app.rb
+# Record to default file (rperf.data, pprof format, cpu mode)
+rperf record ruby my_app.rb
 
 # Record with options
-sperf record -m wall -f 500 -o profile.pb.gz ruby my_app.rb
+rperf record -m wall -f 500 -o profile.pb.gz ruby my_app.rb
 
 # Record to text format
-sperf record -o profile.txt ruby my_app.rb
+rperf record -o profile.txt ruby my_app.rb
 
 # Record to collapsed stacks
-sperf record -o profile.collapsed ruby my_app.rb
+rperf record -o profile.collapsed ruby my_app.rb
 
 # View profile in browser (requires Go)
-sperf report
+rperf report
 
 # Print top functions
-sperf report --top profile.pb.gz
+rperf report --top profile.pb.gz
 
 # Compare two profiles
-sperf diff before.pb.gz after.pb.gz
+rperf diff before.pb.gz after.pb.gz
 
 # Full documentation
-sperf help
+rperf help
 ```
 
 ## Ruby API cheat sheet
 
 ```ruby
-require "sperf"
+require "rperf"
 
 # Block form
-data = Sperf.start(output: "profile.pb.gz", mode: :cpu) do
+data = Rperf.start(output: "profile.pb.gz", mode: :cpu) do
   # code to profile
 end
 
 # Manual form
-Sperf.start(frequency: 1000, mode: :wall)
+Rperf.start(frequency: 1000, mode: :wall)
 # ...
-data = Sperf.stop
+data = Rperf.stop
 
 # Save to file
-Sperf.save("profile.pb.gz", data)
-Sperf.save("profile.collapsed", data)
-Sperf.save("profile.txt", data)
+Rperf.save("profile.pb.gz", data)
+Rperf.save("profile.collapsed", data)
+Rperf.save("profile.txt", data)
 ```
 
 ## Environment variables
@@ -58,14 +58,14 @@ These are used internally by the CLI to configure the auto-started profiler:
 
 | Variable | Values | Description |
 |----------|--------|-------------|
-| `SPERF_ENABLED` | `1` | Enable auto-start on require |
-| `SPERF_OUTPUT` | path | Output file path |
-| `SPERF_FREQUENCY` | integer | Sampling frequency in Hz |
-| `SPERF_MODE` | `cpu`, `wall` | Profiling mode |
-| `SPERF_FORMAT` | `pprof`, `collapsed`, `text` | Output format |
-| `SPERF_VERBOSE` | `1` | Print statistics to stderr |
-| `SPERF_STAT` | `1` | Enable stat mode output |
-| `SPERF_STAT_COMMAND` | string | Command string shown in stat output header |
+| `RPERF_ENABLED` | `1` | Enable auto-start on require |
+| `RPERF_OUTPUT` | path | Output file path |
+| `RPERF_FREQUENCY` | integer | Sampling frequency in Hz |
+| `RPERF_MODE` | `cpu`, `wall` | Profiling mode |
+| `RPERF_FORMAT` | `pprof`, `collapsed`, `text` | Output format |
+| `RPERF_VERBOSE` | `1` | Print statistics to stderr |
+| `RPERF_STAT` | `1` | Enable stat mode output |
+| `RPERF_STAT_COMMAND` | string | Command string shown in stat output header |
 
 ## Profiling mode comparison
 
@@ -82,7 +82,7 @@ These are used internally by the CLI to configure the auto-started profiler:
 
 | Extension | Format | Tooling required |
 |-----------|--------|-----------------|
-| `.pb.gz` (default) | pprof protobuf | Go (`sperf report`) |
+| `.pb.gz` (default) | pprof protobuf | Go (`rperf report`) |
 | `.collapsed` | Collapsed stacks | flamegraph.pl or speedscope |
 | `.txt` | Text report | None |
 

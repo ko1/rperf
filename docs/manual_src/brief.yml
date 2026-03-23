@@ -1,15 +1,15 @@
 # brief.yml - Book brief for ligarb write
-title: "sperf gudie"
+title: "rperf gudie"
 language: en
 audience: "Ordinal Ruby programmer"
 build_dir: ../manual
 notes: |
-  Describe sperf completely in the following order.
+  Describe rperf completely in the following order.
   * general introduction for first users.
   * how to use
     * CLI
     * Library
-  * sperf internal
+  * rperf internal
     * intenral implementations
   
   "how to use" contents should contain real example.

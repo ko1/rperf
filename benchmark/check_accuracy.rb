@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Sperf accuracy benchmark runner
+# Rperf accuracy benchmark runner
 
 require "json"
 require "open3"
@@ -12,7 +12,7 @@ require "optparse"
 scenario_file = File.join(__dir__, "scenarios_mixed.json")
 tolerance = 0.20
 profiling_mode = :cpu
-profiler = "sperf"
+profiler = "rperf"
 frequency = 1000
 cpu_load = false
 verbose = false
@@ -21,7 +21,7 @@ parser = OptionParser.new do |opts|
   opts.banner = "Usage: check_accuracy.rb [options] [scenario_ids...]"
   opts.separator ""
   opts.separator "Examples:"
-  opts.separator "  ruby check_accuracy.rb                        # all scenarios, sperf, cpu mode"
+  opts.separator "  ruby check_accuracy.rb                        # all scenarios, rperf, cpu mode"
   opts.separator "  ruby check_accuracy.rb 0                      # scenario #0 only"
   opts.separator "  ruby check_accuracy.rb 0-4                    # scenarios #0 through #4"
   opts.separator "  ruby check_accuracy.rb -P stackprof -m wall   # stackprof, wall mode"
@@ -39,7 +39,7 @@ parser = OptionParser.new do |opts|
   opts.on("-F", "--frequency HZ", Integer, "Sampling frequency in Hz (default: 1000)") do |v|
     frequency = v
   end
-  opts.on("-P", "--profiler NAME", "Profiler: sperf, stackprof, vernier, pf2 (default: sperf)") do |v|
+  opts.on("-P", "--profiler NAME", "Profiler: rperf, stackprof, vernier, pf2 (default: rperf)") do |v|
     profiler = v
   end
   opts.on("-l", "--load", "Run under CPU load (all cores busy)") do
@@ -103,7 +103,7 @@ selected =
 
 $current_frequency = frequency
 
-puts "=== Sperf Accuracy Check ==="
+puts "=== Rperf Accuracy Check ==="
 puts "File: #{File.basename(scenario_file)}"
 puts "Profiler: #{profiler}"
 puts "Mode: #{profiling_mode}"
@@ -162,7 +162,7 @@ def parse_results_stackprof(output_path, _method_re)
 
   # Parse stackprof --text output:
   #      TOTAL    (pct)     SAMPLES    (pct)     FRAME
-  #        234  (59.2%)          12   (3.0%)     SperfWorkload.rw317
+  #        234  (59.2%)          12   (3.0%)     RperfWorkload.rw317
   # TOTAL = cumulative sample count for the frame (what we want).
   # interval is in microseconds (cpu) or microseconds (wall).
   # Extract interval from the header: Mode: cpu(1000)
@@ -173,7 +173,7 @@ def parse_results_stackprof(output_path, _method_re)
 
   actual_ms = {}
   raw_out.each_line do |line|
-    if line =~ /^\s+(\d+)\s+\(\s*[\d.]+%\)\s+\d+\s+\(\s*[\d.]+%\)\s+SperfWorkload\.((#{$method_prefix_re_global})\d+)\s*$/
+    if line =~ /^\s+(\d+)\s+\(\s*[\d.]+%\)\s+\d+\s+\(\s*[\d.]+%\)\s+RperfWorkload\.((#{$method_prefix_re_global})\d+)\s*$/
       total_samples = $1.to_i
       name = $2
       actual_ms[name] = total_samples * interval_us / 1000.0
@@ -206,8 +206,8 @@ def parse_results_vernier(output_path, _method_re)
       fi = stack_table["frame"][idx]
       funci = frame_table["func"][fi]
       name = strings[func_table["name"][funci]]
-      # Strip "SperfWorkload." prefix if present
-      short = name.sub(/\ASperfWorkload\./, "")
+      # Strip "RperfWorkload." prefix if present
+      short = name.sub(/\ARperfWorkload\./, "")
       unless seen[short]
         cum_time[short] += weight
         seen[short] = true
@@ -227,7 +227,7 @@ failures = []
 
 # Build regex for pprof parsing based on method prefix
 # Matches cum column (4th value column): flat flat% sum% CUM cum% name
-pprof_method_re = /^\s*\S+\s+\S+\s+\S+\s+([\d.]+)(s|ms|us)\s+[\d.]+%\s+(?:SperfWorkload\.)?((#{method_prefix_re})\d+)\s*$/
+pprof_method_re = /^\s*\S+\s+\S+\s+\S+\s+([\d.]+)(s|ms|us)\s+[\d.]+%\s+(?:RperfWorkload\.)?((#{method_prefix_re})\d+)\s*$/
 # For stackprof (needs to be accessible from parse function)
 $method_prefix_re_global = method_prefix_re
 
@@ -321,7 +321,7 @@ selected.each do |scenario|
 
   # Parse results
   actual_ms, raw_out = case profiler
-                       when "sperf", "pf2"
+                       when "rperf", "pf2"
                          parse_results_pprof(output_path, pprof_method_re)
                        when "stackprof"
                          parse_results_stackprof(output_path, pprof_method_re)

@@ -1,25 +1,25 @@
 # Internals
 
-This chapter describes how sperf works under the hood. Understanding the internals helps you interpret edge cases in profiling results and appreciate the design trade-offs.
+This chapter describes how rperf works under the hood. Understanding the internals helps you interpret edge cases in profiling results and appreciate the design trade-offs.
 
 ## Architecture overview
 
-sperf consists of a C extension and a Ruby wrapper:
+rperf consists of a C extension and a Ruby wrapper:
 
 ```mermaid
 graph TD
-    subgraph "C Extension (ext/sperf/sperf.c)"
+    subgraph "C Extension (ext/rperf/rperf.c)"
         Timer["Timer<br/>(signal or nanosleep)"]
         PJ["rb_postponed_job_trigger"]
-        Sample["Sample callback<br/>(sperf_sample_job)"]
+        Sample["Sample callback<br/>(rperf_sample_job)"]
         ThreadHook["Thread event hook<br/>(SUSPENDED/READY/RESUMED/EXITED)"]
         GCHook["GC event hook<br/>(ENTER/EXIT/START/END_MARK/END_SWEEP)"]
         SampleBuf["Sample buffer"]
         FramePool["Frame pool"]
     end
 
-    subgraph "Ruby (lib/sperf.rb)"
-        API["Sperf.start / Sperf.stop"]
+    subgraph "Ruby (lib/rperf.rb)"
+        API["Rperf.start / Rperf.stop"]
         Encoders["Encoders<br/>(PProf / Collapsed / Text)"]
         StatOut["stat output"]
     end
@@ -38,7 +38,7 @@ graph TD
 
 ## Global profiler state
 
-sperf uses a single global `sperf_profiler_t` struct. Only one profiling session can be active at a time ([single session](#index:single session) limitation). The struct holds:
+rperf uses a single global `rperf_profiler_t` struct. Only one profiling session can be active at a time ([single session](#index:single session) limitation). The struct holds:
 
 - Timer configuration (frequency, mode, signal number)
 - Sample buffer (dynamically growing array)
@@ -49,11 +49,11 @@ sperf uses a single global `sperf_profiler_t` struct. Only one profiling session
 
 ## Timer implementation
 
-sperf uses a timer to periodically trigger sampling. The timer implementation depends on the platform:
+rperf uses a timer to periodically trigger sampling. The timer implementation depends on the platform:
 
 ### Linux: Signal-based timer (default)
 
-On Linux, sperf uses `timer_create` with `SIGEV_SIGNAL` to deliver a real-time signal (default: `SIGRTMIN+8`) at the configured frequency. A `sigaction` handler calls `rb_postponed_job_trigger` to schedule the sampling callback.
+On Linux, rperf uses `timer_create` with `SIGEV_SIGNAL` to deliver a real-time signal (default: `SIGRTMIN+8`) at the configured frequency. A `sigaction` handler calls `rb_postponed_job_trigger` to schedule the sampling callback.
 
 ```mermaid
 sequenceDiagram
@@ -65,7 +65,7 @@ sequenceDiagram
     Kernel->>Signal: SIGRTMIN+8 (every 1ms at 1000Hz)
     Signal->>VM: rb_postponed_job_trigger()
     Note over VM: Continues until safepoint...
-    VM->>Job: sperf_sample_job()
+    VM->>Job: rperf_sample_job()
     Job->>Job: rb_profile_frames() + record sample
 ```
 
@@ -73,7 +73,7 @@ This approach provides precise timing (~1000us median interval at 1000Hz) with n
 
 ### Fallback: nanosleep thread
 
-On macOS, or when `signal: false` is set on Linux, sperf creates a dedicated pthread that loops with `nanosleep`:
+On macOS, or when `signal: false` is set on Linux, rperf creates a dedicated pthread that loops with `nanosleep`:
 
 ```c
 while (prof->running) {
@@ -86,16 +86,16 @@ This is simpler but has ~100us drift per tick due to nanosleep's imprecision.
 
 ## Sampling: current-thread-only
 
-When the postponed job fires, `sperf_sample_job` runs on whatever thread currently holds the GVL. It only samples that thread using `rb_thread_current()`.
+When the postponed job fires, `rperf_sample_job` runs on whatever thread currently holds the GVL. It only samples that thread using `rb_thread_current()`.
 
 This is a deliberate design choice:
 
 1. `rb_profile_frames` can only capture the current thread's stack
-2. There's no need to iterate `Thread.list` — combined with GVL event hooks, sperf gets broad coverage of all threads (though a [known race](#known-limitations) in the Ruby VM can cause occasional missed samples)
+2. There's no need to iterate `Thread.list` — combined with GVL event hooks, rperf gets broad coverage of all threads (though a [known race](#known-limitations) in the Ruby VM can cause occasional missed samples)
 
 The sampling callback:
 
-1. Gets or creates per-thread data (`sperf_thread_data_t`)
+1. Gets or creates per-thread data (`rperf_thread_data_t`)
 2. Reads the current clock (`CLOCK_THREAD_CPUTIME_ID` for CPU mode, `CLOCK_MONOTONIC` for wall mode)
 3. Computes weight as `time_now - prev_time`
 4. Captures the backtrace with `rb_profile_frames` directly into the frame pool
@@ -104,7 +104,7 @@ The sampling callback:
 
 ## GVL event tracking (wall mode)
 
-In wall mode, sperf hooks into Ruby's thread event API to track GVL transitions. This captures time that sampling alone would miss — time spent off the GVL.
+In wall mode, rperf hooks into Ruby's thread event API to track GVL transitions. This captures time that sampling alone would miss — time spent off the GVL.
 
 ```mermaid
 stateDiagram-v2
@@ -141,7 +141,7 @@ This way, off-GVL time and GVL contention are accurately attributed to the code 
 
 ## GC phase tracking
 
-sperf hooks into Ruby's internal GC events to track garbage collection time:
+rperf hooks into Ruby's internal GC events to track garbage collection time:
 
 | Event | Action |
 |-------|--------|
@@ -155,11 +155,11 @@ GC samples always use wall time regardless of the profiling mode, because GC tim
 
 ## Deferred string resolution
 
-During sampling, sperf stores raw frame `VALUE`s (Ruby internal object references) in the [frame pool](#index:frame pool) — not strings. This [deferred string resolution](#index:deferred string resolution) keeps the hot path allocation-free and fast.
+During sampling, rperf stores raw frame `VALUE`s (Ruby internal object references) in the [frame pool](#index:frame pool) — not strings. This [deferred string resolution](#index:deferred string resolution) keeps the hot path allocation-free and fast.
 
 String resolution happens at stop time:
 
-1. `Sperf.stop` calls `_c_stop` which returns raw data
+1. `Rperf.stop` calls `_c_stop` which returns raw data
 2. For each frame VALUE, `rb_profile_frame_full_label` and `rb_profile_frame_path` are called to get human-readable strings
 3. These strings are then passed to the Ruby encoders
 
@@ -169,13 +169,13 @@ This means sampling only writes integers (VALUE pointers and timestamps) to pre-
 
 The frame pool is a contiguous array of `VALUE`s that stores raw frame references from `rb_profile_frames`. Since these are Ruby object references, they must be protected from garbage collection.
 
-sperf wraps the profiler struct in a `TypedData` object with a custom `dmark` function that calls `rb_gc_mark_locations` on the entire frame pool. This tells the GC that all VALUEs in the pool are reachable and must not be collected.
+rperf wraps the profiler struct in a `TypedData` object with a custom `dmark` function that calls `rb_gc_mark_locations` on the entire frame pool. This tells the GC that all VALUEs in the pool are reachable and must not be collected.
 
 The frame pool starts at ~1MB and doubles in size via `realloc` when needed. Similarly, the sample buffer starts with 1024 entries and grows by 2x.
 
 ## Per-thread data
 
-Each thread gets a `sperf_thread_data_t` struct stored via Ruby's thread-specific data API (`rb_internal_thread_specific_set`). This tracks:
+Each thread gets a `rperf_thread_data_t` struct stored via Ruby's thread-specific data API (`rb_internal_thread_specific_set`). This tracks:
 
 - `prev_cpu_ns`: Previous CPU time reading (for computing weight)
 - `prev_wall_ns`: Previous wall time reading
@@ -187,7 +187,7 @@ Thread data is created lazily on first encounter and freed on the `EXITED` event
 
 ## Fork safety
 
-sperf registers a `pthread_atfork` child handler that silently stops profiling in the forked child process ([fork safety](#index:fork safety)):
+rperf registers a `pthread_atfork` child handler that silently stops profiling in the forked child process ([fork safety](#index:fork safety)):
 
 - Clears the timer/signal state
 - Removes event hooks
@@ -197,7 +197,7 @@ The parent process continues profiling unaffected. The child can start a fresh p
 
 ## pprof encoder
 
-sperf encodes the [pprof](#cite:ren2010) protobuf format entirely in Ruby, with no protobuf gem dependency. The encoder in `Sperf::PProf.encode`:
+rperf encodes the [pprof](#cite:ren2010) protobuf format entirely in Ruby, with no protobuf gem dependency. The encoder in `Rperf::PProf.encode`:
 
 1. Builds a string table (index 0 is always the empty string)
 2. Converts string frames to index frames and merges identical stacks
@@ -212,12 +212,12 @@ This hand-written encoder is simple (~100 lines) and only runs once at stop time
 
 There is a known race condition in the Ruby VM where `rb_postponed_job_trigger` from the timer thread may set the interrupt flag on the wrong thread's execution context. This happens when a new thread's native thread starts before acquiring the GVL. The result is that timer samples may miss threads doing C busy-wait, with their CPU time leaking into the next SUSPENDED event's stack.
 
-This is a Ruby VM bug, not a sperf bug, and affects all postponed-job-based profilers.
+This is a Ruby VM bug, not a rperf bug, and affects all postponed-job-based profilers.
 
 ### Single session
 
-Only one profiling session can be active at a time due to the global profiler state. Calling `Sperf.start` while already profiling is not supported.
+Only one profiling session can be active at a time due to the global profiler state. Calling `Rperf.start` while already profiling is not supported.
 
 ### Method-level granularity
 
-sperf profiles at the method level, not the line level. Frame labels use `rb_profile_frame_full_label` for qualified names (e.g., `Integer#times`, `MyClass#method_name`). Line numbers are not included.
+rperf profiles at the method level, not the line level. Frame labels use `rb_profile_frame_full_label` for qualified names (e.g., `Integer#times`, `MyClass#method_name`). Line numbers are not included.

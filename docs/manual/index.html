@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>sperf guide</title>
+<title>rperf guide</title>
 <meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="robots" content="noai, noimageai">
 <style>
@@ -869,10 +869,10 @@ details.mermaid-source pre {
 <div class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <div class="sidebar-header-top">
-      <h1 class="book-title"><a href="#cover" onclick="showChapter('cover'); return false;">sperf guide</a></h1>
+      <h1 class="book-title"><a href="#cover" onclick="showChapter('cover'); return false;">rperf guide</a></h1>
       <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">&#9790;</button>
     </div>
-    <p class="book-author">sperf project</p>
+    <p class="book-author">rperf project</p>
     <span class="ai-badge">AI Generated</span>
   </div>
   <div class="search-box">
@@ -888,7 +888,7 @@ details.mermaid-source pre {
             <a href="#01-introduction" class="toc-h1" onclick="showChapter('01-introduction')">1. Introduction</a>
             <ul>
               <li>
-                <a href="#01-introduction--what-is-sperf" class="toc-h2" onclick="showChapterAndScroll('01-introduction', '01-introduction--what-is-sperf')">1.1 What is sperf?</a>
+                <a href="#01-introduction--what-is-rperf" class="toc-h2" onclick="showChapterAndScroll('01-introduction', '01-introduction--what-is-rperf')">1.1 What is rperf?</a>
               </li>
               <li>
                 <a href="#01-introduction--advantages" class="toc-h3" onclick="showChapterAndScroll('01-introduction', '01-introduction--advantages')">1.1.1 Advantages</a>
@@ -939,7 +939,7 @@ details.mermaid-source pre {
             <a href="#03-cli-usage" class="toc-h1" onclick="showChapter('03-cli-usage')">3. CLI Usage</a>
             <ul>
               <li>
-                <a href="#03-cli-usage--sperf-stat" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--sperf-stat')">3.1 sperf stat</a>
+                <a href="#03-cli-usage--rperf-stat" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--rperf-stat')">3.1 rperf stat</a>
               </li>
               <li>
                 <a href="#03-cli-usage--example-cpu-bound-program" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--example-cpu-bound-program')">3.1.1 Example: CPU-bound program</a>
@@ -951,7 +951,7 @@ details.mermaid-source pre {
                 <a href="#03-cli-usage--stat-options" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--stat-options')">3.1.3 stat options</a>
               </li>
               <li>
-                <a href="#03-cli-usage--sperf-record" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--sperf-record')">3.2 sperf record</a>
+                <a href="#03-cli-usage--rperf-record" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--rperf-record')">3.2 rperf record</a>
               </li>
               <li>
                 <a href="#03-cli-usage--example-recording-a-profile" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--example-recording-a-profile')">3.2.1 Example: Recording a profile</a>
@@ -975,7 +975,7 @@ details.mermaid-source pre {
                 <a href="#03-cli-usage--record-options" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--record-options')">3.2.7 record options</a>
               </li>
               <li>
-                <a href="#03-cli-usage--sperf-report" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--sperf-report')">3.3 sperf report</a>
+                <a href="#03-cli-usage--rperf-report" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--rperf-report')">3.3 rperf report</a>
               </li>
               <li>
                 <a href="#03-cli-usage--example-top-and-text-output" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--example-top-and-text-output')">3.3.1 Example: Top and text output</a>
@@ -984,13 +984,13 @@ details.mermaid-source pre {
                 <a href="#03-cli-usage--report-options" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--report-options')">3.3.2 report options</a>
               </li>
               <li>
-                <a href="#03-cli-usage--sperf-diff" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--sperf-diff')">3.4 sperf diff</a>
+                <a href="#03-cli-usage--rperf-diff" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--rperf-diff')">3.4 rperf diff</a>
               </li>
               <li>
                 <a href="#03-cli-usage--workflow-example" class="toc-h3" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--workflow-example')">3.4.1 Workflow example</a>
               </li>
               <li>
-                <a href="#03-cli-usage--sperf-help" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--sperf-help')">3.5 sperf help</a>
+                <a href="#03-cli-usage--rperf-help" class="toc-h2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--rperf-help')">3.5 rperf help</a>
               </li>
             </ul>
           </li>
@@ -1010,13 +1010,13 @@ details.mermaid-source pre {
                 <a href="#04-library-usage--manual-startstop" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--manual-startstop')">4.1.3 Manual start/stop</a>
               </li>
               <li>
-                <a href="#04-library-usage--sperfstart-parameters" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--sperfstart-parameters')">4.2 Sperf.start parameters</a>
+                <a href="#04-library-usage--rperfstart-parameters" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--rperfstart-parameters')">4.2 Rperf.start parameters</a>
               </li>
               <li>
-                <a href="#04-library-usage--sperfstop-return-value" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--sperfstop-return-value')">4.3 Sperf.stop return value</a>
+                <a href="#04-library-usage--rperfstop-return-value" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--rperfstop-return-value')">4.3 Rperf.stop return value</a>
               </li>
               <li>
-                <a href="#04-library-usage--sperfsave" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--sperfsave')">4.4 Sperf.save</a>
+                <a href="#04-library-usage--rperfsave" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--rperfsave')">4.4 Rperf.save</a>
               </li>
               <li>
                 <a href="#04-library-usage--practical-examples" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--practical-examples')">4.5 Practical examples</a>
@@ -1040,6 +1040,12 @@ details.mermaid-source pre {
             <ul>
               <li>
                 <a href="#05-output-formats--pprof-default" class="toc-h2" onclick="showChapterAndScroll('05-output-formats', '05-output-formats--pprof-default')">5.1 pprof (default)</a>
+              </li>
+              <li>
+                <a href="#05-output-formats--embedded-metadata" class="toc-h3" onclick="showChapterAndScroll('05-output-formats', '05-output-formats--embedded-metadata')">5.1.1 Embedded metadata</a>
+              </li>
+              <li>
+                <a href="#05-output-formats--sample-labels" class="toc-h3" onclick="showChapterAndScroll('05-output-formats', '05-output-formats--sample-labels')">5.1.2 Sample labels</a>
               </li>
               <li>
                 <a href="#05-output-formats--collapsed-stacks" class="toc-h2" onclick="showChapterAndScroll('05-output-formats', '05-output-formats--collapsed-stacks')">5.2 Collapsed stacks</a>
@@ -1216,13 +1222,13 @@ details.mermaid-source pre {
 
 <main class="content" id="content">
   <section class="chapter cover-page" id="chapter-cover" style="display: none;">
-    <h1 id="cover--sperf-guide">sperf guide</h1>
+    <h1 id="cover--rperf-guide">rperf guide</h1>
 
-<p><img src="images/logo.svg" alt="sperf logo" /></p>
+<p><img src="images/logo.svg" alt="rperf logo" /></p>
 
 <p>A safepoint-based sampling performance profiler for Ruby.</p>
 
-<p>sperf profiles your Ruby programs by sampling at safepoints and using actual time deltas as weights to correct safepoint bias. It provides a <code>perf</code>-like CLI, a Ruby API, and outputs standard pprof format.</p>
+<p>rperf profiles your Ruby programs by sampling at safepoints and using actual time deltas as weights to correct safepoint bias. It provides a <code>perf</code>-like CLI, a Ruby API, and outputs pprof, collapsed stacks, and text report formats.</p>
 
 <p><strong>Key features:</strong></p>
 
@@ -1231,7 +1237,7 @@ details.mermaid-source pre {
   <li>Time-weighted sampling that corrects safepoint bias</li>
   <li>GVL contention and GC phase tracking</li>
   <li>pprof, collapsed stacks, and text output formats</li>
-  <li>Low overhead (&lt; 0.2% at default 1000 Hz)</li>
+  <li>Low overhead (sampling callback cost &lt; 0.2% at default 1000 Hz)</li>
   <li>Requires Ruby &gt;= 3.4.0 on POSIX systems (Linux, macOS)</li>
 </ul>
 
@@ -1239,23 +1245,23 @@ details.mermaid-source pre {
   <section class="chapter" id="chapter-part1" style="display: none;">
     <h1 id="part1--getting-started">Getting Started</h1>
 
-<p>This part covers what sperf is, why it exists, and how to install it on your system.</p>
+<p>This part covers what rperf is, why it exists, and how to install it on your system.</p>
 
     <nav class="chapter-nav">
-      <a href="#" class="nav-prev" onclick="showChapter('cover'); return false;">&larr; sperf guide</a>
+      <a href="#" class="nav-prev" onclick="showChapter('cover'); return false;">&larr; rperf guide</a>
       <a href="#" class="nav-next" onclick="showChapter('01-introduction'); return false;">1. Introduction &rarr;</a>
     </nav>
   </section>
   <section class="chapter" id="chapter-01-introduction" style="display: none;">
     <h1 id="01-introduction--introduction">1. Introduction</h1>
 
-<h2 id="01-introduction--what-is-sperf">1.1 What is sperf?</h2>
+<h2 id="01-introduction--what-is-rperf">1.1 What is rperf?</h2>
 
-<p><span id="01-introduction--idx-0">sperf</span> is a <span id="01-introduction--idx-1">safepoint</span>-based <span id="01-introduction--idx-2">sampling</span> performance profiler for Ruby. It helps you find where your Ruby program spends its time — whether that’s CPU computation, I/O waits, <span id="01-introduction--idx-3">GVL</span> contention, or garbage collection.</p>
+<p><span id="01-introduction--idx-0">rperf</span> is a <span id="01-introduction--idx-1">safepoint</span>-based <span id="01-introduction--idx-2">sampling</span> performance profiler for Ruby. It helps you find where your Ruby program spends its time — whether that’s CPU computation, I/O waits, <span id="01-introduction--idx-3">GVL</span> contention, or garbage collection.</p>
 
-<p>Unlike traditional sampling profilers that count samples uniformly, sperf uses actual time deltas (in nanoseconds) as <span id="01-introduction--idx-4">weight</span>s for each sample. This corrects the <span id="01-introduction--idx-5">safepoint bias</span> problem inherent in <span id="01-introduction--idx-6">postponed job</span>-based sampling, producing more accurate results.</p>
+<p>Unlike traditional sampling profilers that count samples uniformly, rperf uses actual time deltas (in nanoseconds) as <span id="01-introduction--idx-4">weight</span>s for each sample. This corrects the <span id="01-introduction--idx-5">safepoint bias</span> problem inherent in <span id="01-introduction--idx-6">postponed job</span>-based sampling, producing more accurate results.</p>
 
-<p>sperf is inspired by Linux <span id="01-introduction--cite-0">perf<sup class="cite-ref"><a href="#bib-demelo2010" title="Arnaldo Carvalho de Melo. The New Linux perf Tools. 2010." onclick="showChapterAndScroll('__bibliography__', 'bib-demelo2010'); return false;">[Arnaldo, 2010]</a></sup></span>, providing a familiar CLI interface with subcommands like <code>record</code>, <code>stat</code>, and <code>report</code>.</p>
+<p>rperf is inspired by Linux <span id="01-introduction--cite-0">perf<sup class="cite-ref"><a href="#bib-demelo2010" title="Arnaldo Carvalho de Melo. The New Linux perf Tools. 2010." onclick="showChapterAndScroll('__bibliography__', 'bib-demelo2010'); return false;">[Arnaldo, 2010]</a></sup></span>, providing a familiar CLI interface with subcommands like <code>record</code>, <code>stat</code>, and <code>report</code>.</p>
 
 <h3 id="01-introduction--advantages">1.1.1 Advantages</h3>
 
@@ -1263,8 +1269,8 @@ details.mermaid-source pre {
   <li><strong>Accurate profiling</strong>: Time-delta weighting corrects <span id="01-introduction--idx-7">safepoint bias</span>, producing results closer to real time distribution than traditional count-based profilers.</li>
   <li><strong>GVL / GC visibility</strong>: In wall mode, tracks off-GVL blocking, GVL contention, and GC marking/sweeping as distinct frames — no separate tool needed.</li>
   <li><strong>Standard output formats</strong>: Outputs <span id="01-introduction--idx-8">pprof</span> protobuf (compatible with <code>go tool pprof</code>), <span id="01-introduction--idx-9">collapsed stacks</span> (for flame graphs / speedscope), and human-readable text.</li>
-  <li><strong>Low overhead</strong>: Default 1000 Hz sampling adds &lt; 0.2% overhead, suitable for production.</li>
-  <li><strong>Simple CLI</strong>: <code>sperf stat</code> for a quick overview, <code>sperf record</code> + <code>sperf report</code> for detailed analysis.</li>
+  <li><strong>Low overhead</strong>: Default 1000 Hz sampling callback cost is &lt; 0.2%, suitable for production.</li>
+  <li><strong>Simple CLI</strong>: <code>rperf stat</code> for a quick overview, <code>rperf record</code> + <code>rperf report</code> for detailed analysis.</li>
 </ul>
 
 <h3 id="01-introduction--limitations">1.1.2 Limitations</h3>
@@ -1279,13 +1285,13 @@ details.mermaid-source pre {
 
 <h2 id="01-introduction--why-another-profiler">1.2 Why another profiler?</h2>
 
-<p>Ruby already has profiling tools like <span id="01-introduction--cite-1">stackprof<sup class="cite-ref"><a href="#bib-stackprof" title="Aman Gupta. stackprof: A sampling call-stack profiler for Ruby 2.2+. 2014." onclick="showChapterAndScroll('__bibliography__', 'bib-stackprof'); return false;">[Aman, 2014]</a></sup></span>. So why sperf?</p>
+<p>Ruby already has profiling tools like <span id="01-introduction--cite-1">stackprof<sup class="cite-ref"><a href="#bib-stackprof" title="Aman Gupta. stackprof: A sampling call-stack profiler for Ruby 2.2+. 2014." onclick="showChapterAndScroll('__bibliography__', 'bib-stackprof'); return false;">[Aman, 2014]</a></sup></span>. So why rperf?</p>
 
 <h3 id="01-introduction--the-safepoint-bias-problem">1.2.1 The safepoint bias problem</h3>
 
 <p>Most Ruby sampling profilers collect backtraces by calling <code>rb_profile_frames</code> directly in the signal handler. This approach yields backtraces at the actual signal timing, but relies on undocumented internal VM state — <code>rb_profile_frames</code> is not guaranteed to be async-signal-safe, and the results can be unreliable if the VM is in the middle of updating its internal structures.</p>
 
-<p>sperf takes a different approach: it uses the <span id="01-introduction--idx-10">postponed job</span> mechanism (<code>rb_postponed_job</code>), which is the Ruby VM’s official API for safely deferring work from signal handlers. Backtrace collection is deferred to the next <span id="01-introduction--idx-11">safepoint</span> — a point where the VM is in a consistent state and <code>rb_profile_frames</code> can return reliable results. The trade-off is that when a timer fires between safepoints, the actual sample is delayed until the next safepoint.</p>
+<p>rperf takes a different approach: it uses the <span id="01-introduction--idx-10">postponed job</span> mechanism (<code>rb_postponed_job</code>), which is the Ruby VM’s official API for safely deferring work from signal handlers. Backtrace collection is deferred to the next <span id="01-introduction--idx-11">safepoint</span> — a point where the VM is in a consistent state and <code>rb_profile_frames</code> can return reliable results. The trade-off is that when a timer fires between safepoints, the actual sample is delayed until the next safepoint.</p>
 
 <p>If each sample were counted equally (weight = 1), a sample delayed by a long-running C method would get the same weight as one taken immediately. This is the <span id="01-introduction--cite-2">safepoint bias<sup class="cite-ref"><a href="#bib-mytkowicz2010" title="Todd Mytkowicz and Amer Diwan and Matthias Hauswirth and Peter F. Sweeney. Evaluating the Accuracy of Java Profilers. ACM. pp. 187--197. 2010." onclick="showChapterAndScroll('__bibliography__', 'bib-mytkowicz2010'); return false;">[Todd, 2010]</a></sup></span> problem: functions that happen to be running when the thread reaches a safepoint appear more often than they should, while functions between safepoints are under-represented.</p>
 
@@ -1298,10 +1304,10 @@ sequenceDiagram
     Timer->>VM: Signal (t=0ms)
     Note over VM: Running C method...<br/>cannot stop yet
     VM->>Profiler: Safepoint reached (t=3ms)
-    Note over Profiler: Traditional: weight = 1<br/>sperf: weight = 3ms
+    Note over Profiler: Traditional: weight = 1<br/>rperf: weight = 3ms
     Timer->>VM: Signal (t=1ms)
     VM->>Profiler: Safepoint reached (t=1ms)
-    Note over Profiler: Traditional: weight = 1<br/>sperf: weight = 1ms
+    Note over Profiler: Traditional: weight = 1<br/>rperf: weight = 1ms
 </div><details class="mermaid-source"><summary>mermaid source</summary><pre>sequenceDiagram
     participant Timer
     participant VM
@@ -1310,21 +1316,21 @@ sequenceDiagram
     Timer-&gt;&gt;VM: Signal (t=0ms)
     Note over VM: Running C method...&lt;br/&gt;cannot stop yet
     VM-&gt;&gt;Profiler: Safepoint reached (t=3ms)
-    Note over Profiler: Traditional: weight = 1&lt;br/&gt;sperf: weight = 3ms
+    Note over Profiler: Traditional: weight = 1&lt;br/&gt;rperf: weight = 3ms
     Timer-&gt;&gt;VM: Signal (t=1ms)
     VM-&gt;&gt;Profiler: Safepoint reached (t=1ms)
-    Note over Profiler: Traditional: weight = 1&lt;br/&gt;sperf: weight = 1ms
+    Note over Profiler: Traditional: weight = 1&lt;br/&gt;rperf: weight = 1ms
 </pre></details>
 
-<p>sperf solves this by recording <code>clock_now - clock_prev</code> as the weight of each sample. A sample delayed by 3ms gets 3x the weight of a 1ms sample, accurately reflecting where time was actually spent.</p>
+<p>rperf solves this by recording <code>clock_now - clock_prev</code> as the weight of each sample. A sample delayed by 3ms gets 3x the weight of a 1ms sample, accurately reflecting where time was actually spent.</p>
 
 <h3 id="01-introduction--other-advantages">1.2.2 Other advantages</h3>
 
 <ul>
-  <li><strong>GVL and GC awareness</strong>: In wall mode, sperf tracks time spent blocked off the GVL, waiting to reacquire the GVL, and in GC marking/sweeping phases — each as distinct <span id="01-introduction--idx-12">synthetic frames</span>.</li>
-  <li><strong>perf-like CLI</strong>: The <span id="01-introduction--idx-13"><code>sperf stat</code></span> command gives you a quick performance overview (like <code>perf stat</code>), while <span id="01-introduction--idx-14"><code>sperf record</code></span> + <span id="01-introduction--idx-15"><code>sperf report</code></span> gives you detailed profiling.</li>
-  <li><strong>Standard output</strong>: sperf outputs <span id="01-introduction--idx-16">pprof</span> protobuf format, compatible with Go’s <code>pprof</code> tool ecosystem, as well as <span id="01-introduction--idx-17">collapsed stacks</span> for <span id="01-introduction--cite-3">flame graphs<sup class="cite-ref"><a href="#bib-gregg2016" title="Brendan Gregg. The Flame Graph. Communications of the ACM. Vol. 59. No. 6. pp. 48--57. 2016." onclick="showChapterAndScroll('__bibliography__', 'bib-gregg2016'); return false;">[Brendan, 2016]</a></sup></span> and speedscope.</li>
-  <li><strong>Low overhead</strong>: Default 1000 Hz sampling adds &lt; 0.2% overhead, suitable for production use.</li>
+  <li><strong>GVL and GC awareness</strong>: In wall mode, rperf tracks time spent blocked off the GVL, waiting to reacquire the GVL, and in GC marking/sweeping phases — each as distinct <span id="01-introduction--idx-12">synthetic frames</span>.</li>
+  <li><strong>perf-like CLI</strong>: The <span id="01-introduction--idx-13"><code>rperf stat</code></span> command gives you a quick performance overview (like <code>perf stat</code>), while <span id="01-introduction--idx-14"><code>rperf record</code></span> + <span id="01-introduction--idx-15"><code>rperf report</code></span> gives you detailed profiling.</li>
+  <li><strong>Standard output</strong>: rperf outputs <span id="01-introduction--idx-16">pprof</span> protobuf format, compatible with Go’s <code>pprof</code> tool ecosystem, as well as <span id="01-introduction--idx-17">collapsed stacks</span> for <span id="01-introduction--cite-3">flame graphs<sup class="cite-ref"><a href="#bib-gregg2016" title="Brendan Gregg. The Flame Graph. Communications of the ACM. Vol. 59. No. 6. pp. 48--57. 2016." onclick="showChapterAndScroll('__bibliography__', 'bib-gregg2016'); return false;">[Brendan, 2016]</a></sup></span> and speedscope.</li>
+  <li><strong>Low overhead</strong>: Default 1000 Hz sampling callback cost is &lt; 0.2%, suitable for production use.</li>
 </ul>
 
 <h2 id="01-introduction--requirements">1.3 Requirements</h2>
@@ -1332,29 +1338,29 @@ sequenceDiagram
 <ul>
   <li>Ruby &gt;= 3.4.0</li>
   <li>POSIX system (Linux or macOS)</li>
-  <li>Go (optional, for <code>sperf report</code> and <code>sperf diff</code> subcommands)</li>
+  <li>Go (optional, for <code>rperf report</code> and <code>rperf diff</code> subcommands)</li>
 </ul>
 
 <h2 id="01-introduction--quick-start">1.4 Quick start</h2>
 
 <p>Profile a Ruby script and view the results:</p>
 
-<pre><code class="language-bash"># Install sperf
-gem install sperf
+<pre><code class="language-bash"># Install rperf
+gem install rperf
 
 # Quick performance overview
-sperf stat ruby my_app.rb
+rperf stat ruby my_app.rb
 
 # Record a profile and view it interactively
-sperf record ruby my_app.rb
-sperf report
+rperf record ruby my_app.rb
+rperf report
 </code></pre>
 
-<p>Or use sperf from Ruby code:</p>
+<p>Or use rperf from Ruby code:</p>
 
-<pre><code class="language-ruby">require "sperf"
+<pre><code class="language-ruby">require "rperf"
 
-Sperf.start(output: "profile.pb.gz") do
+Rperf.start(output: "profile.pb.gz") do
   # code to profile
 end
 </code></pre>
@@ -1370,14 +1376,14 @@ end
 
 <h2 id="02-installation--installing-the-gem">2.1 Installing the gem</h2>
 
-<p>sperf is distributed as a Ruby gem with a C extension:</p>
+<p>rperf is distributed as a Ruby gem with a C extension:</p>
 
-<pre><code class="language-bash">gem install sperf
+<pre><code class="language-bash">gem install rperf
 </code></pre>
 
 <p>Or add it to your Gemfile:</p>
 
-<pre><code class="language-ruby">gem "sperf"
+<pre><code class="language-ruby">gem "rperf"
 </code></pre>
 
 <p>Then run:</p>
@@ -1387,25 +1393,25 @@ end
 
 <h2 id="02-installation--verifying-the-installation">2.2 Verifying the installation</h2>
 
-<p>Check that sperf is installed correctly:</p>
+<p>Check that rperf is installed correctly:</p>
 
-<pre><code class="language-bash">sperf --help
+<pre><code class="language-bash">rperf --help
 </code></pre>
 
 <p>You should see:</p>
 
-<pre><code>Usage: sperf record [options] command [args...]
-       sperf stat [options] command [args...]
-       sperf report [options] [file]
-       sperf diff [options] base.pb.gz target.pb.gz
-       sperf help
+<pre><code>Usage: rperf record [options] command [args...]
+       rperf stat [options] command [args...]
+       rperf report [options] [file]
+       rperf diff [options] base.pb.gz target.pb.gz
+       rperf help
 
-Run 'sperf help' for full documentation
+Run 'rperf help' for full documentation
 </code></pre>
 
 <h2 id="02-installation--platform-support">2.3 Platform support</h2>
 
-<p>sperf supports POSIX systems:</p>
+<p>rperf supports POSIX systems:</p>
 
 <table>
   <thead>
@@ -1434,15 +1440,15 @@ Run 'sperf help' for full documentation
   </tbody>
 </table>
 
-<p>On Linux, sperf uses <code>timer_create</code> with <code>SIGEV_SIGNAL</code> and a <code>sigaction</code> handler by default. This provides precise interval timing with no extra thread. The signal number defaults to <code>SIGRTMIN+8</code> and can be changed via the <code>signal:</code> option.</p>
+<p>On Linux, rperf uses <code>timer_create</code> with <code>SIGEV_SIGNAL</code> and a <code>sigaction</code> handler by default. This provides precise interval timing with no extra thread. The signal number defaults to <code>SIGRTMIN+8</code> and can be changed via the <code>signal:</code> keyword argument to <code>Rperf.start</code> in the Ruby API.</p>
 
-<p>On macOS (and when <code>signal: false</code> is set on Linux), sperf falls back to a dedicated pthread with a <code>nanosleep</code> loop.</p>
+<p>On macOS (and when <code>signal: false</code> is set on Linux), rperf falls back to a dedicated pthread with a <code>nanosleep</code> loop.</p>
 
 <h2 id="02-installation--optional-go-toolchain">2.4 Optional: Go toolchain</h2>
 
-<p>The <code>sperf report</code> and <code>sperf diff</code> subcommands are thin wrappers around <code>go tool pprof</code>. If you want to use these commands, install Go from <a href="https://go.dev/dl/">go.dev</a>.</p>
+<p>The <code>rperf report</code> and <code>rperf diff</code> subcommands are thin wrappers around <code>go tool pprof</code>. If you want to use these commands, install Go from <a href="https://go.dev/dl/">go.dev</a>.</p>
 
-<p>Without Go, you can still use all other sperf features. You can view pprof files with other tools like <a href="https://www.speedscope.app/">speedscope</a> or generate text/collapsed output directly.</p>
+<p>Without Go, you can still use all other rperf features. You can view pprof files with other tools like <a href="https://www.speedscope.app/">speedscope</a> or generate text/collapsed output directly.</p>
 
     <div class="chapter-footer">This chapter was generated by AI. Accuracy is not guaranteed.</div>
     <nav class="chapter-nav">
@@ -1453,7 +1459,7 @@ Run 'sperf help' for full documentation
   <section class="chapter" id="chapter-part2" style="display: none;">
     <h1 id="part2--how-to-use">How to Use</h1>
 
-<p>This part explains how to profile Ruby programs with sperf — from the command line and as a library — and describes the available output formats.</p>
+<p>This part explains how to profile Ruby programs with rperf — from the command line and as a library — and describes the available output formats.</p>
 
     <nav class="chapter-nav">
       <a href="#" class="nav-prev" onclick="showChapter('02-installation'); return false;">&larr; 2. Installation</a>
@@ -1463,13 +1469,13 @@ Run 'sperf help' for full documentation
   <section class="chapter" id="chapter-03-cli-usage" style="display: none;">
     <h1 id="03-cli-usage--cli-usage">3. CLI Usage</h1>
 
-<p>sperf provides a perf-like command-line interface with four main subcommands: <code>record</code>, <code>stat</code>, <code>report</code>, and <code>diff</code>.</p>
+<p>rperf provides a perf-like command-line interface with four main subcommands: <code>record</code>, <code>stat</code>, <code>report</code>, and <code>diff</code>.</p>
 
-<h2 id="03-cli-usage--sperf-stat">3.1 sperf stat</h2>
+<h2 id="03-cli-usage--rperf-stat">3.1 rperf stat</h2>
 
-<p><span id="03-cli-usage--idx-0"><code>sperf stat</code></span> is the quickest way to get a performance overview. It runs your command with <span id="03-cli-usage--idx-1">wall</span>-mode profiling and prints a summary to stderr.</p>
+<p><span id="03-cli-usage--idx-0"><code>rperf stat</code></span> is the quickest way to get a performance overview. It runs your command with <span id="03-cli-usage--idx-1">wall</span>-mode profiling and prints a summary to stderr.</p>
 
-<pre><code class="language-bash">sperf stat ruby my_app.rb
+<pre><code class="language-bash">rperf stat ruby my_app.rb
 </code></pre>
 
 <h3 id="03-cli-usage--example-cpu-bound-program">3.1.1 Example: CPU-bound program</h3>
@@ -1484,9 +1490,9 @@ end
 fib(35)
 </code></pre>
 
-<p>Running <code>sperf stat</code>:</p>
+<p>Running <code>rperf stat</code>:</p>
 
-<pre><code class="language-bash">sperf stat ruby fib.rb
+<pre><code class="language-bash">rperf stat ruby fib.rb
 </code></pre>
 
 <pre><code> Performance stats for 'ruby fib.rb':
@@ -1538,16 +1544,16 @@ end
 end
 </code></pre>
 
-<p>Running <code>sperf stat</code>:</p>
+<p>Running <code>rperf stat</code>:</p>
 
-<pre><code class="language-bash">sperf stat ruby mixed.rb
+<pre><code class="language-bash">rperf stat ruby mixed.rb
 </code></pre>
 
 <p>Because <code>stat</code> always uses wall mode, you can see how time is divided between CPU and I/O. The <code>[Ruby] GVL blocked</code> line shows time spent sleeping/in I/O, while <code>CPU execution</code> shows compute time.</p>
 
 <h3 id="03-cli-usage--stat-options">3.1.3 stat options</h3>
 
-<pre><code class="language-bash">sperf stat [options] command [args...]
+<pre><code class="language-bash">rperf stat [options] command [args...]
 </code></pre>
 
 <table>
@@ -1573,25 +1579,25 @@ end
   </tbody>
 </table>
 
-<h2 id="03-cli-usage--sperf-record">3.2 sperf record</h2>
+<h2 id="03-cli-usage--rperf-record">3.2 rperf record</h2>
 
-<p><span id="03-cli-usage--idx-2"><code>sperf record</code></span> profiles a command and saves the result to a file. This is the primary way to capture profiles for detailed analysis.</p>
+<p><span id="03-cli-usage--idx-2"><code>rperf record</code></span> profiles a command and saves the result to a file. This is the primary way to capture profiles for detailed analysis.</p>
 
-<pre><code class="language-bash">sperf record ruby my_app.rb
+<pre><code class="language-bash">rperf record ruby my_app.rb
 </code></pre>
 
-<p>By default, it saves to <code>sperf.data</code> in pprof format with CPU mode.</p>
+<p>By default, it saves to <code>rperf.data</code> in pprof format with CPU mode.</p>
 
 <h3 id="03-cli-usage--example-recording-a-profile">3.2.1 Example: Recording a profile</h3>
 
-<pre><code class="language-bash">sperf record ruby fib.rb
+<pre><code class="language-bash">rperf record ruby fib.rb
 </code></pre>
 
-<p>This creates <code>sperf.data</code>. You can then analyze it with <code>sperf report</code> or other pprof-compatible tools.</p>
+<p>This creates <code>rperf.data</code>. You can then analyze it with <code>rperf report</code> or other pprof-compatible tools.</p>
 
 <h3 id="03-cli-usage--choosing-a-profiling-mode">3.2.2 Choosing a profiling mode</h3>
 
-<p>sperf supports two profiling modes:</p>
+<p>rperf supports two profiling modes:</p>
 
 <ul>
   <li><strong><span id="03-cli-usage--idx-3">cpu</span></strong> (default): Measures per-thread CPU time. Best for finding functions that consume CPU cycles. Ignores time spent sleeping, in I/O, or waiting for the GVL.</li>
@@ -1599,34 +1605,34 @@ end
 </ul>
 
 <pre><code class="language-bash"># CPU mode (default)
-sperf record ruby my_app.rb
+rperf record ruby my_app.rb
 
 # Wall mode
-sperf record -m wall ruby my_app.rb
+rperf record -m wall ruby my_app.rb
 </code></pre>
 
 <h3 id="03-cli-usage--choosing-an-output-format">3.2.3 Choosing an output format</h3>
 
-<p>sperf auto-detects the format from the file extension:</p>
+<p>rperf auto-detects the format from the file extension:</p>
 
 <pre><code class="language-bash"># pprof format (default)
-sperf record -o profile.pb.gz ruby my_app.rb
+rperf record -o profile.pb.gz ruby my_app.rb
 
 # Collapsed stacks (for FlameGraph / speedscope)
-sperf record -o profile.collapsed ruby my_app.rb
+rperf record -o profile.collapsed ruby my_app.rb
 
 # Human-readable text
-sperf record -o profile.txt ruby my_app.rb
+rperf record -o profile.txt ruby my_app.rb
 </code></pre>
 
 <p>You can also force the format explicitly:</p>
 
-<pre><code class="language-bash">sperf record --format text -o profile.dat ruby my_app.rb
+<pre><code class="language-bash">rperf record --format text -o profile.dat ruby my_app.rb
 </code></pre>
 
 <h3 id="03-cli-usage--example-text-output">3.2.4 Example: Text output</h3>
 
-<pre><code class="language-bash">sperf record -o profile.txt ruby fib.rb
+<pre><code class="language-bash">rperf record -o profile.txt ruby fib.rb
 </code></pre>
 
 <p>The text output looks like this:</p>
@@ -1644,7 +1650,7 @@ Cumulative:
 
 <h3 id="03-cli-usage--example-wall-mode-text-output">3.2.5 Example: Wall mode text output</h3>
 
-<pre><code class="language-bash">sperf record -m wall -o wall_profile.txt ruby mixed.rb
+<pre><code class="language-bash">rperf record -m wall -o wall_profile.txt ruby mixed.rb
 </code></pre>
 
 <pre><code>Total: 311.8ms (wall)
@@ -1674,21 +1680,21 @@ Cumulative:
 
 <p>The <code>-v</code> flag prints sampling statistics to stderr during profiling:</p>
 
-<pre><code class="language-bash">sperf record -v ruby my_app.rb
+<pre><code class="language-bash">rperf record -v ruby my_app.rb
 </code></pre>
 
-<pre><code>[sperf] mode=cpu frequency=1000Hz
-[sperf] sampling: 98 calls, 0.11ms total, 1.1us/call avg
-[sperf] samples recorded: 904
-[sperf] top 10 by flat:
-[sperf]       53.4ms  50.1%  Object#cpu_work (-e)
-[sperf]       17.0ms  15.9%  Integer#times (&lt;internal:numeric&gt;)
+<pre><code>[rperf] mode=cpu frequency=1000Hz
+[rperf] sampling: 98 calls, 0.11ms total, 1.1us/call avg
+[rperf] samples recorded: 904
+[rperf] top 10 by flat:
+[rperf]       53.4ms  50.1%  Object#cpu_work (-e)
+[rperf]       17.0ms  15.9%  Integer#times (&lt;internal:numeric&gt;)
 ...
 </code></pre>
 
 <h3 id="03-cli-usage--record-options">3.2.7 record options</h3>
 
-<pre><code class="language-bash">sperf record [options] command [args...]
+<pre><code class="language-bash">rperf record [options] command [args...]
 </code></pre>
 
 <table>
@@ -1701,7 +1707,7 @@ Cumulative:
   <tbody>
     <tr>
       <td><code>-o PATH</code></td>
-      <td>Output file (default: <code>sperf.data</code>)</td>
+      <td>Output file (default: <code>rperf.data</code>)</td>
     </tr>
     <tr>
       <td><code>-f HZ</code></td>
@@ -1722,28 +1728,28 @@ Cumulative:
   </tbody>
 </table>
 
-<h2 id="03-cli-usage--sperf-report">3.3 sperf report</h2>
+<h2 id="03-cli-usage--rperf-report">3.3 rperf report</h2>
 
-<p><span id="03-cli-usage--idx-5"><code>sperf report</code></span> opens a pprof profile for analysis. It wraps <code>go tool pprof</code> and requires Go to be installed.</p>
+<p><span id="03-cli-usage--idx-5"><code>rperf report</code></span> opens a pprof profile for analysis. It wraps <code>go tool pprof</code> and requires Go to be installed.</p>
 
 <pre><code class="language-bash"># Open interactive web UI (default)
-sperf report
+rperf report
 
 # Open a specific file
-sperf report profile.pb.gz
+rperf report profile.pb.gz
 
 # Print top functions
-sperf report --top
+rperf report --top
 
-# Print text report
-sperf report --text
+# Print pprof text summary
+rperf report --text
 </code></pre>
 
 <h3 id="03-cli-usage--example-top-and-text-output">3.3.1 Example: Top and text output</h3>
 
 <p>Using the <code>fib.rb</code> profile recorded earlier:</p>
 
-<pre><code class="language-bash">sperf report --top sperf.data
+<pre><code class="language-bash">rperf report --top rperf.data
 </code></pre>
 
 <pre><code>Type: cpu
@@ -1771,7 +1777,7 @@ Showing nodes accounting for 577.31ms, 100% of 577.31ms total
     </tr>
     <tr>
       <td><code>--text</code></td>
-      <td>Print text report</td>
+      <td>Print pprof text summary</td>
     </tr>
     <tr>
       <td>(default)</td>
@@ -1780,39 +1786,39 @@ Showing nodes accounting for 577.31ms, 100% of 577.31ms total
   </tbody>
 </table>
 
-<h2 id="03-cli-usage--sperf-diff">3.4 sperf diff</h2>
+<h2 id="03-cli-usage--rperf-diff">3.4 rperf diff</h2>
 
-<p><span id="03-cli-usage--idx-6"><code>sperf diff</code></span> compares two pprof profiles, showing the difference (target - base). This is useful for measuring the impact of optimizations.</p>
+<p><span id="03-cli-usage--idx-6"><code>rperf diff</code></span> compares two pprof profiles, showing the difference (target - base). This is useful for measuring the impact of optimizations.</p>
 
 <pre><code class="language-bash"># Open diff in browser
-sperf diff before.pb.gz after.pb.gz
+rperf diff before.pb.gz after.pb.gz
 
 # Print top functions by diff
-sperf diff --top before.pb.gz after.pb.gz
+rperf diff --top before.pb.gz after.pb.gz
 
 # Print text diff
-sperf diff --text before.pb.gz after.pb.gz
+rperf diff --text before.pb.gz after.pb.gz
 </code></pre>
 
 <h3 id="03-cli-usage--workflow-example">3.4.1 Workflow example</h3>
 
 <pre><code class="language-bash"># Profile the baseline
-sperf record -o before.pb.gz ruby my_app.rb
+rperf record -o before.pb.gz ruby my_app.rb
 
 # Make your optimization changes...
 
 # Profile again
-sperf record -o after.pb.gz ruby my_app.rb
+rperf record -o after.pb.gz ruby my_app.rb
 
 # Compare
-sperf diff before.pb.gz after.pb.gz
+rperf diff before.pb.gz after.pb.gz
 </code></pre>
 
-<h2 id="03-cli-usage--sperf-help">3.5 sperf help</h2>
+<h2 id="03-cli-usage--rperf-help">3.5 rperf help</h2>
 
-<p><code>sperf help</code> prints the full reference documentation, including profiling modes, output formats, synthetic frames, and diagnostic tips.</p>
+<p><code>rperf help</code> prints the full reference documentation, including profiling modes, output formats, synthetic frames, and diagnostic tips.</p>
 
-<pre><code class="language-bash">sperf help
+<pre><code class="language-bash">rperf help
 </code></pre>
 
 <p>This outputs detailed documentation suitable for both human reading and AI-assisted analysis.</p>
@@ -1826,17 +1832,17 @@ sperf diff before.pb.gz after.pb.gz
   <section class="chapter" id="chapter-04-library-usage" style="display: none;">
     <h1 id="04-library-usage--ruby-api">4. Ruby API</h1>
 
-<p>sperf provides a Ruby API for programmatic profiling. This is useful when you want to profile specific sections of code, integrate profiling into test suites, or build custom profiling workflows.</p>
+<p>rperf provides a Ruby API for programmatic profiling. This is useful when you want to profile specific sections of code, integrate profiling into test suites, or build custom profiling workflows.</p>
 
 <h2 id="04-library-usage--basic-usage">4.1 Basic usage</h2>
 
 <h3 id="04-library-usage--block-form-recommended">4.1.1 Block form (recommended)</h3>
 
-<p>The simplest way to use sperf is with the block form of <span id="04-library-usage--idx-0"><code>Sperf.start</code></span>. It profiles the block and returns the profiling data:</p>
+<p>The simplest way to use rperf is with the block form of <span id="04-library-usage--idx-0"><code>Rperf.start</code></span>. It profiles the block and returns the profiling data:</p>
 
-<pre><code class="language-ruby">require "sperf"
+<pre><code class="language-ruby">require "rperf"
 
-data = Sperf.start(output: "profile.pb.gz", frequency: 1000, mode: :cpu) do
+data = Rperf.start(output: "profile.pb.gz", frequency: 1000, mode: :cpu) do
   # code to profile
 end
 </code></pre>
@@ -1845,18 +1851,18 @@ end
 
 <h3 id="04-library-usage--example-profiling-a-fibonacci-function">4.1.2 Example: Profiling a Fibonacci function</h3>
 
-<pre><code class="language-ruby">require "sperf"
+<pre><code class="language-ruby">require "rperf"
 
 def fib(n)
   return n if n &lt;= 1
   fib(n - 1) + fib(n - 2)
 end
 
-data = Sperf.start(frequency: 1000, mode: :cpu) do
+data = Rperf.start(frequency: 1000, mode: :cpu) do
   fib(33)
 end
 
-Sperf.save("profile.txt", data)
+Rperf.save("profile.txt", data)
 </code></pre>
 
 <p>Running this produces:</p>
@@ -1870,7 +1876,7 @@ Flat:
 Cumulative:
      192.7ms 100.0%  Object#fib (example.rb)
      192.7ms 100.0%  block in &lt;main&gt; (example.rb)
-     192.7ms 100.0%  Sperf.start (lib/sperf.rb)
+     192.7ms 100.0%  Rperf.start (lib/rperf.rb)
      192.7ms 100.0%  &lt;main&gt; (example.rb)
 </code></pre>
 
@@ -1878,18 +1884,18 @@ Cumulative:
 
 <p>For cases where block form is awkward, you can manually start and stop profiling:</p>
 
-<pre><code class="language-ruby">require "sperf"
+<pre><code class="language-ruby">require "rperf"
 
-Sperf.start(frequency: 1000, mode: :wall)
+Rperf.start(frequency: 1000, mode: :wall)
 
 # ... code to profile ...
 
-data = Sperf.stop
+data = Rperf.stop
 </code></pre>
 
-<p><span id="04-library-usage--idx-1"><code>Sperf.stop</code></span> returns the data hash, or <code>nil</code> if the profiler was not running.</p>
+<p><span id="04-library-usage--idx-1"><code>Rperf.stop</code></span> returns the data hash, or <code>nil</code> if the profiler was not running.</p>
 
-<h2 id="04-library-usage--sperfstart-parameters">4.2 Sperf.start parameters</h2>
+<h2 id="04-library-usage--rperfstart-parameters">4.2 Rperf.start parameters</h2>
 
 <table>
   <thead>
@@ -1940,19 +1946,21 @@ data = Sperf.stop
   </tbody>
 </table>
 
-<h2 id="04-library-usage--sperfstop-return-value">4.3 Sperf.stop return value</h2>
+<h2 id="04-library-usage--rperfstop-return-value">4.3 Rperf.stop return value</h2>
 
-<p><code>Sperf.stop</code> returns <code>nil</code> if the profiler was not running. Otherwise it returns a Hash:</p>
+<p><code>Rperf.stop</code> returns <code>nil</code> if the profiler was not running. Otherwise it returns a Hash:</p>
 
 <pre><code class="language-ruby">{
   mode: :cpu,              # or :wall
   frequency: 1000,
   sampling_count: 1234,    # number of timer callbacks
   sampling_time_ns: 56789, # total time spent sampling (overhead)
-  samples: [               # Array of [frames, weight]
-    [frames, weight],      #   frames: [[path, label], ...] deepest-first
+  start_time_ns: 17740..., # CLOCK_REALTIME epoch nanos
+  duration_ns: 10000000,   # profiling duration in nanos
+  samples: [               # Array of [frames, weight, thread_seq]
+    [frames, weight, seq], #   frames: [[path, label], ...] deepest-first
     ...                    #   weight: Integer (nanoseconds)
-  ]
+  ]                        #   seq: Integer (thread sequence, 1-based)
 }
 </code></pre>
 
@@ -1960,38 +1968,39 @@ data = Sperf.stop
 <ul>
   <li><strong>frames</strong>: An array of <code>[path, label]</code> pairs, ordered deepest-first (leaf frame at index 0)</li>
   <li><strong>weight</strong>: Time in nanoseconds attributed to this sample</li>
+  <li><strong>thread_seq</strong>: Thread sequence number (1-based, assigned per profiling session)</li>
 </ul>
 
-<h2 id="04-library-usage--sperfsave">4.4 Sperf.save</h2>
+<h2 id="04-library-usage--rperfsave">4.4 Rperf.save</h2>
 
-<p><span id="04-library-usage--idx-2"><code>Sperf.save</code></span> writes profiling data to a file in any supported format:</p>
+<p><span id="04-library-usage--idx-2"><code>Rperf.save</code></span> writes profiling data to a file in any supported format:</p>
 
-<pre><code class="language-ruby">Sperf.save("profile.pb.gz", data)        # pprof format
-Sperf.save("profile.collapsed", data)    # collapsed stacks
-Sperf.save("profile.txt", data)          # text report
+<pre><code class="language-ruby">Rperf.save("profile.pb.gz", data)        # pprof format
+Rperf.save("profile.collapsed", data)    # collapsed stacks
+Rperf.save("profile.txt", data)          # text report
 </code></pre>
 
 <p>The format is auto-detected from the file extension. You can override it with the <code>format:</code> keyword:</p>
 
-<pre><code class="language-ruby">Sperf.save("output.dat", data, format: :text)
+<pre><code class="language-ruby">Rperf.save("output.dat", data, format: :text)
 </code></pre>
 
 <h2 id="04-library-usage--practical-examples">4.5 Practical examples</h2>
 
 <h3 id="04-library-usage--profiling-a-web-request-handler">4.5.1 Profiling a web request handler</h3>
 
-<pre><code class="language-ruby">require "sperf"
+<pre><code class="language-ruby">require "rperf"
 
 class ApplicationController
   def profile_action
-    data = Sperf.start(mode: :wall) do
+    data = Rperf.start(mode: :wall) do
       # Simulate a typical request
       users = User.where(active: true).limit(100)
       result = users.map { |u| serialize_user(u) }
       render json: result
     end
 
-    Sperf.save("request_profile.txt", data)
+    Rperf.save("request_profile.txt", data)
   end
 end
 </code></pre>
@@ -2000,7 +2009,7 @@ end
 
 <h3 id="04-library-usage--comparing-cpu-and-wall-profiles">4.5.2 Comparing CPU and wall profiles</h3>
 
-<pre><code class="language-ruby">require "sperf"
+<pre><code class="language-ruby">require "rperf"
 
 def workload
   # Mix of CPU and I/O
@@ -2011,12 +2020,12 @@ def workload
 end
 
 # CPU profile: shows where CPU cycles go
-cpu_data = Sperf.start(mode: :cpu) { workload }
-Sperf.save("cpu.txt", cpu_data)
+cpu_data = Rperf.start(mode: :cpu) { workload }
+Rperf.save("cpu.txt", cpu_data)
 
 # Wall profile: shows where wall time goes
-wall_data = Sperf.start(mode: :wall) { workload }
-Sperf.save("wall.txt", wall_data)
+wall_data = Rperf.start(mode: :wall) { workload }
+Rperf.save("wall.txt", wall_data)
 </code></pre>
 
 <p>The CPU profile will focus on <code>compute_something</code>, while the wall profile will show the <code>sleep</code> calls as <code>[GVL blocked]</code> time.</p>
@@ -2025,13 +2034,13 @@ Sperf.save("wall.txt", wall_data)
 
 <p>You can work with the raw sample data programmatically:</p>
 
-<pre><code class="language-ruby">require "sperf"
+<pre><code class="language-ruby">require "rperf"
 
-data = Sperf.start(mode: :cpu) { workload }
+data = Rperf.start(mode: :cpu) { workload }
 
 # Find the hottest function
 flat = Hash.new(0)
-data[:samples].each do |frames, weight|
+data[:samples].each do |frames, weight, thread_seq|
   leaf_label = frames.first&amp;.last  # frames[0] is the leaf
   flat[leaf_label] += weight
 end
@@ -2044,10 +2053,10 @@ end
 
 <h3 id="04-library-usage--generating-collapsed-stacks-for-flamegraph">4.5.4 Generating collapsed stacks for FlameGraph</h3>
 
-<pre><code class="language-ruby">require "sperf"
+<pre><code class="language-ruby">require "rperf"
 
-data = Sperf.start(mode: :cpu) { workload }
-Sperf.save("profile.collapsed", data)
+data = Rperf.start(mode: :cpu) { workload }
+Rperf.save("profile.collapsed", data)
 </code></pre>
 
 <p>The collapsed format is one line per unique stack, compatible with Brendan Gregg’s <span id="04-library-usage--cite-0">FlameGraph<sup class="cite-ref"><a href="#bib-gregg2016" title="Brendan Gregg. The Flame Graph. Communications of the ACM. Vol. 59. No. 6. pp. 48--57. 2016." onclick="showChapterAndScroll('__bibliography__', 'bib-gregg2016'); return false;">[Brendan, 2016]</a></sup></span> tools and speedscope:</p>
@@ -2071,34 +2080,74 @@ Sperf.save("profile.collapsed", data)
   <section class="chapter" id="chapter-05-output-formats" style="display: none;">
     <h1 id="05-output-formats--output-formats">5. Output Formats</h1>
 
-<p>sperf supports three output formats. The format is auto-detected from the file extension, or can be set explicitly with the <code>--format</code> flag (CLI) or <code>format:</code> parameter (API).</p>
+<p>rperf supports three output formats. The format is auto-detected from the file extension, or can be set explicitly with the <code>--format</code> flag (CLI) or <code>format:</code> parameter (API).</p>
 
 <h2 id="05-output-formats--pprof-default">5.1 pprof (default)</h2>
 
-<p>The <span id="05-output-formats--idx-0">pprof</span> format is a gzip-compressed Protocol Buffers binary. This is the standard format used by Go’s pprof tooling and is the default output of sperf.</p>
+<p>The <span id="05-output-formats--idx-0">pprof</span> format is a gzip-compressed Protocol Buffers binary. This is the standard format used by Go’s pprof tooling and is the default output of rperf.</p>
 
 <p><strong>Extension convention</strong>: <code>.pb.gz</code></p>
 
 <p><strong>How to view</strong>:</p>
 
 <pre><code class="language-bash"># Interactive web UI (requires Go)
-sperf report profile.pb.gz
+rperf report profile.pb.gz
 
 # Top functions
-sperf report --top profile.pb.gz
+rperf report --top profile.pb.gz
 
 # Text report
-sperf report --text profile.pb.gz
+rperf report --text profile.pb.gz
 
 # Or use go tool pprof directly
 go tool pprof -http=:8080 profile.pb.gz
 go tool pprof -top profile.pb.gz
-go tool pprof -flame profile.pb.gz
 </code></pre>
 
 <p>You can also import pprof files into <a href="https://www.speedscope.app/">speedscope</a> via its web interface.</p>
 
 <p><strong>Advantages</strong>: Standard format supported by a wide ecosystem of tools. Supports diff comparison between two profiles. Interactive exploration with flame graphs, call graphs, and source annotations.</p>
+
+<h3 id="05-output-formats--embedded-metadata">5.1.1 Embedded metadata</h3>
+
+<p>rperf embeds the following metadata in each pprof profile:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>comment</code></td>
+      <td>rperf version, profiling mode, frequency, Ruby version</td>
+    </tr>
+    <tr>
+      <td><code>time_nanos</code></td>
+      <td>Profile collection start time (epoch nanoseconds)</td>
+    </tr>
+    <tr>
+      <td><code>duration_nanos</code></td>
+      <td>Profile duration (nanoseconds)</td>
+    </tr>
+    <tr>
+      <td><code>doc_url</code></td>
+      <td>Link to rperf documentation</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>View comments with: <code>go tool pprof -comments profile.pb.gz</code></p>
+
+<h3 id="05-output-formats--sample-labels">5.1.2 Sample labels</h3>
+
+<p>Each sample carries a <code>thread_seq</code> numeric label — a thread sequence number (1-based) assigned when rperf first sees each thread during a profiling session. This allows per-thread analysis:</p>
+
+<pre><code class="language-bash"># Group flame graph by thread
+go tool pprof -tagroot=thread_seq profile.pb.gz
+</code></pre>
 
 <h2 id="05-output-formats--collapsed-stacks">5.2 Collapsed stacks</h2>
 
@@ -2121,11 +2170,12 @@ go tool pprof -flame profile.pb.gz
 <p><strong>How to use</strong>:</p>
 
 <pre><code class="language-bash"># Generate a FlameGraph SVG
-sperf record -o profile.collapsed ruby my_app.rb
+rperf record -o profile.collapsed ruby my_app.rb
 flamegraph.pl profile.collapsed &gt; flamegraph.svg
 
-# Open in speedscope (drag-and-drop the file)
-open https://www.speedscope.app/
+# Open in speedscope (drag-and-drop the .collapsed file)
+# macOS: open https://www.speedscope.app/
+# Linux: xdg-open https://www.speedscope.app/
 </code></pre>
 
 <p><strong>Advantages</strong>: Simple text format, easy to process with command-line tools. Compatible with Brendan Gregg’s <span id="05-output-formats--cite-0">FlameGraph<sup class="cite-ref"><a href="#bib-gregg2016" title="Brendan Gregg. The Flame Graph. Communications of the ACM. Vol. 59. No. 6. pp. 48--57. 2016." onclick="showChapterAndScroll('__bibliography__', 'bib-gregg2016'); return false;">[Brendan, 2016]</a></sup></span> tools and speedscope.</p>
@@ -2201,7 +2251,7 @@ Cumulative:
     </tr>
     <tr>
       <td>Diff comparison</td>
-      <td>Yes (<code>sperf diff</code>)</td>
+      <td>Yes (<code>rperf diff</code>)</td>
       <td>No</td>
       <td>No</td>
     </tr>
@@ -2251,7 +2301,7 @@ Cumulative:
   </tbody>
 </table>
 
-<p>The default output file (<code>sperf.data</code>) uses pprof format.</p>
+<p>The default output file (<code>rperf.data</code>) uses pprof format.</p>
 
     <div class="chapter-footer">This chapter was generated by AI. Accuracy is not guaranteed.</div>
     <nav class="chapter-nav">
@@ -2262,7 +2312,7 @@ Cumulative:
   <section class="chapter" id="chapter-part3" style="display: none;">
     <h1 id="part3--deep-dive">Deep Dive</h1>
 
-<p>This part explores how to read and act on profiling results, and explains how sperf works under the hood.</p>
+<p>This part explores how to read and act on profiling results, and explains how rperf works under the hood.</p>
 
     <nav class="chapter-nav">
       <a href="#" class="nav-prev" onclick="showChapter('05-output-formats'); return false;">&larr; 5. Output Formats</a>
@@ -2302,7 +2352,7 @@ graph TD
 
 <h2 id="06-interpreting-results--weight-unit">6.2 Weight unit</h2>
 
-<p>All weights in sperf are in <strong>nanoseconds</strong>, regardless of profiling mode:</p>
+<p>All weights in rperf are in <strong>nanoseconds</strong>, regardless of profiling mode:</p>
 
 <ul>
   <li>1,000 ns = 1 us (microsecond)</li>
@@ -2312,7 +2362,7 @@ graph TD
 
 <h2 id="06-interpreting-results--synthetic-frames">6.3 Synthetic frames</h2>
 
-<p>In addition to normal Ruby frames, sperf records synthetic frames that represent non-CPU activity. These always appear as the leaf (deepest) frame in a sample.</p>
+<p>In addition to normal Ruby frames, rperf records synthetic frames that represent non-CPU activity. These always appear as the leaf (deepest) frame in a sample.</p>
 
 <h3 id="06-interpreting-results--gvl-blocked">6.3.1 [GVL blocked]</h3>
 
@@ -2378,7 +2428,7 @@ graph TD
   <li>High <code>[GC sweeping]</code>: Too many short-lived objects. Reuse or pool objects.</li>
 </ul>
 
-<p>The <code>sperf stat</code> output also shows GC counts and allocated/freed object counts, which can help diagnose allocation-heavy code.</p>
+<p>The <code>rperf stat</code> output also shows GC counts and allocated/freed object counts, which can help diagnose allocation-heavy code.</p>
 
 <h3 id="06-interpreting-results--multithreaded-app-slower-than-expected">6.4.4 Multithreaded app slower than expected</h3>
 
@@ -2386,7 +2436,7 @@ graph TD
 
 <p>Look for <code>[GVL wait]</code> time across threads.</p>
 
-<pre><code class="language-bash">sperf stat ruby threaded_app.rb
+<pre><code class="language-bash">rperf stat ruby threaded_app.rb
 </code></pre>
 
 <p>Example output for a GVL-contended workload:</p>
@@ -2410,7 +2460,7 @@ graph TD
   <li><strong>Default frequency (1000 Hz) works well</strong> for most cases. For long-running production profiling, 100-500 Hz reduces overhead further.</li>
   <li><strong>Profile representative workloads</strong>, not micro-benchmarks. Profiling a real request or batch job gives more actionable results than profiling a tight loop.</li>
   <li><strong>Compare cpu and wall profiles</strong> to distinguish CPU-bound from I/O-bound code. If a function is hot in wall mode but not in CPU mode, it’s blocked on I/O.</li>
-  <li><strong>Use <code>sperf diff</code></strong> to measure the impact of optimizations. Profile before and after, then compare.</li>
+  <li><strong>Use <code>rperf diff</code></strong> to measure the impact of optimizations. Profile before and after, then compare.</li>
   <li><strong>Use the verbose flag</strong> (<code>-v</code>) to check profiler overhead and see top functions immediately.</li>
 </ul>
 
@@ -2423,26 +2473,26 @@ graph TD
   <section class="chapter" id="chapter-07-internals" style="display: none;">
     <h1 id="07-internals--internals">7. Internals</h1>
 
-<p>This chapter describes how sperf works under the hood. Understanding the internals helps you interpret edge cases in profiling results and appreciate the design trade-offs.</p>
+<p>This chapter describes how rperf works under the hood. Understanding the internals helps you interpret edge cases in profiling results and appreciate the design trade-offs.</p>
 
 <h2 id="07-internals--architecture-overview">7.1 Architecture overview</h2>
 
-<p>sperf consists of a C extension and a Ruby wrapper:</p>
+<p>rperf consists of a C extension and a Ruby wrapper:</p>
 
 <div class="mermaid">
 graph TD
-    subgraph "C Extension (ext/sperf/sperf.c)"
+    subgraph "C Extension (ext/rperf/rperf.c)"
         Timer["Timer<br/>(signal or nanosleep)"]
         PJ["rb_postponed_job_trigger"]
-        Sample["Sample callback<br/>(sperf_sample_job)"]
+        Sample["Sample callback<br/>(rperf_sample_job)"]
         ThreadHook["Thread event hook<br/>(SUSPENDED/READY/RESUMED/EXITED)"]
         GCHook["GC event hook<br/>(ENTER/EXIT/START/END_MARK/END_SWEEP)"]
         SampleBuf["Sample buffer"]
         FramePool["Frame pool"]
     end
 
-    subgraph "Ruby (lib/sperf.rb)"
-        API["Sperf.start / Sperf.stop"]
+    subgraph "Ruby (lib/rperf.rb)"
+        API["Rperf.start / Rperf.stop"]
         Encoders["Encoders<br/>(PProf / Collapsed / Text)"]
         StatOut["stat output"]
     end
@@ -2458,18 +2508,18 @@ graph TD
     FramePool -->|resolved at stop| Encoders
     Encoders --> StatOut
 </div><details class="mermaid-source"><summary>mermaid source</summary><pre>graph TD
-    subgraph "C Extension (ext/sperf/sperf.c)"
+    subgraph "C Extension (ext/rperf/rperf.c)"
         Timer["Timer&lt;br/&gt;(signal or nanosleep)"]
         PJ["rb_postponed_job_trigger"]
-        Sample["Sample callback&lt;br/&gt;(sperf_sample_job)"]
+        Sample["Sample callback&lt;br/&gt;(rperf_sample_job)"]
         ThreadHook["Thread event hook&lt;br/&gt;(SUSPENDED/READY/RESUMED/EXITED)"]
         GCHook["GC event hook&lt;br/&gt;(ENTER/EXIT/START/END_MARK/END_SWEEP)"]
         SampleBuf["Sample buffer"]
         FramePool["Frame pool"]
     end
 
-    subgraph "Ruby (lib/sperf.rb)"
-        API["Sperf.start / Sperf.stop"]
+    subgraph "Ruby (lib/rperf.rb)"
+        API["Rperf.start / Rperf.stop"]
         Encoders["Encoders&lt;br/&gt;(PProf / Collapsed / Text)"]
         StatOut["stat output"]
     end
@@ -2488,7 +2538,7 @@ graph TD
 
 <h2 id="07-internals--global-profiler-state">7.2 Global profiler state</h2>
 
-<p>sperf uses a single global <code>sperf_profiler_t</code> struct. Only one profiling session can be active at a time (<span id="07-internals--idx-0">single session</span> limitation). The struct holds:</p>
+<p>rperf uses a single global <code>rperf_profiler_t</code> struct. Only one profiling session can be active at a time (<span id="07-internals--idx-0">single session</span> limitation). The struct holds:</p>
 
 <ul>
   <li>Timer configuration (frequency, mode, signal number)</li>
@@ -2501,11 +2551,11 @@ graph TD
 
 <h2 id="07-internals--timer-implementation">7.3 Timer implementation</h2>
 
-<p>sperf uses a timer to periodically trigger sampling. The timer implementation depends on the platform:</p>
+<p>rperf uses a timer to periodically trigger sampling. The timer implementation depends on the platform:</p>
 
 <h3 id="07-internals--linux-signal-based-timer-default">7.3.1 Linux: Signal-based timer (default)</h3>
 
-<p>On Linux, sperf uses <code>timer_create</code> with <code>SIGEV_SIGNAL</code> to deliver a real-time signal (default: <code>SIGRTMIN+8</code>) at the configured frequency. A <code>sigaction</code> handler calls <code>rb_postponed_job_trigger</code> to schedule the sampling callback.</p>
+<p>On Linux, rperf uses <code>timer_create</code> with <code>SIGEV_SIGNAL</code> to deliver a real-time signal (default: <code>SIGRTMIN+8</code>) at the configured frequency. A <code>sigaction</code> handler calls <code>rb_postponed_job_trigger</code> to schedule the sampling callback.</p>
 
 <div class="mermaid">
 sequenceDiagram
@@ -2517,7 +2567,7 @@ sequenceDiagram
     Kernel->>Signal: SIGRTMIN+8 (every 1ms at 1000Hz)
     Signal->>VM: rb_postponed_job_trigger()
     Note over VM: Continues until safepoint...
-    VM->>Job: sperf_sample_job()
+    VM->>Job: rperf_sample_job()
     Job->>Job: rb_profile_frames() + record sample
 </div><details class="mermaid-source"><summary>mermaid source</summary><pre>sequenceDiagram
     participant Kernel as Linux Kernel
@@ -2528,7 +2578,7 @@ sequenceDiagram
     Kernel-&gt;&gt;Signal: SIGRTMIN+8 (every 1ms at 1000Hz)
     Signal-&gt;&gt;VM: rb_postponed_job_trigger()
     Note over VM: Continues until safepoint...
-    VM-&gt;&gt;Job: sperf_sample_job()
+    VM-&gt;&gt;Job: rperf_sample_job()
     Job-&gt;&gt;Job: rb_profile_frames() + record sample
 </pre></details>
 
@@ -2536,7 +2586,7 @@ sequenceDiagram
 
 <h3 id="07-internals--fallback-nanosleep-thread">7.3.2 Fallback: nanosleep thread</h3>
 
-<p>On macOS, or when <code>signal: false</code> is set on Linux, sperf creates a dedicated pthread that loops with <code>nanosleep</code>:</p>
+<p>On macOS, or when <code>signal: false</code> is set on Linux, rperf creates a dedicated pthread that loops with <code>nanosleep</code>:</p>
 
 <pre><code class="language-c">while (prof-&gt;running) {
     rb_postponed_job_trigger(prof-&gt;pj_handle);
@@ -2548,19 +2598,19 @@ sequenceDiagram
 
 <h2 id="07-internals--sampling-current-thread-only">7.4 Sampling: current-thread-only</h2>
 
-<p>When the postponed job fires, <code>sperf_sample_job</code> runs on whatever thread currently holds the GVL. It only samples that thread using <code>rb_thread_current()</code>.</p>
+<p>When the postponed job fires, <code>rperf_sample_job</code> runs on whatever thread currently holds the GVL. It only samples that thread using <code>rb_thread_current()</code>.</p>
 
 <p>This is a deliberate design choice:</p>
 
 <ol>
   <li><code>rb_profile_frames</code> can only capture the current thread’s stack</li>
-  <li>There’s no need to iterate <code>Thread.list</code> — combined with GVL event hooks, sperf gets complete coverage of all threads</li>
+  <li>There’s no need to iterate <code>Thread.list</code> — combined with GVL event hooks, rperf gets broad coverage of all threads (though a <a href="#known-limitations">known race</a> in the Ruby VM can cause occasional missed samples)</li>
 </ol>
 
 <p>The sampling callback:</p>
 
 <ol>
-  <li>Gets or creates per-thread data (<code>sperf_thread_data_t</code>)</li>
+  <li>Gets or creates per-thread data (<code>rperf_thread_data_t</code>)</li>
   <li>Reads the current clock (<code>CLOCK_THREAD_CPUTIME_ID</code> for CPU mode, <code>CLOCK_MONOTONIC</code> for wall mode)</li>
   <li>Computes weight as <code>time_now - prev_time</code></li>
   <li>Captures the backtrace with <code>rb_profile_frames</code> directly into the frame pool</li>
@@ -2570,7 +2620,7 @@ sequenceDiagram
 
 <h2 id="07-internals--gvl-event-tracking-wall-mode">7.5 GVL event tracking (wall mode)</h2>
 
-<p>In wall mode, sperf hooks into Ruby’s thread event API to track GVL transitions. This captures time that sampling alone would miss — time spent off the GVL.</p>
+<p>In wall mode, rperf hooks into Ruby’s thread event API to track GVL transitions. This captures time that sampling alone would miss — time spent off the GVL.</p>
 
 <div class="mermaid">
 stateDiagram-v2
@@ -2619,7 +2669,7 @@ stateDiagram-v2
 
 <h2 id="07-internals--gc-phase-tracking">7.6 GC phase tracking</h2>
 
-<p>sperf hooks into Ruby’s internal GC events to track garbage collection time:</p>
+<p>rperf hooks into Ruby’s internal GC events to track garbage collection time:</p>
 
 <table>
   <thead>
@@ -2656,12 +2706,12 @@ stateDiagram-v2
 
 <h2 id="07-internals--deferred-string-resolution">7.7 Deferred string resolution</h2>
 
-<p>During sampling, sperf stores raw frame <code>VALUE</code>s (Ruby internal object references) in the <span id="07-internals--idx-1">frame pool</span> — not strings. This <span id="07-internals--idx-2">deferred string resolution</span> keeps the hot path allocation-free and fast.</p>
+<p>During sampling, rperf stores raw frame <code>VALUE</code>s (Ruby internal object references) in the <span id="07-internals--idx-1">frame pool</span> — not strings. This <span id="07-internals--idx-2">deferred string resolution</span> keeps the hot path allocation-free and fast.</p>
 
 <p>String resolution happens at stop time:</p>
 
 <ol>
-  <li><code>Sperf.stop</code> calls <code>_c_stop</code> which returns raw data</li>
+  <li><code>Rperf.stop</code> calls <code>_c_stop</code> which returns raw data</li>
   <li>For each frame VALUE, <code>rb_profile_frame_full_label</code> and <code>rb_profile_frame_path</code> are called to get human-readable strings</li>
   <li>These strings are then passed to the Ruby encoders</li>
 </ol>
@@ -2672,13 +2722,13 @@ stateDiagram-v2
 
 <p>The frame pool is a contiguous array of <code>VALUE</code>s that stores raw frame references from <code>rb_profile_frames</code>. Since these are Ruby object references, they must be protected from garbage collection.</p>
 
-<p>sperf wraps the profiler struct in a <code>TypedData</code> object with a custom <code>dmark</code> function that calls <code>rb_gc_mark_locations</code> on the entire frame pool. This tells the GC that all VALUEs in the pool are reachable and must not be collected.</p>
+<p>rperf wraps the profiler struct in a <code>TypedData</code> object with a custom <code>dmark</code> function that calls <code>rb_gc_mark_locations</code> on the entire frame pool. This tells the GC that all VALUEs in the pool are reachable and must not be collected.</p>
 
 <p>The frame pool starts at ~1MB and doubles in size via <code>realloc</code> when needed. Similarly, the sample buffer starts with 1024 entries and grows by 2x.</p>
 
 <h2 id="07-internals--per-thread-data">7.9 Per-thread data</h2>
 
-<p>Each thread gets a <code>sperf_thread_data_t</code> struct stored via Ruby’s thread-specific data API (<code>rb_internal_thread_specific_set</code>). This tracks:</p>
+<p>Each thread gets a <code>rperf_thread_data_t</code> struct stored via Ruby’s thread-specific data API (<code>rb_internal_thread_specific_set</code>). This tracks:</p>
 
 <ul>
   <li><code>prev_cpu_ns</code>: Previous CPU time reading (for computing weight)</li>
@@ -2692,7 +2742,7 @@ stateDiagram-v2
 
 <h2 id="07-internals--fork-safety">7.10 Fork safety</h2>
 
-<p>sperf registers a <code>pthread_atfork</code> child handler that silently stops profiling in the forked child process (<span id="07-internals--idx-3">fork safety</span>):</p>
+<p>rperf registers a <code>pthread_atfork</code> child handler that silently stops profiling in the forked child process (<span id="07-internals--idx-3">fork safety</span>):</p>
 
 <ul>
   <li>Clears the timer/signal state</li>
@@ -2704,7 +2754,7 @@ stateDiagram-v2
 
 <h2 id="07-internals--pprof-encoder">7.11 pprof encoder</h2>
 
-<p>sperf encodes the <span id="07-internals--cite-0">pprof<sup class="cite-ref"><a href="#bib-ren2010" title="Gang Ren and Eric Tune and Tipp Moseley and Yixin Shi and Silvius Rus and Robert Hundt. Google-Wide Profiling: A Continuous Profiling Infrastructure for Data Centers. IEEE Micro. Vol. 30. No. 4. pp. 65--79. 2010." onclick="showChapterAndScroll('__bibliography__', 'bib-ren2010'); return false;">[Gang, 2010]</a></sup></span> protobuf format entirely in Ruby, with no protobuf gem dependency. The encoder in <code>Sperf::PProf.encode</code>:</p>
+<p>rperf encodes the <span id="07-internals--cite-0">pprof<sup class="cite-ref"><a href="#bib-ren2010" title="Gang Ren and Eric Tune and Tipp Moseley and Yixin Shi and Silvius Rus and Robert Hundt. Google-Wide Profiling: A Continuous Profiling Infrastructure for Data Centers. IEEE Micro. Vol. 30. No. 4. pp. 65--79. 2010." onclick="showChapterAndScroll('__bibliography__', 'bib-ren2010'); return false;">[Gang, 2010]</a></sup></span> protobuf format entirely in Ruby, with no protobuf gem dependency. The encoder in <code>Rperf::PProf.encode</code>:</p>
 
 <ol>
   <li>Builds a string table (index 0 is always the empty string)</li>
@@ -2721,15 +2771,15 @@ stateDiagram-v2
 
 <p>There is a known race condition in the Ruby VM where <code>rb_postponed_job_trigger</code> from the timer thread may set the interrupt flag on the wrong thread’s execution context. This happens when a new thread’s native thread starts before acquiring the GVL. The result is that timer samples may miss threads doing C busy-wait, with their CPU time leaking into the next SUSPENDED event’s stack.</p>
 
-<p>This is a Ruby VM bug, not a sperf bug, and affects all postponed-job-based profilers.</p>
+<p>This is a Ruby VM bug, not a rperf bug, and affects all postponed-job-based profilers.</p>
 
 <h3 id="07-internals--single-session">7.12.2 Single session</h3>
 
-<p>Only one profiling session can be active at a time due to the global profiler state. Calling <code>Sperf.start</code> while already profiling is not supported.</p>
+<p>Only one profiling session can be active at a time due to the global profiler state. Calling <code>Rperf.start</code> while already profiling is not supported.</p>
 
 <h3 id="07-internals--method-level-granularity">7.12.3 Method-level granularity</h3>
 
-<p>sperf profiles at the method level, not the line level. Frame labels use <code>rb_profile_frame_full_label</code> for qualified names (e.g., <code>Integer#times</code>, <code>MyClass#method_name</code>). Line numbers are not included.</p>
+<p>rperf profiles at the method level, not the line level. Frame labels use <code>rb_profile_frame_full_label</code> for qualified names (e.g., <code>Integer#times</code>, <code>MyClass#method_name</code>). Line numbers are not included.</p>
 
     <div class="chapter-footer">This chapter was generated by AI. Accuracy is not guaranteed.</div>
     <nav class="chapter-nav">
@@ -2743,51 +2793,51 @@ stateDiagram-v2
 <h2 id="a1-reference--cli-cheat-sheet">A.1 CLI cheat sheet</h2>
 
 <pre><code class="language-bash"># Quick performance overview
-sperf stat ruby my_app.rb
+rperf stat ruby my_app.rb
 
-# Record to default file (sperf.data, pprof format, cpu mode)
-sperf record ruby my_app.rb
+# Record to default file (rperf.data, pprof format, cpu mode)
+rperf record ruby my_app.rb
 
 # Record with options
-sperf record -m wall -f 500 -o profile.pb.gz ruby my_app.rb
+rperf record -m wall -f 500 -o profile.pb.gz ruby my_app.rb
 
 # Record to text format
-sperf record -o profile.txt ruby my_app.rb
+rperf record -o profile.txt ruby my_app.rb
 
 # Record to collapsed stacks
-sperf record -o profile.collapsed ruby my_app.rb
+rperf record -o profile.collapsed ruby my_app.rb
 
 # View profile in browser (requires Go)
-sperf report
+rperf report
 
 # Print top functions
-sperf report --top profile.pb.gz
+rperf report --top profile.pb.gz
 
 # Compare two profiles
-sperf diff before.pb.gz after.pb.gz
+rperf diff before.pb.gz after.pb.gz
 
 # Full documentation
-sperf help
+rperf help
 </code></pre>
 
 <h2 id="a1-reference--ruby-api-cheat-sheet">A.2 Ruby API cheat sheet</h2>
 
-<pre><code class="language-ruby">require "sperf"
+<pre><code class="language-ruby">require "rperf"
 
 # Block form
-data = Sperf.start(output: "profile.pb.gz", mode: :cpu) do
+data = Rperf.start(output: "profile.pb.gz", mode: :cpu) do
   # code to profile
 end
 
 # Manual form
-Sperf.start(frequency: 1000, mode: :wall)
+Rperf.start(frequency: 1000, mode: :wall)
 # ...
-data = Sperf.stop
+data = Rperf.stop
 
 # Save to file
-Sperf.save("profile.pb.gz", data)
-Sperf.save("profile.collapsed", data)
-Sperf.save("profile.txt", data)
+Rperf.save("profile.pb.gz", data)
+Rperf.save("profile.collapsed", data)
+Rperf.save("profile.txt", data)
 </code></pre>
 
 <h2 id="a1-reference--environment-variables">A.3 Environment variables</h2>
@@ -2804,34 +2854,44 @@ Sperf.save("profile.txt", data)
   </thead>
   <tbody>
     <tr>
-      <td><code>SPERF_ENABLED</code></td>
+      <td><code>RPERF_ENABLED</code></td>
       <td><code>1</code></td>
       <td>Enable auto-start on require</td>
     </tr>
     <tr>
-      <td><code>SPERF_OUTPUT</code></td>
+      <td><code>RPERF_OUTPUT</code></td>
       <td>path</td>
       <td>Output file path</td>
     </tr>
     <tr>
-      <td><code>SPERF_FREQUENCY</code></td>
+      <td><code>RPERF_FREQUENCY</code></td>
       <td>integer</td>
       <td>Sampling frequency in Hz</td>
     </tr>
     <tr>
-      <td><code>SPERF_MODE</code></td>
+      <td><code>RPERF_MODE</code></td>
       <td><code>cpu</code>, <code>wall</code></td>
       <td>Profiling mode</td>
     </tr>
     <tr>
-      <td><code>SPERF_FORMAT</code></td>
+      <td><code>RPERF_FORMAT</code></td>
       <td><code>pprof</code>, <code>collapsed</code>, <code>text</code></td>
       <td>Output format</td>
     </tr>
     <tr>
-      <td><code>SPERF_VERBOSE</code></td>
+      <td><code>RPERF_VERBOSE</code></td>
       <td><code>1</code></td>
       <td>Print statistics to stderr</td>
+    </tr>
+    <tr>
+      <td><code>RPERF_STAT</code></td>
+      <td><code>1</code></td>
+      <td>Enable stat mode output</td>
+    </tr>
+    <tr>
+      <td><code>RPERF_STAT_COMMAND</code></td>
+      <td>string</td>
+      <td>Command string shown in stat output header</td>
     </tr>
   </tbody>
 </table>
@@ -2894,7 +2954,7 @@ Sperf.save("profile.txt", data)
     <tr>
       <td><code>.pb.gz</code> (default)</td>
       <td>pprof protobuf</td>
-      <td>Go (<code>sperf report</code>)</td>
+      <td>Go (<code>rperf report</code>)</td>
     </tr>
     <tr>
       <td><code>.collapsed</code></td>
@@ -3013,14 +3073,32 @@ Sperf.save("profile.txt", data)
       </dl>
     </div>
     <div class="index-group">
+      <h2 class="index-letter">R</h2>
+      <dl class="index-entries">
+        <dt>Rperf.save</dt>
+        <dd><a href="#04-library-usage--idx-2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-2'); return false;">4. Ruby API</a></dd>
+        <dt>Rperf.start</dt>
+        <dd><a href="#04-library-usage--idx-0" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-0'); return false;">4. Ruby API</a></dd>
+        <dt>Rperf.stop</dt>
+        <dd><a href="#04-library-usage--idx-1" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-1'); return false;">4. Ruby API</a></dd>
+        <dt>rperf</dt>
+        <dd><a href="#01-introduction--idx-0" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-0'); return false;">1. Introduction</a></dd>
+        <dt>rperf diff</dt>
+        <dd><a href="#03-cli-usage--idx-6" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--idx-6'); return false;">3. CLI Usage</a></dd>
+        <dt>rperf record</dt>
+        <dd><a href="#01-introduction--idx-14" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-14'); return false;">1. Introduction</a></dd>
+        <dd><a href="#03-cli-usage--idx-2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--idx-2'); return false;">3. CLI Usage</a></dd>
+        <dt>rperf report</dt>
+        <dd><a href="#01-introduction--idx-15" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-15'); return false;">1. Introduction</a></dd>
+        <dd><a href="#03-cli-usage--idx-5" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--idx-5'); return false;">3. CLI Usage</a></dd>
+        <dt>rperf stat</dt>
+        <dd><a href="#01-introduction--idx-13" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-13'); return false;">1. Introduction</a></dd>
+        <dd><a href="#03-cli-usage--idx-0" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--idx-0'); return false;">3. CLI Usage</a></dd>
+      </dl>
+    </div>
+    <div class="index-group">
       <h2 class="index-letter">S</h2>
       <dl class="index-entries">
-        <dt>Sperf.save</dt>
-        <dd><a href="#04-library-usage--idx-2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-2'); return false;">4. Ruby API</a></dd>
-        <dt>Sperf.start</dt>
-        <dd><a href="#04-library-usage--idx-0" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-0'); return false;">4. Ruby API</a></dd>
-        <dt>Sperf.stop</dt>
-        <dd><a href="#04-library-usage--idx-1" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-1'); return false;">4. Ruby API</a></dd>
         <dt>safepoint</dt>
         <dd><a href="#01-introduction--idx-1" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-1'); return false;">1. Introduction</a></dd>
         <dd><a href="#01-introduction--idx-11" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-11'); return false;">1. Introduction</a></dd>
@@ -3031,19 +3109,6 @@ Sperf.save("profile.txt", data)
         <dd><a href="#01-introduction--idx-2" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-2'); return false;">1. Introduction</a></dd>
         <dt>single session</dt>
         <dd><a href="#07-internals--idx-0" onclick="showChapterAndScroll('07-internals', '07-internals--idx-0'); return false;">7. Internals</a></dd>
-        <dt>sperf</dt>
-        <dd><a href="#01-introduction--idx-0" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-0'); return false;">1. Introduction</a></dd>
-        <dt>sperf diff</dt>
-        <dd><a href="#03-cli-usage--idx-6" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--idx-6'); return false;">3. CLI Usage</a></dd>
-        <dt>sperf record</dt>
-        <dd><a href="#01-introduction--idx-14" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-14'); return false;">1. Introduction</a></dd>
-        <dd><a href="#03-cli-usage--idx-2" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--idx-2'); return false;">3. CLI Usage</a></dd>
-        <dt>sperf report</dt>
-        <dd><a href="#01-introduction--idx-15" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-15'); return false;">1. Introduction</a></dd>
-        <dd><a href="#03-cli-usage--idx-5" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--idx-5'); return false;">3. CLI Usage</a></dd>
-        <dt>sperf stat</dt>
-        <dd><a href="#01-introduction--idx-13" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-13'); return false;">1. Introduction</a></dd>
-        <dd><a href="#03-cli-usage--idx-0" onclick="showChapterAndScroll('03-cli-usage', '03-cli-usage--idx-0'); return false;">3. CLI Usage</a></dd>
         <dt>synthetic frames</dt>
         <dd><a href="#01-introduction--idx-12" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-12'); return false;">1. Introduction</a></dd>
         <dd><a href="#06-interpreting-results--idx-3" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--idx-3'); return false;">6. Interpreting Results</a></dd>

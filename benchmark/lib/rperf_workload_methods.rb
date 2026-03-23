@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "sperf_workload"
+require "rperf_workload"
 
-module SperfWorkload
+module RperfWorkload
   # Pure Ruby busy-wait methods: rw1 ~ rw1000
   # Each method is defined separately so rb_profile_frame_label
   # returns a distinct name per method.
@@ -16,5 +16,5 @@ module SperfWorkload
   end
 
   # C-level busy-wait methods: cw1 ~ cw1000
-  # Defined in ext/sperf_workload/sperf_workload.c via rb_define_module_function
+  # Defined in ext/rperf_workload/rperf_workload.c via rb_define_module_function
 end

@@ -1,19 +1,19 @@
 require "test-unit"
-require "sperf"
+require "rperf"
 require "tempfile"
 require "zlib"
 
-class TestSperf < Test::Unit::TestCase
+class TestRperf < Test::Unit::TestCase
   def teardown
     # Ensure profiler is stopped after each test
-    Sperf.stop rescue nil
+    Rperf.stop rescue nil
   end
 
   def test_start_stop
-    Sperf.start(frequency: 100)
+    Rperf.start(frequency: 100)
     # Do some work
     1_000_000.times { 1 + 1 }
-    data = Sperf.stop
+    data = Rperf.stop
 
     assert_kind_of Hash, data
     assert_include data, :samples
@@ -22,9 +22,9 @@ class TestSperf < Test::Unit::TestCase
   end
 
   def test_cpu_bound_weight
-    Sperf.start(frequency: 1000)
+    Rperf.start(frequency: 1000)
     10_000_000.times { 1 + 1 }
-    data = Sperf.stop
+    data = Rperf.stop
 
     assert_not_nil data
     samples = data[:samples]
@@ -41,7 +41,7 @@ class TestSperf < Test::Unit::TestCase
   def test_profile_block
     Dir.mktmpdir do |dir|
       path = File.join(dir, "test.data")
-      Sperf.start(output: path, frequency: 500) do
+      Rperf.start(output: path, frequency: 500) do
         5_000_000.times { 1 + 1 }
       end
 
@@ -58,41 +58,41 @@ class TestSperf < Test::Unit::TestCase
   end
 
   def test_multithread
-    Sperf.start(frequency: 1000)
+    Rperf.start(frequency: 1000)
 
     threads = 4.times.map do
       Thread.new { 5_000_000.times { 1 + 1 } }
     end
     threads.each(&:join)
 
-    data = Sperf.stop
+    data = Rperf.stop
     assert_not_nil data
     assert_operator data[:samples].size, :>, 0, "Should have samples from threads"
   end
 
   def test_double_start_raises
-    Sperf.start(frequency: 100)
-    assert_raise(RuntimeError) { Sperf.start(frequency: 100) }
-    Sperf.stop
+    Rperf.start(frequency: 100)
+    assert_raise(RuntimeError) { Rperf.start(frequency: 100) }
+    Rperf.stop
   end
 
   def test_stop_without_start_returns_nil
-    assert_nil Sperf.stop
+    assert_nil Rperf.stop
   end
 
   def test_restart_clears_thread_state
     # First session
-    Sperf.start(frequency: 1000)
+    Rperf.start(frequency: 1000)
     1_000_000.times { 1 + 1 }
-    data1 = Sperf.stop
+    data1 = Rperf.stop
 
     # Sleep to create a gap between sessions
     sleep 0.2
 
     # Second session - weights should NOT include the 200ms gap
-    Sperf.start(frequency: 1000)
+    Rperf.start(frequency: 1000)
     1_000_000.times { 1 + 1 }
-    data2 = Sperf.stop
+    data2 = Rperf.stop
 
     assert_not_nil data1
     assert_not_nil data2
@@ -110,13 +110,13 @@ class TestSperf < Test::Unit::TestCase
   # Sample buffer initial capacity is 1024.
   # With 4 threads at 5000Hz, ~20000 samples/sec → crosses boundary quickly.
   def test_sample_buffer_realloc
-    Sperf.start(frequency: 5000)
+    Rperf.start(frequency: 5000)
 
     # Single thread: timer sampling fires reliably (~5000/sec) without
     # GVL contention, crossing the initial capacity of 1024 in ~0.3s.
     15_000_000.times { 1 + 1 }
 
-    data = Sperf.stop
+    data = Rperf.stop
     assert_not_nil data
     samples = data[:samples]
 
@@ -131,13 +131,13 @@ class TestSperf < Test::Unit::TestCase
   # Frame pool initial capacity is ~131K frames (1MB / 8 bytes per VALUE).
   # Use deep recursion + many threads to generate lots of frames quickly.
   def test_frame_pool_realloc
-    Sperf.start(frequency: 5000)
+    Rperf.start(frequency: 5000)
 
     # Single thread with deep recursion: each sample captures ~300 frames.
     # ~440+ samples × 300 depth > 131072 (initial 1MB pool).
     deep_recurse(300) { 5_000_000.times { 1 + 1 } }
 
-    data = Sperf.stop
+    data = Rperf.stop
     assert_not_nil data
     samples = data[:samples]
 
@@ -155,11 +155,11 @@ class TestSperf < Test::Unit::TestCase
 
   # Generate deep call stacks via recursion
   def test_deep_stack
-    Sperf.start(frequency: 1000)
+    Rperf.start(frequency: 1000)
 
     deep_recurse(200) { 5_000_000.times { 1 + 1 } }
 
-    data = Sperf.stop
+    data = Rperf.stop
     assert_not_nil data
     samples = data[:samples]
     assert_operator samples.size, :>, 0
@@ -173,7 +173,7 @@ class TestSperf < Test::Unit::TestCase
 
   # Threads created and destroyed during profiling
   def test_thread_churn
-    Sperf.start(frequency: 1000)
+    Rperf.start(frequency: 1000)
 
     20.times do
       threads = 4.times.map do
@@ -182,7 +182,7 @@ class TestSperf < Test::Unit::TestCase
       threads.each(&:join)
     end
 
-    data = Sperf.stop
+    data = Rperf.stop
     assert_not_nil data
     assert_operator data[:samples].size, :>, 0
     assert_valid_samples(data[:samples])
@@ -199,16 +199,16 @@ class TestSperf < Test::Unit::TestCase
     end
 
     # Session 1
-    Sperf.start(frequency: 1000)
+    Rperf.start(frequency: 1000)
     5_000_000.times { 1 + 1 }
-    data1 = Sperf.stop
+    data1 = Rperf.stop
 
     sleep 0.2
 
     # Session 2 - surviving worker thread must not carry stale state
-    Sperf.start(frequency: 1000)
+    Rperf.start(frequency: 1000)
     5_000_000.times { 1 + 1 }
-    data2 = Sperf.stop
+    data2 = Rperf.stop
 
     worker_running = false
     worker.join
@@ -225,9 +225,9 @@ class TestSperf < Test::Unit::TestCase
   # Multiple start/stop cycles to check no resource leaks cause crashes
   def test_repeated_start_stop
     10.times do |cycle|
-      Sperf.start(frequency: 1000)
+      Rperf.start(frequency: 1000)
       1_000_000.times { 1 + 1 }
-      data = Sperf.stop
+      data = Rperf.stop
 
       assert_not_nil data, "Cycle #{cycle}: stop should return data"
       assert_operator data[:samples].size, :>, 0, "Cycle #{cycle}: should have samples"
@@ -237,7 +237,7 @@ class TestSperf < Test::Unit::TestCase
   # --- GVL event tracking tests ---
 
   def test_gvl_blocked_frames_wall_mode
-    Sperf.start(frequency: 100, mode: :wall)
+    Rperf.start(frequency: 100, mode: :wall)
 
     # sleep releases GVL → triggers SUSPENDED/READY/RESUMED
     threads = 4.times.map do
@@ -245,7 +245,7 @@ class TestSperf < Test::Unit::TestCase
     end
     threads.each(&:join)
 
-    data = Sperf.stop
+    data = Rperf.stop
     assert_not_nil data
 
     labels = data[:samples].flat_map { |frames, _| frames.map { |_, label| label } }
@@ -257,14 +257,14 @@ class TestSperf < Test::Unit::TestCase
   end
 
   def test_gvl_events_cpu_mode_no_synthetic
-    Sperf.start(frequency: 100, mode: :cpu)
+    Rperf.start(frequency: 100, mode: :cpu)
 
     threads = 4.times.map do
       Thread.new { 20.times { sleep 0.002 } }
     end
     threads.each(&:join)
 
-    data = Sperf.stop
+    data = Rperf.stop
     assert_not_nil data
 
     labels = data[:samples].flat_map { |frames, _| frames.map { |_, label| label } }
@@ -275,7 +275,7 @@ class TestSperf < Test::Unit::TestCase
   end
 
   def test_gvl_wait_weight_positive
-    Sperf.start(frequency: 100, mode: :wall)
+    Rperf.start(frequency: 100, mode: :wall)
 
     # Multiple threads contending for GVL
     threads = 4.times.map do
@@ -283,7 +283,7 @@ class TestSperf < Test::Unit::TestCase
     end
     threads.each(&:join)
 
-    data = Sperf.stop
+    data = Rperf.stop
     assert_not_nil data
 
     gvl_samples = data[:samples].select { |frames, _|
@@ -298,7 +298,7 @@ class TestSperf < Test::Unit::TestCase
   def test_pprof_output
     Dir.mktmpdir do |dir|
       path = File.join(dir, "test.pb.gz")
-      Sperf.start(output: path, frequency: 500) do
+      Rperf.start(output: path, frequency: 500) do
         5_000_000.times { 1 + 1 }
       end
 
@@ -316,10 +316,10 @@ class TestSperf < Test::Unit::TestCase
   # --- CLI help subcommand test ---
 
   def test_cli_help_subcommand
-    exe = File.expand_path("../exe/sperf", __dir__)
+    exe = File.expand_path("../exe/rperf", __dir__)
     output = IO.popen([RbConfig.ruby, exe, "help"], &:read)
 
-    assert_equal 0, $?.exitstatus, "sperf help should exit 0"
+    assert_equal 0, $?.exitstatus, "rperf help should exit 0"
     assert_include output, "OVERVIEW"
     assert_include output, "CLI USAGE"
     assert_include output, "RUBY API"
@@ -336,9 +336,9 @@ class TestSperf < Test::Unit::TestCase
     old_stderr = $stderr
     $stderr = StringIO.new
 
-    Sperf.start(frequency: 500, mode: :wall, stat: true)
+    Rperf.start(frequency: 500, mode: :wall, stat: true)
     5_000_000.times { 1 + 1 }
-    data = Sperf.stop
+    data = Rperf.stop
 
     output = $stderr.string
     $stderr = old_stderr
@@ -365,15 +365,15 @@ class TestSperf < Test::Unit::TestCase
     # Capture stderr output
     old_stderr = $stderr
     $stderr = StringIO.new
-    ENV["SPERF_STAT_COMMAND"] = "ruby test.rb"
+    ENV["RPERF_STAT_COMMAND"] = "ruby test.rb"
 
-    Sperf.instance_variable_set(:@stat_start_mono,
+    Rperf.instance_variable_set(:@stat_start_mono,
       Process.clock_gettime(Process::CLOCK_MONOTONIC) - 0.2)
-    Sperf.print_stat(data)
+    Rperf.print_stat(data)
 
     output = $stderr.string
     $stderr = old_stderr
-    ENV.delete("SPERF_STAT_COMMAND")
+    ENV.delete("RPERF_STAT_COMMAND")
 
     assert_include output, "Performance stats for 'ruby test.rb'"
     assert_include output, "user"
@@ -405,7 +405,7 @@ class TestSperf < Test::Unit::TestCase
       mode: :cpu,
     }
 
-    result = Sperf::Text.encode(data)
+    result = Rperf::Text.encode(data)
 
     assert_include result, "Total: 3.5ms (cpu)"
     assert_include result, "Samples: 3"
@@ -420,7 +420,7 @@ class TestSperf < Test::Unit::TestCase
   def test_text_output
     Dir.mktmpdir do |dir|
       path = File.join(dir, "profile.txt")
-      Sperf.start(output: path, frequency: 500) do
+      Rperf.start(output: path, frequency: 500) do
         5_000_000.times { 1 + 1 }
       end
 
@@ -437,12 +437,12 @@ class TestSperf < Test::Unit::TestCase
 
   def test_save_text
     Dir.mktmpdir do |dir|
-      data = Sperf.start(frequency: 500) do
+      data = Rperf.start(frequency: 500) do
         5_000_000.times { 1 + 1 }
       end
 
       path = File.join(dir, "report.dat")
-      Sperf.save(path, data, format: :text)
+      Rperf.save(path, data, format: :text)
 
       content = File.read(path)
       assert_include content, "Total:"
@@ -453,7 +453,7 @@ class TestSperf < Test::Unit::TestCase
 
   def test_text_encode_empty
     data = { samples: [], frequency: 100, mode: :cpu }
-    result = Sperf::Text.encode(data)
+    result = Rperf::Text.encode(data)
     assert_equal "No samples recorded.\n", result
   end
 
@@ -470,7 +470,7 @@ class TestSperf < Test::Unit::TestCase
       mode: :cpu,
     }
 
-    result = Sperf::Collapsed.encode(data)
+    result = Rperf::Collapsed.encode(data)
     lines = result.strip.split("\n")
 
     assert_equal 2, lines.size
@@ -489,7 +489,7 @@ class TestSperf < Test::Unit::TestCase
   def test_collapsed_output
     Dir.mktmpdir do |dir|
       path = File.join(dir, "test.collapsed")
-      Sperf.start(output: path, frequency: 500) do
+      Rperf.start(output: path, frequency: 500) do
         5_000_000.times { 1 + 1 }
       end
 
@@ -515,12 +515,12 @@ class TestSperf < Test::Unit::TestCase
   def test_save_collapsed
     Dir.mktmpdir do |dir|
       # Collect some data
-      data = Sperf.start(frequency: 500) do
+      data = Rperf.start(frequency: 500) do
         5_000_000.times { 1 + 1 }
       end
 
       path = File.join(dir, "test.txt")
-      Sperf.save(path, data, format: :collapsed)
+      Rperf.save(path, data, format: :collapsed)
 
       content = File.read(path)
       lines = content.strip.split("\n")
@@ -537,19 +537,19 @@ class TestSperf < Test::Unit::TestCase
   # --- Fork safety tests ---
 
   def test_fork_stops_profiling_in_child
-    Sperf.start(frequency: 100)
+    Rperf.start(frequency: 100)
 
     rd, wr = IO.pipe
     pid = fork do
       rd.close
       # In child: profiling should be silently stopped
-      result = Sperf.stop
+      result = Rperf.stop
       wr.puts(result.nil? ? "nil" : "not_nil")
 
       # Should be able to start a new session in child
-      Sperf.start(frequency: 100)
+      Rperf.start(frequency: 100)
       1_000_000.times { 1 + 1 }
-      data = Sperf.stop
+      data = Rperf.stop
       wr.puts(data.nil? ? "no_data" : "has_data")
       wr.close
     end
@@ -560,12 +560,12 @@ class TestSperf < Test::Unit::TestCase
     _, status = Process.waitpid2(pid)
 
     assert status.success?, "Child process should exit successfully"
-    assert_equal "nil", lines[0], "Sperf.stop in child should return nil"
+    assert_equal "nil", lines[0], "Rperf.stop in child should return nil"
     assert_equal "has_data", lines[1], "New profiling session in child should work"
 
     # Parent profiling should continue normally
     1_000_000.times { 1 + 1 }
-    data = Sperf.stop
+    data = Rperf.stop
     assert_not_nil data, "Parent profiling should still work after fork"
     assert_operator data[:samples].size, :>, 0
   end

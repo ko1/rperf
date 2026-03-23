@@ -1,13 +1,13 @@
 # CLI Usage
 
-sperf provides a perf-like command-line interface with four main subcommands: `record`, `stat`, `report`, and `diff`.
+rperf provides a perf-like command-line interface with four main subcommands: `record`, `stat`, `report`, and `diff`.
 
-## sperf stat
+## rperf stat
 
-[`sperf stat`](#index:sperf stat) is the quickest way to get a performance overview. It runs your command with [wall](#index:wall mode)-mode profiling and prints a summary to stderr.
+[`rperf stat`](#index:rperf stat) is the quickest way to get a performance overview. It runs your command with [wall](#index:wall mode)-mode profiling and prints a summary to stderr.
 
 ```bash
-sperf stat ruby my_app.rb
+rperf stat ruby my_app.rb
 ```
 
 ### Example: CPU-bound program
@@ -23,10 +23,10 @@ end
 fib(35)
 ```
 
-Running `sperf stat`:
+Running `rperf stat`:
 
 ```bash
-sperf stat ruby fib.rb
+rperf stat ruby fib.rb
 ```
 
 ```
@@ -78,10 +78,10 @@ end
 end
 ```
 
-Running `sperf stat`:
+Running `rperf stat`:
 
 ```bash
-sperf stat ruby mixed.rb
+rperf stat ruby mixed.rb
 ```
 
 Because `stat` always uses wall mode, you can see how time is divided between CPU and I/O. The `[Ruby] GVL blocked` line shows time spent sleeping/in I/O, while `CPU execution` shows compute time.
@@ -89,7 +89,7 @@ Because `stat` always uses wall mode, you can see how time is divided between CP
 ### stat options
 
 ```bash
-sperf stat [options] command [args...]
+rperf stat [options] command [args...]
 ```
 
 | Option | Description |
@@ -98,64 +98,64 @@ sperf stat [options] command [args...]
 | `-f HZ` | Sampling frequency in Hz (default: 1000) |
 | `-v` | Print additional sampling statistics |
 
-## sperf record
+## rperf record
 
-[`sperf record`](#index:sperf record) profiles a command and saves the result to a file. This is the primary way to capture profiles for detailed analysis.
+[`rperf record`](#index:rperf record) profiles a command and saves the result to a file. This is the primary way to capture profiles for detailed analysis.
 
 ```bash
-sperf record ruby my_app.rb
+rperf record ruby my_app.rb
 ```
 
-By default, it saves to `sperf.data` in pprof format with CPU mode.
+By default, it saves to `rperf.data` in pprof format with CPU mode.
 
 ### Example: Recording a profile
 
 ```bash
-sperf record ruby fib.rb
+rperf record ruby fib.rb
 ```
 
-This creates `sperf.data`. You can then analyze it with `sperf report` or other pprof-compatible tools.
+This creates `rperf.data`. You can then analyze it with `rperf report` or other pprof-compatible tools.
 
 ### Choosing a profiling mode
 
-sperf supports two profiling modes:
+rperf supports two profiling modes:
 
 - **[cpu](#index:cpu mode)** (default): Measures per-thread CPU time. Best for finding functions that consume CPU cycles. Ignores time spent sleeping, in I/O, or waiting for the GVL.
 - **[wall](#index:wall mode)**: Measures wall-clock time. Best for finding where wall time goes, including I/O, sleep, and GVL contention.
 
 ```bash
 # CPU mode (default)
-sperf record ruby my_app.rb
+rperf record ruby my_app.rb
 
 # Wall mode
-sperf record -m wall ruby my_app.rb
+rperf record -m wall ruby my_app.rb
 ```
 
 ### Choosing an output format
 
-sperf auto-detects the format from the file extension:
+rperf auto-detects the format from the file extension:
 
 ```bash
 # pprof format (default)
-sperf record -o profile.pb.gz ruby my_app.rb
+rperf record -o profile.pb.gz ruby my_app.rb
 
 # Collapsed stacks (for FlameGraph / speedscope)
-sperf record -o profile.collapsed ruby my_app.rb
+rperf record -o profile.collapsed ruby my_app.rb
 
 # Human-readable text
-sperf record -o profile.txt ruby my_app.rb
+rperf record -o profile.txt ruby my_app.rb
 ```
 
 You can also force the format explicitly:
 
 ```bash
-sperf record --format text -o profile.dat ruby my_app.rb
+rperf record --format text -o profile.dat ruby my_app.rb
 ```
 
 ### Example: Text output
 
 ```bash
-sperf record -o profile.txt ruby fib.rb
+rperf record -o profile.txt ruby fib.rb
 ```
 
 The text output looks like this:
@@ -175,7 +175,7 @@ Cumulative:
 ### Example: Wall mode text output
 
 ```bash
-sperf record -m wall -o wall_profile.txt ruby mixed.rb
+rperf record -m wall -o wall_profile.txt ruby mixed.rb
 ```
 
 ```
@@ -207,49 +207,49 @@ In wall mode, `[GVL blocked]` appears as the dominant cost — this is the sleep
 The `-v` flag prints sampling statistics to stderr during profiling:
 
 ```bash
-sperf record -v ruby my_app.rb
+rperf record -v ruby my_app.rb
 ```
 
 ```
-[sperf] mode=cpu frequency=1000Hz
-[sperf] sampling: 98 calls, 0.11ms total, 1.1us/call avg
-[sperf] samples recorded: 904
-[sperf] top 10 by flat:
-[sperf]       53.4ms  50.1%  Object#cpu_work (-e)
-[sperf]       17.0ms  15.9%  Integer#times (<internal:numeric>)
+[rperf] mode=cpu frequency=1000Hz
+[rperf] sampling: 98 calls, 0.11ms total, 1.1us/call avg
+[rperf] samples recorded: 904
+[rperf] top 10 by flat:
+[rperf]       53.4ms  50.1%  Object#cpu_work (-e)
+[rperf]       17.0ms  15.9%  Integer#times (<internal:numeric>)
 ...
 ```
 
 ### record options
 
 ```bash
-sperf record [options] command [args...]
+rperf record [options] command [args...]
 ```
 
 | Option | Description |
 |--------|-------------|
-| `-o PATH` | Output file (default: `sperf.data`) |
+| `-o PATH` | Output file (default: `rperf.data`) |
 | `-f HZ` | Sampling frequency in Hz (default: 1000) |
 | `-m MODE` | `cpu` or `wall` (default: `cpu`) |
 | `--format FMT` | `pprof`, `collapsed`, or `text` (default: auto from extension) |
 | `-v` | Print sampling statistics to stderr |
 
-## sperf report
+## rperf report
 
-[`sperf report`](#index:sperf report) opens a pprof profile for analysis. It wraps `go tool pprof` and requires Go to be installed.
+[`rperf report`](#index:rperf report) opens a pprof profile for analysis. It wraps `go tool pprof` and requires Go to be installed.
 
 ```bash
 # Open interactive web UI (default)
-sperf report
+rperf report
 
 # Open a specific file
-sperf report profile.pb.gz
+rperf report profile.pb.gz
 
 # Print top functions
-sperf report --top
+rperf report --top
 
 # Print pprof text summary
-sperf report --text
+rperf report --text
 ```
 
 ### Example: Top and text output
@@ -257,7 +257,7 @@ sperf report --text
 Using the `fib.rb` profile recorded earlier:
 
 ```bash
-sperf report --top sperf.data
+rperf report --top rperf.data
 ```
 
 ```
@@ -278,42 +278,42 @@ The default behavior (without `--top` or `--text`) opens an interactive web UI i
 | `--text` | Print pprof text summary |
 | (default) | Open interactive web UI in browser |
 
-## sperf diff
+## rperf diff
 
-[`sperf diff`](#index:sperf diff) compares two pprof profiles, showing the difference (target - base). This is useful for measuring the impact of optimizations.
+[`rperf diff`](#index:rperf diff) compares two pprof profiles, showing the difference (target - base). This is useful for measuring the impact of optimizations.
 
 ```bash
 # Open diff in browser
-sperf diff before.pb.gz after.pb.gz
+rperf diff before.pb.gz after.pb.gz
 
 # Print top functions by diff
-sperf diff --top before.pb.gz after.pb.gz
+rperf diff --top before.pb.gz after.pb.gz
 
 # Print text diff
-sperf diff --text before.pb.gz after.pb.gz
+rperf diff --text before.pb.gz after.pb.gz
 ```
 
 ### Workflow example
 
 ```bash
 # Profile the baseline
-sperf record -o before.pb.gz ruby my_app.rb
+rperf record -o before.pb.gz ruby my_app.rb
 
 # Make your optimization changes...
 
 # Profile again
-sperf record -o after.pb.gz ruby my_app.rb
+rperf record -o after.pb.gz ruby my_app.rb
 
 # Compare
-sperf diff before.pb.gz after.pb.gz
+rperf diff before.pb.gz after.pb.gz
 ```
 
-## sperf help
+## rperf help
 
-`sperf help` prints the full reference documentation, including profiling modes, output formats, synthetic frames, and diagnostic tips.
+`rperf help` prints the full reference documentation, including profiling modes, output formats, synthetic frames, and diagnostic tips.
 
 ```bash
-sperf help
+rperf help
 ```
 
 This outputs detailed documentation suitable for both human reading and AI-assisted analysis.

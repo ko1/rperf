@@ -44,7 +44,7 @@ def run_pprof_subcommand(name, banner, min_files:)
   end
 
   files = ARGV.shift(min_files > 1 ? [ARGV.size, min_files].min : 1)
-  files = ["sperf.data"] if files.empty? && min_files == 1
+  files = ["rperf.data"] if files.empty? && min_files == 1
 
   if min_files > 1 && files.size < min_files
     $stderr.puts "Two profile files required."
@@ -60,7 +60,7 @@ def run_pprof_subcommand(name, banner, min_files:)
   end
 
   unless system("go", "version", out: File::NULL, err: File::NULL)
-    $stderr.puts "'go' command not found. Install Go to use 'sperf #{name}'."
+    $stderr.puts "'go' command not found. Install Go to use 'rperf #{name}'."
     $stderr.puts "  https://go.dev/dl/"
     exit 1
   end
@@ -70,22 +70,22 @@ end
 
 HELP_TEXT = File.read(File.expand_path("../docs/help.md", __dir__))
 
-USAGE = "Usage: sperf record [options] command [args...]\n" \
-       "       sperf stat [options] command [args...]\n" \
-       "       sperf report [options] [file]\n" \
-       "       sperf diff [options] base.pb.gz target.pb.gz\n" \
-       "       sperf help\n"
+USAGE = "Usage: rperf record [options] command [args...]\n" \
+       "       rperf stat [options] command [args...]\n" \
+       "       rperf report [options] [file]\n" \
+       "       rperf diff [options] base.pb.gz target.pb.gz\n" \
+       "       rperf help\n"
 
 # Handle top-level flags before subcommand parsing
 case ARGV.first
 when "-v", "--version"
-  require "sperf"
-  puts "sperf #{Sperf::VERSION}"
+  require "rperf"
+  puts "rperf #{Rperf::VERSION}"
   exit
 when "-h", "--help"
   puts USAGE
   puts
-  puts "Run 'sperf help' for full documentation"
+  puts "Run 'rperf help' for full documentation"
   exit
 end
 
@@ -97,9 +97,9 @@ when "help"
   exit
 when "report"
   run_pprof_subcommand("report",
-    "Usage: sperf report [options] [file]\n" \
+    "Usage: rperf report [options] [file]\n" \
     "       Opens pprof profile in browser (default) or prints summary.\n" \
-    "       Default file: sperf.data",
+    "       Default file: rperf.data",
     min_files: 1) do |mode, files|
     report_file = files[0]
     case mode
@@ -110,7 +110,7 @@ when "report"
   end
 when "diff"
   run_pprof_subcommand("diff",
-    "Usage: sperf diff [options] base.pb.gz target.pb.gz\n" \
+    "Usage: rperf diff [options] base.pb.gz target.pb.gz\n" \
     "       Compare two pprof profiles (shows target - base).",
     min_files: 2) do |mode, files|
     base_file, target_file = files
@@ -128,7 +128,7 @@ else
   exit 1
 end
 
-output = (subcommand == "stat") ? nil : "sperf.data"
+output = (subcommand == "stat") ? nil : "rperf.data"
 frequency = 1000
 mode = (subcommand == "stat") ? "wall" : "cpu"
 format = nil
@@ -138,7 +138,7 @@ verbose = false
 parser = OptionParser.new do |opts|
   opts.banner = USAGE
 
-  opts.on("-o", "--output PATH", "Output file#{subcommand == 'stat' ? ' (default: none)' : ' (default: sperf.data)'}") do |v|
+  opts.on("-o", "--output PATH", "Output file#{subcommand == 'stat' ? ' (default: none)' : ' (default: rperf.data)'}") do |v|
     output = v
   end
 
@@ -168,7 +168,7 @@ parser = OptionParser.new do |opts|
   opts.on("-h", "--help", "Show this help") do
     puts opts
     puts
-    puts "Run 'sperf help' for full documentation (modes, formats, diagnostics guide, etc.)"
+    puts "Run 'rperf help' for full documentation (modes, formats, diagnostics guide, etc.)"
     exit
   end
 end
@@ -187,21 +187,21 @@ if ARGV.empty?
   exit 1
 end
 
-# Add lib dir to RUBYLIB so -rsperf can find the extension
+# Add lib dir to RUBYLIB so -rrperf can find the extension
 lib_dir = File.expand_path("../lib", __dir__)
 ENV["RUBYLIB"] = [lib_dir, ENV["RUBYLIB"]].compact.join(File::PATH_SEPARATOR)
-ENV["RUBYOPT"] = "-rsperf #{ENV['RUBYOPT']}".strip
-ENV["SPERF_ENABLED"] = "1"
-ENV["SPERF_OUTPUT"] = output if output
-ENV["SPERF_FREQUENCY"] = frequency.to_s
-ENV["SPERF_MODE"] = mode
-ENV["SPERF_FORMAT"] = format if format
-ENV["SPERF_VERBOSE"] = "1" if verbose
-ENV["SPERF_SIGNAL"] = signal if signal
+ENV["RUBYOPT"] = "-rrperf #{ENV['RUBYOPT']}".strip
+ENV["RPERF_ENABLED"] = "1"
+ENV["RPERF_OUTPUT"] = output if output
+ENV["RPERF_FREQUENCY"] = frequency.to_s
+ENV["RPERF_MODE"] = mode
+ENV["RPERF_FORMAT"] = format if format
+ENV["RPERF_VERBOSE"] = "1" if verbose
+ENV["RPERF_SIGNAL"] = signal if signal
 
 if subcommand == "stat"
-  ENV["SPERF_STAT"] = "1"
-  ENV["SPERF_STAT_COMMAND"] = ARGV.join(" ")
+  ENV["RPERF_STAT"] = "1"
+  ENV["RPERF_STAT_COMMAND"] = ARGV.join(" ")
 end
 
 exec(*ARGV)

@@ -1,21 +1,21 @@
-# sperf - safepoint-based sampling performance profiler for Ruby
+# rperf - safepoint-based sampling performance profiler for Ruby
 
 ## OVERVIEW
 
-sperf profiles Ruby programs by sampling at safepoints and using actual
+rperf profiles Ruby programs by sampling at safepoints and using actual
 time deltas (nanoseconds) as weights to correct safepoint bias.
 POSIX systems (Linux, macOS). Requires Ruby >= 3.4.0.
 
 ## CLI USAGE
 
-    sperf record [options] command [args...]
-    sperf stat [options] command [args...]
-    sperf report [options] [file]
-    sperf help
+    rperf record [options] command [args...]
+    rperf stat [options] command [args...]
+    rperf report [options] [file]
+    rperf help
 
 ### record: Profile and save to file.
 
-    -o, --output PATH       Output file (default: sperf.data)
+    -o, --output PATH       Output file (default: rperf.data)
     -f, --frequency HZ      Sampling frequency in Hz (default: 1000)
     -m, --mode MODE         cpu or wall (default: cpu)
     --format FORMAT         pprof, collapsed, or text (default: auto from extension)
@@ -42,7 +42,7 @@ GVL wait, GC marking, GC sweeping), and top 5 hot functions.
     --text                  Print text report
 
 Default (no flag): opens interactive web UI in browser.
-Default file: sperf.data
+Default file: rperf.data
 
 ### diff: Compare two pprof profiles (target - base). Requires Go.
 
@@ -53,40 +53,40 @@ Default (no flag): opens diff in browser.
 
 ### Examples
 
-    sperf record ruby app.rb
-    sperf record -o profile.pb.gz ruby app.rb
-    sperf record -m wall -f 500 -o profile.pb.gz ruby server.rb
-    sperf record -o profile.collapsed ruby app.rb
-    sperf record -o profile.txt ruby app.rb
-    sperf stat ruby app.rb
-    sperf stat -o profile.pb.gz ruby app.rb
-    sperf report
-    sperf report --top profile.pb.gz
-    sperf diff before.pb.gz after.pb.gz
-    sperf diff --top before.pb.gz after.pb.gz
+    rperf record ruby app.rb
+    rperf record -o profile.pb.gz ruby app.rb
+    rperf record -m wall -f 500 -o profile.pb.gz ruby server.rb
+    rperf record -o profile.collapsed ruby app.rb
+    rperf record -o profile.txt ruby app.rb
+    rperf stat ruby app.rb
+    rperf stat -o profile.pb.gz ruby app.rb
+    rperf report
+    rperf report --top profile.pb.gz
+    rperf diff before.pb.gz after.pb.gz
+    rperf diff --top before.pb.gz after.pb.gz
 
 ## RUBY API
 
 ```ruby
-require "sperf"
+require "rperf"
 
 # Block form (recommended) — profiles the block and writes to file
-Sperf.start(output: "profile.pb.gz", frequency: 500, mode: :cpu) do
+Rperf.start(output: "profile.pb.gz", frequency: 500, mode: :cpu) do
   # code to profile
 end
 
 # Manual start/stop — returns data hash for programmatic use
-Sperf.start(frequency: 1000, mode: :wall)
+Rperf.start(frequency: 1000, mode: :wall)
 # ... code to profile ...
-data = Sperf.stop
+data = Rperf.stop
 
 # Save data to file later
-Sperf.save("profile.pb.gz", data)
-Sperf.save("profile.collapsed", data)
-Sperf.save("profile.txt", data)
+Rperf.save("profile.pb.gz", data)
+Rperf.save("profile.collapsed", data)
+Rperf.save("profile.txt", data)
 ```
 
-### Sperf.start parameters
+### Rperf.start parameters
 
     frequency:  Sampling frequency in Hz (Integer, default: 1000)
     mode:       :cpu or :wall (Symbol, default: :cpu)
@@ -94,7 +94,7 @@ Sperf.save("profile.txt", data)
     verbose:    Print statistics to stderr (true/false, default: false)
     format:     :pprof, :collapsed, :text, or nil for auto-detect (Symbol or nil)
 
-### Sperf.stop return value
+### Rperf.stop return value
 
 nil if profiler was not running; otherwise a Hash:
 
@@ -111,7 +111,7 @@ nil if profiler was not running; otherwise a Hash:
   ] }                      #   seq: Integer (thread sequence, 1-based)
 ```
 
-### Sperf.save(path, data, format: nil)
+### Rperf.save(path, data, format: nil)
 
 Writes data to path. format: :pprof, :collapsed, or :text.
 nil auto-detects from extension.
@@ -137,7 +137,7 @@ View with: `go tool pprof`, pprof-rs, or speedscope (via import).
 
 Embedded metadata:
 
-    comment         sperf version, mode, frequency, Ruby version
+    comment         rperf version, mode, frequency, Ruby version
     time_nanos      profile collection start time (epoch nanoseconds)
     duration_nanos  profile duration (nanoseconds)
     doc_url         link to this documentation
@@ -189,7 +189,7 @@ The `--format` flag (CLI) or `format:` parameter (API) overrides auto-detect.
 
 ## SYNTHETIC FRAMES
 
-In wall mode, sperf adds synthetic frames that represent non-CPU time:
+In wall mode, rperf adds synthetic frames that represent non-CPU time:
 
 - **[GVL blocked]** — Time the thread spent off-GVL (I/O, sleep, C extension
   releasing GVL). Attributed to the stack at SUSPENDED.
@@ -273,14 +273,14 @@ Or convert to text with pprof CLI:
 
 Used internally by the CLI to pass options to the auto-started profiler:
 
-    SPERF_ENABLED=1       Enable auto-start on require
-    SPERF_OUTPUT=path     Output file path
-    SPERF_FREQUENCY=hz    Sampling frequency
-    SPERF_MODE=cpu|wall   Profiling mode
-    SPERF_FORMAT=fmt      pprof, collapsed, or text
-    SPERF_VERBOSE=1       Print statistics
-    SPERF_SIGNAL=N|false  Timer signal number or 'false' for nanosleep (Linux only)
-    SPERF_STAT=1          Enable stat mode (used by sperf stat)
+    RPERF_ENABLED=1       Enable auto-start on require
+    RPERF_OUTPUT=path     Output file path
+    RPERF_FREQUENCY=hz    Sampling frequency
+    RPERF_MODE=cpu|wall   Profiling mode
+    RPERF_FORMAT=fmt      pprof, collapsed, or text
+    RPERF_VERBOSE=1       Print statistics
+    RPERF_SIGNAL=N|false  Timer signal number or 'false' for nanosleep (Linux only)
+    RPERF_STAT=1          Enable stat mode (used by rperf stat)
 
 ## TIPS
 

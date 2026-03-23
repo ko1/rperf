@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Profiler runner for sperf accuracy benchmarks.
+# Profiler runner for rperf accuracy benchmarks.
 #
 # Runs a workload script under a specified profiler and outputs stats to stdout.
 #
@@ -9,21 +9,21 @@
 #   ruby profrun.rb [options] SCRIPT
 #
 # Options:
-#   -P, --profiler NAME    sperf, stackprof, vernier, pf2, none (default: sperf)
+#   -P, --profiler NAME    rperf, stackprof, vernier, pf2, none (default: rperf)
 #   -m, --mode MODE        cpu or wall (default: cpu)
 #   -F, --frequency HZ     Sampling frequency (default: 1000)
 #   -o, --output FILE      Profiler output file path (required for profilers that produce output)
 
 require "optparse"
 
-profiler = "sperf"
+profiler = "rperf"
 mode = :cpu
 frequency = 1000
 output_path = nil
 
 parser = OptionParser.new do |opts|
   opts.banner = "Usage: profrun.rb [options] SCRIPT"
-  opts.on("-P", "--profiler NAME", "Profiler: sperf, stackprof, vernier, pf2, none (default: sperf)") { |v| profiler = v }
+  opts.on("-P", "--profiler NAME", "Profiler: rperf, stackprof, vernier, pf2, none (default: rperf)") { |v| profiler = v }
   opts.on("-m", "--mode MODE", "Profiling mode: cpu or wall (default: cpu)") { |v| mode = v.to_sym }
   opts.on("-F", "--frequency HZ", Integer, "Sampling frequency in Hz (default: 1000)") { |v| frequency = v }
   opts.on("-o", "--output FILE", "Profiler output file path") { |v| output_path = v }
@@ -39,14 +39,14 @@ $LOAD_PATH.unshift(File.join(__dir__, "..", "lib"))
 $LOAD_PATH.unshift(File.join(__dir__, "lib"))
 
 # Require workload methods
-require "sperf_workload_methods"
+require "rperf_workload_methods"
 
 # Start profiler
 case profiler
-when "sperf"
-  require "sperf"
+when "rperf"
+  require "rperf"
   t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-  Sperf.start(frequency: frequency, mode: mode)
+  Rperf.start(frequency: frequency, mode: mode)
 when "stackprof"
   require "stackprof"
   sp_mode = mode == :wall ? :wall : :cpu
@@ -81,15 +81,15 @@ load script unless profiler == "pf2"
 
 # Stop profiler and save output
 case profiler
-when "sperf"
-  data = Sperf.stop
+when "rperf"
+  data = Rperf.stop
   elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
   puts "elapsed_ms=#{(elapsed * 1000).round(1)}"
   puts "sampling_count=#{data[:sampling_count]}"
   puts "sampling_time_ns=#{data[:sampling_time_ns]}"
   if output_path
-    encoded = Sperf::PProf.encode(data)
-    File.binwrite(output_path, Sperf.gzip(encoded))
+    encoded = Rperf::PProf.encode(data)
+    File.binwrite(output_path, Rperf.gzip(encoded))
   end
 when "stackprof"
   result = StackProf.stop

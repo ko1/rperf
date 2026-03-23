@@ -1,10 +1,10 @@
-# sperf guide
+# rperf guide
 
-![sperf logo](images/logo.svg)
+![rperf logo](images/logo.svg)
 
 A safepoint-based sampling performance profiler for Ruby.
 
-sperf profiles your Ruby programs by sampling at safepoints and using actual time deltas as weights to correct safepoint bias. It provides a `perf`-like CLI, a Ruby API, and outputs pprof, collapsed stacks, and text report formats.
+rperf profiles your Ruby programs by sampling at safepoints and using actual time deltas as weights to correct safepoint bias. It provides a `perf`-like CLI, a Ruby API, and outputs pprof, collapsed stacks, and text report formats.
 
 **Key features:**
 

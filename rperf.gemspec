@@ -1,19 +1,19 @@
-require_relative "lib/sperf/version"
+require_relative "lib/rperf/version"
 
 Gem::Specification.new do |spec|
-  spec.name          = "sperf"
-  spec.version       = Sperf::VERSION
+  spec.name          = "rperf"
+  spec.version       = Rperf::VERSION
   spec.authors       = ["Koichi Sasada"]
   spec.summary       = "Safepoint-based sampling performance profiler for Ruby"
   spec.description   = "A safepoint-based sampling performance profiler that uses thread CPU time deltas as weights to correct safepoint bias. Outputs pprof, collapsed stacks, or text report."
-  spec.homepage      = "https://github.com/ko1/sperf"
+  spec.homepage      = "https://github.com/ko1/rperf"
   spec.license       = "MIT"
   spec.required_ruby_version = ">= 3.4.0"
 
   spec.files         = Dir["lib/**/*.rb", "ext/**/*.{c,h,rb}", "exe/*", "docs/help.md", "LICENSE", "README.md"]
   spec.bindir        = "exe"
-  spec.executables   = ["sperf"]
-  spec.extensions    = ["ext/sperf/extconf.rb"]
+  spec.executables   = ["rperf"]
+  spec.extensions    = ["ext/rperf/extconf.rb"]
   spec.require_paths = ["lib"]
 
   spec.add_development_dependency "rake-compiler", "~> 1.2"

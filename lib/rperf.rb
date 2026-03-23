@@ -1,17 +1,17 @@
-require "sperf/version"
+require "rperf/version"
 require "zlib"
 require "stringio"
 
 begin
   # gem install
-  require "sperf.so"
+  require "rperf.so"
 rescue LoadError
   # local development
   require 'rbconfig'
-  require_relative "../tmp/#{RbConfig::CONFIG['arch']}/sperf/#{RbConfig::CONFIG['RUBY_PROGRAM_VERSION']}/sperf.so"
+  require_relative "../tmp/#{RbConfig::CONFIG['arch']}/rperf/#{RbConfig::CONFIG['RUBY_PROGRAM_VERSION']}/rperf.so"
 end
 
-module Sperf
+module Rperf
 
   @verbose = false
   @output = nil
@@ -26,7 +26,7 @@ module Sperf
   #   .txt       → text report (human/AI readable flat + cumulative table)
   #   otherwise (.pb.gz etc) → pprof protobuf (gzip compressed)
   def self.start(frequency: 1000, mode: :cpu, output: nil, verbose: false, format: nil, stat: false, signal: nil)
-    @verbose = verbose || ENV["SPERF_VERBOSE"] == "1"
+    @verbose = verbose || ENV["RPERF_VERBOSE"] == "1"
     @output = output
     @format = format
     @stat = stat
@@ -111,9 +111,9 @@ module Sperf
     total_ms = total_ns / 1_000_000.0
     avg_us = count > 0 ? total_ns / count / 1000.0 : 0.0
 
-    $stderr.puts "[sperf] mode=#{mode} frequency=#{frequency}Hz"
-    $stderr.puts "[sperf] sampling: #{count} calls, #{format("%.2f", total_ms)}ms total, #{format("%.1f", avg_us)}us/call avg"
-    $stderr.puts "[sperf] samples recorded: #{samples}"
+    $stderr.puts "[rperf] mode=#{mode} frequency=#{frequency}Hz"
+    $stderr.puts "[rperf] sampling: #{count} calls, #{format("%.2f", total_ms)}ms total, #{format("%.1f", avg_us)}us/call avg"
+    $stderr.puts "[rperf] samples recorded: #{samples}"
 
     print_top(data)
   end
@@ -162,13 +162,13 @@ module Sperf
 
   def self.print_top_table(kind, table, total_weight)
     top = table.sort_by { |_, w| -w }.first(TOP_N)
-    $stderr.puts "[sperf] top #{top.size} by #{kind}:"
+    $stderr.puts "[rperf] top #{top.size} by #{kind}:"
     top.each do |key, weight|
       label, path = key
       ms = weight / 1_000_000.0
       pct = total_weight > 0 ? weight * 100.0 / total_weight : 0.0
       loc = path.empty? ? "" : " (#{path})"
-      $stderr.puts format("[sperf]   %8.1fms %5.1f%%  %s%s", ms, pct, label, loc)
+      $stderr.puts format("[rperf]   %8.1fms %5.1f%%  %s%s", ms, pct, label, loc)
     end
   end
 
@@ -188,7 +188,7 @@ module Sperf
     user_ns = (times.utime * 1_000_000_000).to_i
     sys_ns = (times.stime * 1_000_000_000).to_i
 
-    command = ENV["SPERF_STAT_COMMAND"] || "(unknown)"
+    command = ENV["RPERF_STAT_COMMAND"] || "(unknown)"
 
     $stderr.puts
     $stderr.puts " Performance stats for '#{command}':"
@@ -380,26 +380,26 @@ module Sperf
   private_class_method :get_system_stats
 
   # ENV-based auto-start for CLI usage
-  if ENV["SPERF_ENABLED"] == "1"
-    _sperf_mode_str = ENV["SPERF_MODE"] || "cpu"
-    unless %w[cpu wall].include?(_sperf_mode_str)
-      raise ArgumentError, "SPERF_MODE must be 'cpu' or 'wall', got: #{_sperf_mode_str.inspect}"
+  if ENV["RPERF_ENABLED"] == "1"
+    _rperf_mode_str = ENV["RPERF_MODE"] || "cpu"
+    unless %w[cpu wall].include?(_rperf_mode_str)
+      raise ArgumentError, "RPERF_MODE must be 'cpu' or 'wall', got: #{_rperf_mode_str.inspect}"
     end
-    _sperf_mode = _sperf_mode_str == "wall" ? :wall : :cpu
-    _sperf_format = ENV["SPERF_FORMAT"] ? ENV["SPERF_FORMAT"].to_sym : nil
-    _sperf_stat = ENV["SPERF_STAT"] == "1"
-    _sperf_signal = case ENV["SPERF_SIGNAL"]
+    _rperf_mode = _rperf_mode_str == "wall" ? :wall : :cpu
+    _rperf_format = ENV["RPERF_FORMAT"] ? ENV["RPERF_FORMAT"].to_sym : nil
+    _rperf_stat = ENV["RPERF_STAT"] == "1"
+    _rperf_signal = case ENV["RPERF_SIGNAL"]
                     when nil then nil
                     when "false" then false
-                    else ENV["SPERF_SIGNAL"].to_i
+                    else ENV["RPERF_SIGNAL"].to_i
                     end
-    _sperf_start_opts = { frequency: (ENV["SPERF_FREQUENCY"] || 1000).to_i, mode: _sperf_mode,
-                          output: _sperf_stat ? ENV["SPERF_OUTPUT"] : (ENV["SPERF_OUTPUT"] || "sperf.data"),
-                          verbose: ENV["SPERF_VERBOSE"] == "1",
-                          format: _sperf_format,
-                          stat: _sperf_stat }
-    _sperf_start_opts[:signal] = _sperf_signal unless _sperf_signal.nil?
-    start(**_sperf_start_opts)
+    _rperf_start_opts = { frequency: (ENV["RPERF_FREQUENCY"] || 1000).to_i, mode: _rperf_mode,
+                          output: _rperf_stat ? ENV["RPERF_OUTPUT"] : (ENV["RPERF_OUTPUT"] || "rperf.data"),
+                          verbose: ENV["RPERF_VERBOSE"] == "1",
+                          format: _rperf_format,
+                          stat: _rperf_stat }
+    _rperf_start_opts[:signal] = _rperf_signal unless _rperf_signal.nil?
+    start(**_rperf_start_opts)
     at_exit { stop }
   end
 
@@ -414,7 +414,7 @@ module Sperf
 
       return "No samples recorded.\n" if !samples_raw || samples_raw.empty?
 
-      result = Sperf.send(:compute_flat_cum, samples_raw)
+      result = Rperf.send(:compute_flat_cum, samples_raw)
 
       out = String.new
       total_ms = result[:total_weight] / 1_000_000.0
@@ -543,12 +543,12 @@ module Sperf
 
       # Intern comment and doc_url strings before encoding string_table
       comment_indices = [
-        intern.("sperf #{Sperf::VERSION}"),
+        intern.("rperf #{Rperf::VERSION}"),
         intern.("mode: #{mode}"),
         intern.("frequency: #{frequency}Hz"),
         intern.("ruby: #{RUBY_DESCRIPTION}"),
       ]
-      doc_url_idx = intern.("https://ko1.github.io/sperf/help.html")
+      doc_url_idx = intern.("https://ko1.github.io/rperf/help.html")
 
       # field 6: string_table (repeated string)
       string_table.each do |s|
