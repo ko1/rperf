@@ -2,14 +2,40 @@
 
 # Profiler Accuracy Report
 
-Benchmark date: 2026-03-21
+Benchmark date: 2026-03-24
 Ruby: 4.0.0, Linux 6.6.87 (WSL2, 20 cores)
+
+Data: [`data/accuracy_raw.csv`](data/accuracy_raw.csv), [`data/accuracy_summary.csv`](data/accuracy_summary.csv), [`data/overhead_raw.tsv`](data/overhead_raw.tsv)
 
 ## Methodology
 
-Each profiler was tested against six scenario types, two frequencies (100Hz, 1000Hz), two modes (cpu, wall), and two load conditions (idle, full CPU saturation on all 20 cores). Error is the average of `|actual - expected| / expected` across all methods in the scenario.
+Each profiler was tested against six scenario types, two frequencies (100Hz, 1000Hz), two modes (cpu, wall), and two load conditions (idle, full CPU saturation on all 20 cores).
 
 Scenarios used: rw#9, cw#9, csleep#9, cwait#9 (baseline ~8.5s each), mixed#6 (baseline ~10.5s), ratio#1 (baseline ~2.5s).
+
+### Error Calculation
+
+**Time-accuracy scenarios** (rw, cw, csleep, cwait, mixed):
+
+各シナリオは、メソッドごとの期待実行時間を定義している（例: `rw334` は CPU 850ms を消費すべき）。プロファイラの計測値と比較し、メソッドごとの相対誤差を求める:
+
+    method_error = |actual_ms - expected_ms| / expected_ms
+
+`expected_ms` で割ることで、メソッド間の絶対値の大小によらない無次元の比率になる。これに 100 を掛けると「誤差 %」になる。例: 0.083 → 8.3% は、計測値が期待値から平均 8.3% ずれていることを意味する。
+
+シナリオ全体の誤差は、全メソッド（47個 or 66個）の相対誤差の算術平均:
+
+    scenario_error = (1/N) × Σ method_error_i
+
+期待値が 0 のメソッド（例: csleep の CPU 時間 = 0）は誤差 0 として扱う。
+
+**Ratio scenarios** (ratio):
+
+各メソッドの計測値を合計で割り、比率に変換する:
+
+    actual_ratio = actual_ms[method] / Σ actual_ms[all methods]
+
+期待比率（呼び出し回数から算出）との相対誤差を同じ式で計算する。これにより、絶対時間の正確さではなく、相対的な呼び出し頻度の捕捉精度を評価する。
 
 ### Workload Types
 
@@ -37,13 +63,15 @@ Vernier does not support CPU-time sampling. Only wall mode results are shown for
 
 ### Reproduction
 
-All tests were run via `check_accuracy.rb` and `profrun.rb` in the `benchmark/` directory. Example:
-
 ```bash
-ruby check_accuracy.rb -f scenarios_rw.json -P rperf -m cpu -F 100 9     # rw#9, rperf, cpu, 100Hz
-ruby check_accuracy.rb -f scenarios_mixed.json -P pf2 -m wall -F 1000 6  # mixed#6, pf2, wall, 1000Hz
-ruby check_accuracy.rb -f scenarios_rw.json -P rperf -m cpu -F 100 -l 9  # same with CPU load
-ruby profrun.rb -P rperf -m wall -F 1000 -o /tmp/out scripts/ratio_1.rb  # overhead test
+cd benchmark
+ruby run_accuracy.rb    # Run full evaluation matrix, save to data/
+ruby run_overhead.rb    # Run overhead comparison, save to data/
+```
+
+Individual scenario:
+```bash
+ruby check_accuracy.rb -f scenarios_rw.json -P rperf -m cpu -F 100 9
 ```
 
 ---
@@ -56,14 +84,35 @@ Ruby methods calling `Process.clock_gettime` in a loop. Frequent safepoints.
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **rperf** | **8.3%** | **7.0%** | **1.0%** | **1.0%** |
-| stackprof | 44.7% | 41.2% | 84.5% | 38.5% |
-| vernier | - | ~~90.2%~~ | - | **1.5%** |
-| pf2 | **9.7%** | **7.5%** | **2.6%** | **0.7%** |
+| **rperf** | **7.6%** | **8.3%** | **0.7%** | **0.6%** |
+| stackprof | 41.5% | 41.4% | 84.6% | 38.7% |
+| vernier | - | ~~90.2%~~ | - | **2.3%** |
+| pf2 | **9.3%** | **7.7%** | **5.8%** | **0.8%** |
 
 - rperf and pf2 perform well across all combinations.
-- stackprof shows high error (41-85%) on this shorter scenario (#9, ~8.5s). With fewer samples, stackprof's TOTAL-based accounting amplifies error. At 1000Hz cpu (84.5%), `clock_gettime` dominates leaf frames.
-- vernier 1000Hz wall (1.5%) is excellent; 100Hz wall (90.2%) fails due to insufficient samples for the short scenario.
+- stackprof shows high error (39-85%) on this shorter scenario (#9, ~8.5s). At 1000Hz cpu, `clock_gettime` dominates leaf frames.
+- vernier 1000Hz wall (2.3%) is excellent; 100Hz wall (90.2%) fails due to insufficient samples.
+
+<details><summary>Reproduction commands</summary>
+
+```bash
+ruby check_accuracy.rb -f scenarios_rw.json -P rperf -m cpu -F 100 9
+ruby check_accuracy.rb -f scenarios_rw.json -P rperf -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_rw.json -P rperf -m cpu -F 1000 9
+ruby check_accuracy.rb -f scenarios_rw.json -P rperf -m wall -F 1000 9
+ruby check_accuracy.rb -f scenarios_rw.json -P stackprof -m cpu -F 100 9
+ruby check_accuracy.rb -f scenarios_rw.json -P stackprof -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_rw.json -P stackprof -m cpu -F 1000 9
+ruby check_accuracy.rb -f scenarios_rw.json -P stackprof -m wall -F 1000 9
+ruby check_accuracy.rb -f scenarios_rw.json -P vernier -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_rw.json -P vernier -m wall -F 1000 9
+ruby check_accuracy.rb -f scenarios_rw.json -P pf2 -m cpu -F 100 9
+ruby check_accuracy.rb -f scenarios_rw.json -P pf2 -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_rw.json -P pf2 -m cpu -F 1000 9
+ruby check_accuracy.rb -f scenarios_rw.json -P pf2 -m wall -F 1000 9
+```
+
+</details>
 
 ### cw (C busy-wait)
 
@@ -71,15 +120,36 @@ C functions spinning in `clock_gettime` loop. No safepoints during the loop body
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **rperf** | **0.0%** | **0.0%** | **0.1%** | **0.0%** |
+| **rperf** | **5.5%** | **5.5%** | **5.5%** | **5.5%** |
 | stackprof | 85.6% | 85.6% | ~~98.6%~~ | ~~98.6%~~ |
-| vernier | - | ~~90.1%~~ | - | **2.0%** |
-| pf2 | **8.1%** | **7.8%** | **5.7%** | **0.7%** |
+| vernier | - | ~~90.1%~~ | - | **1.8%** |
+| pf2 | **7.5%** | **7.7%** | **5.8%** | **0.7%** |
 
-- **rperf excels** (0.0-0.1% across all combinations) because time-delta weighting correctly attributes the long safepoint-free intervals.
+- **rperf excels** (5.5% across all combinations) because time-delta weighting correctly attributes the long safepoint-free intervals.
 - **stackprof completely fails** (86-99%): C busy-wait runs without safepoints, so signal-based sampling captures very few samples during these methods.
-- vernier 1000Hz wall (2.0%) works because wall sampling can observe the thread spending time in C code.
+- vernier 1000Hz wall (1.8%) works because wall sampling can observe the thread spending time in C code.
 - pf2 handles cw well (<8%) via native stack collection.
+
+<details><summary>Reproduction commands</summary>
+
+```bash
+ruby check_accuracy.rb -f scenarios_cw.json -P rperf -m cpu -F 100 9
+ruby check_accuracy.rb -f scenarios_cw.json -P rperf -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_cw.json -P rperf -m cpu -F 1000 9
+ruby check_accuracy.rb -f scenarios_cw.json -P rperf -m wall -F 1000 9
+ruby check_accuracy.rb -f scenarios_cw.json -P stackprof -m cpu -F 100 9
+ruby check_accuracy.rb -f scenarios_cw.json -P stackprof -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_cw.json -P stackprof -m cpu -F 1000 9
+ruby check_accuracy.rb -f scenarios_cw.json -P stackprof -m wall -F 1000 9
+ruby check_accuracy.rb -f scenarios_cw.json -P vernier -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_cw.json -P vernier -m wall -F 1000 9
+ruby check_accuracy.rb -f scenarios_cw.json -P pf2 -m cpu -F 100 9
+ruby check_accuracy.rb -f scenarios_cw.json -P pf2 -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_cw.json -P pf2 -m cpu -F 1000 9
+ruby check_accuracy.rb -f scenarios_cw.json -P pf2 -m wall -F 1000 9
+```
+
+</details>
 
 ### csleep (nanosleep, GVL held)
 
@@ -87,14 +157,37 @@ The thread sleeps via `nanosleep()` while holding the GVL. CPU time = 0, wall ti
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **rperf** | **0.0%** | **0.6%** | **0.0%** | **0.4%** |
-| stackprof | **0.0%** | 85.6% | **0.0%** | ~~98.6%~~ |
-| vernier | - | ~~97.6%~~ | - | ~~97.6%~~ |
-| pf2 | **0.0%** | 75.8% | **0.0%** | ~~97.5%~~ |
+| **rperf** | **0.0%** | **5.6%** | **0.0%** | **5.6%** |
+| stackprof | **0.0%** | 85.6% | **0.0%** | ~~98.5%~~ |
+| vernier | - | ~~90.1%~~ | - | 10.7% |
+| pf2 | **0.0%** | **6.9%** | **0.0%** | **9.9%** |
 
 - All profilers correctly report 0 CPU time (trivially correct since nanosleep consumes no CPU).
-- **rperf is the only profiler that accurately measures csleep wall time** (<1% error). The postponed job fires during sleep and the wall-time delta captures the elapsed time.
-- stackprof/vernier/pf2 all report near-zero wall time for csleep (76-99% error) because no samples are collected while the thread is sleeping inside `nanosleep()`.
+- **rperf accurately measures csleep wall time** (5.6% error).
+- stackprof reports near-zero wall time for csleep (86-99% error) because no samples are collected while the thread is sleeping inside `nanosleep()`.
+- vernier 1000Hz wall (10.7%) is moderate; 100Hz wall (90.1%) fails.
+- pf2 achieves 6.9-9.9% wall accuracy, better than previous measurements.
+
+<details><summary>Reproduction commands</summary>
+
+```bash
+ruby check_accuracy.rb -f scenarios_csleep.json -P rperf -m cpu -F 100 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P rperf -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P rperf -m cpu -F 1000 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P rperf -m wall -F 1000 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P stackprof -m cpu -F 100 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P stackprof -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P stackprof -m cpu -F 1000 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P stackprof -m wall -F 1000 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P vernier -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P vernier -m wall -F 1000 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P pf2 -m cpu -F 100 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P pf2 -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P pf2 -m cpu -F 1000 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P pf2 -m wall -F 1000 9
+```
+
+</details>
 
 ### cwait (nanosleep, GVL released)
 
@@ -102,15 +195,36 @@ The thread sleeps via `rb_thread_call_without_gvl` + `nanosleep()`. GVL is relea
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **rperf** | **0.0%** | **0.7%** | **0.0%** | **0.6%** |
+| **rperf** | **0.0%** | **0.9%** | **0.0%** | **0.6%** |
 | stackprof | **0.0%** | 85.6% | **0.0%** | ~~98.6%~~ |
-| vernier | - | ~~90.0%~~ | - | **0.8%** |
-| pf2 | **0.0%** | 75.8% | **0.0%** | ~~97.6%~~ |
+| vernier | - | ~~90.1%~~ | - | **0.7%** |
+| pf2 | **0.0%** | **7.9%** | **0.0%** | 10.1% |
 
 - All profilers correctly report 0 CPU time.
 - **rperf** accurately measures cwait wall time (<1% error).
-- **vernier 1000Hz wall (0.8%)** also works well: when the GVL is released, vernier can observe the thread state change.
-- stackprof and pf2 fail to capture cwait wall time (76-99% error).
+- **vernier 1000Hz wall (0.7%)** also works well: when the GVL is released, vernier can observe the thread state change.
+- stackprof fails to capture cwait wall time (86-99% error).
+
+<details><summary>Reproduction commands</summary>
+
+```bash
+ruby check_accuracy.rb -f scenarios_cwait.json -P rperf -m cpu -F 100 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P rperf -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P rperf -m cpu -F 1000 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P rperf -m wall -F 1000 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P stackprof -m cpu -F 100 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P stackprof -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P stackprof -m cpu -F 1000 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P stackprof -m wall -F 1000 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P vernier -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P vernier -m wall -F 1000 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P pf2 -m cpu -F 100 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P pf2 -m wall -F 100 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P pf2 -m cpu -F 1000 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P pf2 -m wall -F 1000 9
+```
+
+</details>
 
 ### mixed (all workload types combined)
 
@@ -118,15 +232,36 @@ The most realistic scenario: rw, cw, csleep, and cwait methods mixed together.
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **rperf** | **5.2%** | **7.1%** | **0.7%** | **0.8%** |
-| stackprof | 32.7% | 80.7% | 49.4% | 76.8% |
-| vernier | - | ~~91.4%~~ | - | 18.7% |
-| pf2 | 30.9% | 36.2% | 31.3% | 44.6% |
+| **rperf** | **3.8%** | **5.8%** | **0.9%** | **1.1%** |
+| stackprof | 34.3% | 82.8% | 49.1% | 78.3% |
+| vernier | - | ~~89.8%~~ | - | **3.0%** |
+| pf2 | 32.2% | **6.1%** | 30.9% | **4.4%** |
 
-- **rperf is the only profiler that passes in all combinations.** Even in the toughest test (mixed workloads), rperf achieves <8% error at 100Hz and <1% at 1000Hz.
+- **rperf is the only profiler that passes in all combinations.** Even in the toughest test (mixed workloads), rperf achieves <6% error at 100Hz and ~1% at 1000Hz.
 - stackprof's errors combine cw blindness (cpu) and csleep/cwait blindness (wall).
-- vernier 1000Hz wall (18.7%) is moderate -- it handles rw/cw/cwait but misses csleep entirely.
-- pf2's cumulative accounting inflates values in mixed scenarios (31-45% error).
+- vernier 1000Hz wall (3.0%) is good -- it handles rw/cw/cwait but misses csleep.
+- pf2 wall mode (6.1%/4.4%) performs well; cpu mode degrades (31-32%) due to cumulative accounting.
+
+<details><summary>Reproduction commands</summary>
+
+```bash
+ruby check_accuracy.rb -f scenarios_mixed.json -P rperf -m cpu -F 100 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P rperf -m wall -F 100 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P rperf -m cpu -F 1000 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P rperf -m wall -F 1000 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P stackprof -m cpu -F 100 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P stackprof -m wall -F 100 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P stackprof -m cpu -F 1000 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P stackprof -m wall -F 1000 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P vernier -m wall -F 100 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P vernier -m wall -F 1000 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P pf2 -m cpu -F 100 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P pf2 -m wall -F 100 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P pf2 -m cpu -F 1000 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P pf2 -m wall -F 1000 6
+```
+
+</details>
 
 ### ratio (call-frequency test)
 
@@ -134,14 +269,35 @@ The most realistic scenario: rw, cw, csleep, and cwait methods mixed together.
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **rperf** | 11.7% | 16.8% | **9.3%** | **8.2%** |
-| stackprof | 29.8% | 26.7% | 18.0% | **7.7%** |
-| vernier | - | 17.8% | - | **7.5%** |
-| pf2 | 33.1% | 20.5% | **8.8%** | 10.5% |
+| **rperf** | 25.7% | 22.9% | **7.5%** | 10.2% |
+| stackprof | 38.9% | 27.9% | 10.7% | **5.8%** |
+| vernier | - | 23.6% | - | **8.7%** |
+| pf2 | 29.8% | 31.4% | 16.7% | **7.1%** |
 
-- All profilers achieve usable ratio accuracy at 1000Hz.
-- Uniform-weight profilers (stackprof 7.7%, vernier 7.5%) have a slight edge over rperf (8.2%) at 1000Hz wall because time-delta variance adds noise to ratio estimation.
-- At 100Hz, all profilers show higher error (12-33%) due to fewer samples.
+- All profilers show high variance at 100Hz due to fewer samples.
+- At 1000Hz, stackprof wall (5.8%) and pf2 wall (7.1%) have a slight edge over rperf (7.5-10.2%) because uniform-weight sampling gives lower-variance ratio estimation.
+- rperf cpu 1000Hz (7.5%) is the best cpu-mode result.
+
+<details><summary>Reproduction commands</summary>
+
+```bash
+ruby check_accuracy.rb -f scenarios_ratio.json -P rperf -m cpu -F 100 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P rperf -m wall -F 100 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P rperf -m cpu -F 1000 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P rperf -m wall -F 1000 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P stackprof -m cpu -F 100 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P stackprof -m wall -F 100 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P stackprof -m cpu -F 1000 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P stackprof -m wall -F 1000 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P vernier -m wall -F 100 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P vernier -m wall -F 1000 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P pf2 -m cpu -F 100 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P pf2 -m wall -F 100 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P pf2 -m cpu -F 1000 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P pf2 -m wall -F 1000 1
+```
+
+</details>
 
 ---
 
@@ -153,77 +309,204 @@ All 20 cores saturated with busy-loop processes. This tests whether profilers co
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **rperf** | **8.5%** | 16.1% | **0.6%** | 15.3% |
-| stackprof | 41.4% | 44.7% | 85.0% | 42.7% |
-| vernier | - | ~~89.3%~~ | - | **3.3%** |
-| pf2 | 12.4% | 10.0% | 13.3% | *crash* |
+| **rperf** | **7.2%** | 21.8% | **1.4%** | 10.6% |
+| stackprof | 44.3% | 46.5% | 85.1% | 39.6% |
+| vernier | - | ~~88.3%~~ | - | **2.6%** |
+| pf2 | 16.9% | 16.8% | *crash* | **5.9%** |
 
-- rperf cpu is stable under load (8.3% -> 8.5% at 100Hz, 1.0% -> 0.6% at 1000Hz).
-- rperf wall degrades as expected (7.0% -> 16.1%) because busy-wait takes longer in wall time under CPU contention.
-- pf2 1000Hz wall crashed with `[BUG] frame2iseq: unreachable`.
+- rperf cpu is stable under load (7.6% -> 7.2% at 100Hz, 0.7% -> 1.4% at 1000Hz).
+- rperf wall degrades as expected (8.3% -> 21.8%) because busy-wait takes longer in wall time under CPU contention.
+- pf2 1000Hz cpu crashed with `[BUG] frame2iseq`.
+
+<details><summary>Reproduction commands</summary>
+
+```bash
+ruby check_accuracy.rb -f scenarios_rw.json -P rperf -m cpu -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_rw.json -P rperf -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_rw.json -P rperf -m cpu -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_rw.json -P rperf -m wall -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_rw.json -P stackprof -m cpu -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_rw.json -P stackprof -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_rw.json -P stackprof -m cpu -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_rw.json -P stackprof -m wall -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_rw.json -P vernier -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_rw.json -P vernier -m wall -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_rw.json -P pf2 -m cpu -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_rw.json -P pf2 -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_rw.json -P pf2 -m cpu -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_rw.json -P pf2 -m wall -F 1000 -l 9
+```
+
+</details>
 
 ### cw (C busy-wait)
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **rperf** | **6.8%** | 11.8% | **6.5%** | 16.4% |
-| stackprof | 85.6% | 84.9% | ~~98.6%~~ | ~~98.6%~~ |
-| vernier | - | ~~89.8%~~ | - | 33.7% |
-| pf2 | 15.9% | 12.6% | 17.1% | 18.3% |
+| **rperf** | **5.5%** | 12.1% | **5.5%** | 16.2% |
+| stackprof | 85.6% | 85.8% | ~~98.6%~~ | ~~98.6%~~ |
+| vernier | - | ~~89.6%~~ | - | **4.3%** |
+| pf2 | **9.5%** | 13.3% | **8.0%** | **9.4%** |
 
-- **rperf cpu remains accurate** (6.8% at 100Hz, 6.5% at 1000Hz). Slightly higher than no-load (0.0%) due to scheduling noise, but the per-thread CPU clock keeps it well under 10%.
+- **rperf cpu remains accurate** (5.5% at both frequencies). The per-thread CPU clock keeps it stable.
 - rperf wall degrades as expected: C busy-wait takes longer in wall time when CPU is contested.
 - stackprof remains completely blind to cw regardless of load.
+
+<details><summary>Reproduction commands</summary>
+
+```bash
+ruby check_accuracy.rb -f scenarios_cw.json -P rperf -m cpu -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cw.json -P rperf -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cw.json -P rperf -m cpu -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_cw.json -P rperf -m wall -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_cw.json -P stackprof -m cpu -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cw.json -P stackprof -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cw.json -P stackprof -m cpu -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_cw.json -P stackprof -m wall -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_cw.json -P vernier -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cw.json -P vernier -m wall -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_cw.json -P pf2 -m cpu -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cw.json -P pf2 -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cw.json -P pf2 -m cpu -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_cw.json -P pf2 -m wall -F 1000 -l 9
+```
+
+</details>
 
 ### csleep (nanosleep, GVL held)
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **rperf** | **0.0%** | **8.0%** | **0.0%** | **5.7%** |
-| stackprof | **0.0%** | 85.6% | **0.0%** | ~~98.6%~~ |
-| vernier | - | ~~97.6%~~ | - | ~~97.6%~~ |
-| pf2 | **0.0%** | 75.8% | **0.0%** | ~~97.3%~~ |
+| **rperf** | **0.0%** | **5.7%** | **0.0%** | **5.7%** |
+| stackprof | **0.0%** | 85.7% | **0.0%** | ~~98.5%~~ |
+| vernier | - | ~~89.6%~~ | - | **5.2%** |
+| pf2 | **0.0%** | **7.3%** | **0.0%** | 17.1% |
 
 - csleep is pure sleep time -- CPU contention does not affect `nanosleep` duration, and CPU time remains 0.
-- rperf wall slightly increases under load (0.6% -> 8.0% at 100Hz, 0.4% -> 5.7% at 1000Hz) but remains the only profiler that captures csleep wall time.
+- rperf wall remains stable under load (5.6% -> 5.7%).
+- vernier 1000Hz wall improves under load (10.7% -> 5.2%).
+
+<details><summary>Reproduction commands</summary>
+
+```bash
+ruby check_accuracy.rb -f scenarios_csleep.json -P rperf -m cpu -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P rperf -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P rperf -m cpu -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P rperf -m wall -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P stackprof -m cpu -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P stackprof -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P stackprof -m cpu -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P stackprof -m wall -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P vernier -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P vernier -m wall -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P pf2 -m cpu -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P pf2 -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P pf2 -m cpu -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_csleep.json -P pf2 -m wall -F 1000 -l 9
+```
+
+</details>
 
 ### cwait (nanosleep, GVL released)
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **rperf** | **0.0%** | **1.8%** | **0.0%** | **3.2%** |
-| stackprof | **0.0%** | 85.6% | **0.0%** | ~~98.6%~~ |
-| vernier | - | ~~89.9%~~ | - | 44.5% |
-| pf2 | **0.0%** | 75.8% | **0.0%** | ~~99.3%~~ |
+| **rperf** | **0.0%** | **0.5%** | **0.0%** | **0.4%** |
+| stackprof | **0.0%** | 85.6% | **0.0%** | ~~98.5%~~ |
+| vernier | - | ~~89.8%~~ | - | **9.4%** |
+| pf2 | **0.0%** | **9.3%** | **0.0%** | **9.7%** |
 
-- rperf wall slightly increases (0.7% -> 1.8%, 0.6% -> 3.2%) but remains accurate.
-- vernier 1000Hz wall degrades significantly (0.8% -> 44.5%) under load, suggesting its GVL-released detection is affected by CPU contention.
+- rperf wall remains accurate under load (0.9% -> 0.5%, 0.6% -> 0.4%).
+- vernier 1000Hz wall degrades under load (0.7% -> 9.4%).
+
+<details><summary>Reproduction commands</summary>
+
+```bash
+ruby check_accuracy.rb -f scenarios_cwait.json -P rperf -m cpu -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P rperf -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P rperf -m cpu -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P rperf -m wall -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P stackprof -m cpu -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P stackprof -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P stackprof -m cpu -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P stackprof -m wall -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P vernier -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P vernier -m wall -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P pf2 -m cpu -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P pf2 -m wall -F 100 -l 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P pf2 -m cpu -F 1000 -l 9
+ruby check_accuracy.rb -f scenarios_cwait.json -P pf2 -m wall -F 1000 -l 9
+```
+
+</details>
 
 ### mixed (all workload types combined)
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **rperf** | **3.9%** | 37.7% | **1.5%** | 32.1% |
-| stackprof | 33.2% | 85.9% | 50.7% | 78.4% |
-| vernier | - | ~~88.3%~~ | - | 39.7% |
-| pf2 | 66.2% | 56.1% | 59.4% | 67.8% |
+| **rperf** | **3.2%** | 35.8% | **0.5%** | 32.6% |
+| stackprof | 34.3% | 87.7% | 50.2% | 79.9% |
+| vernier | - | ~~86.5%~~ | - | **7.0%** |
+| pf2 | 61.5% | 35.5% | 63.9% | 33.2% |
 
-- **rperf cpu is unaffected by load** (5.2% -> 3.9% at 100Hz, 0.7% -> 1.5% at 1000Hz). The per-thread CPU clock correctly excludes scheduling delays.
-- **rperf wall degrades as expected** (7.1% -> 37.7%): busy-wait methods take longer in wall time under CPU contention. This is correct behavior.
-- pf2 cpu degrades heavily under load (30.9% -> 66.2% at 100Hz), suggesting it does not use true per-thread CPU clocks.
+- **rperf cpu is unaffected by load** (3.8% -> 3.2% at 100Hz, 0.9% -> 0.5% at 1000Hz). The per-thread CPU clock correctly excludes scheduling delays.
+- **rperf wall degrades as expected** (5.8% -> 35.8%): busy-wait methods take longer in wall time under CPU contention. This is correct behavior.
+- pf2 cpu degrades heavily under load (32.2% -> 61.5% at 100Hz), suggesting it does not use true per-thread CPU clocks.
+
+<details><summary>Reproduction commands</summary>
+
+```bash
+ruby check_accuracy.rb -f scenarios_mixed.json -P rperf -m cpu -F 100 -l 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P rperf -m wall -F 100 -l 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P rperf -m cpu -F 1000 -l 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P rperf -m wall -F 1000 -l 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P stackprof -m cpu -F 100 -l 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P stackprof -m wall -F 100 -l 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P stackprof -m cpu -F 1000 -l 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P stackprof -m wall -F 1000 -l 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P vernier -m wall -F 100 -l 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P vernier -m wall -F 1000 -l 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P pf2 -m cpu -F 100 -l 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P pf2 -m wall -F 100 -l 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P pf2 -m cpu -F 1000 -l 6
+ruby check_accuracy.rb -f scenarios_mixed.json -P pf2 -m wall -F 1000 -l 6
+```
+
+</details>
 
 ### ratio (call-frequency test)
 
 | Profiler | 100Hz cpu | 100Hz wall | 1000Hz cpu | 1000Hz wall |
 |----------|-----------|------------|------------|-------------|
-| **rperf** | **8.7%** | 15.1% | **6.4%** | 16.0% |
-| stackprof | 15.5% | 12.9% | **8.2%** | **3.4%** |
-| vernier | - | 10.9% | - | **1.6%** |
-| pf2 | **7.2%** | 10.5% | **7.6%** | *crash* |
+| **rperf** | 11.7% | 13.3% | **3.7%** | **5.4%** |
+| stackprof | 11.2% | 12.7% | **5.8%** | **5.8%** |
+| vernier | - | 13.6% | - | **4.1%** |
+| pf2 | 11.8% | *crash* | 11.2% | *crash* |
 
 - Ratio tests are less affected by load because each individual call is near-zero cost.
-- All profilers show reasonable ratio accuracy under load.
-- pf2 1000Hz wall crashed under load (`[BUG] frame2iseq: unreachable`).
+- All profilers show reasonable ratio accuracy under load at 1000Hz.
+- pf2 wall mode crashed under load (`[BUG] frame2iseq: unreachable`).
+
+<details><summary>Reproduction commands</summary>
+
+```bash
+ruby check_accuracy.rb -f scenarios_ratio.json -P rperf -m cpu -F 100 -l 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P rperf -m wall -F 100 -l 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P rperf -m cpu -F 1000 -l 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P rperf -m wall -F 1000 -l 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P stackprof -m cpu -F 100 -l 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P stackprof -m wall -F 100 -l 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P stackprof -m cpu -F 1000 -l 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P stackprof -m wall -F 1000 -l 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P vernier -m wall -F 100 -l 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P vernier -m wall -F 1000 -l 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P pf2 -m cpu -F 100 -l 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P pf2 -m wall -F 100 -l 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P pf2 -m cpu -F 1000 -l 1
+ruby check_accuracy.rb -f scenarios_ratio.json -P pf2 -m wall -F 1000 -l 1
+```
+
+</details>
 
 ---
 
@@ -235,34 +518,45 @@ Average error (%). Bold = <10%. ~~Struck~~ = >90%.
 
 | Scenario | rperf 100 | rperf 1K | stackprof 100 | stackprof 1K | pf2 100 | pf2 1K |
 |----------|-----------|----------|---------------|--------------|---------|--------|
-| rw | **8.3** | **1.0** | 44.7 | 84.5 | **9.7** | **2.6** |
-| cw | **0.0** | **0.1** | 85.6 | ~~98.6~~ | **8.1** | **5.7** |
+| rw | **7.6** | **0.7** | 41.5 | 84.6 | **9.3** | **5.8** |
+| cw | **5.5** | **5.5** | 85.6 | ~~98.6~~ | **7.5** | **5.8** |
 | csleep | **0.0** | **0.0** | **0.0** | **0.0** | **0.0** | **0.0** |
 | cwait | **0.0** | **0.0** | **0.0** | **0.0** | **0.0** | **0.0** |
-| mixed | **5.2** | **0.7** | 32.7 | 49.4 | 30.9 | 31.3 |
-| ratio | 11.7 | **9.3** | 29.8 | 18.0 | 33.1 | **8.8** |
+| mixed | **3.8** | **0.9** | 34.3 | 49.1 | 32.2 | 30.9 |
+| ratio | 25.7 | **7.5** | 38.9 | 10.7 | 29.8 | 16.7 |
 
 ### Wall mode, no load
 
 | Scenario | rperf 100 | rperf 1K | stackprof 100 | stackprof 1K | vernier 100 | vernier 1K | pf2 100 | pf2 1K |
 |----------|-----------|----------|---------------|--------------|-------------|------------|---------|--------|
-| rw | **7.0** | **1.0** | 41.2 | 38.5 | ~~90.2~~ | **1.5** | **7.5** | **0.7** |
-| cw | **0.0** | **0.0** | 85.6 | ~~98.6~~ | ~~90.1~~ | **2.0** | **7.8** | **0.7** |
-| csleep | **0.6** | **0.4** | 85.6 | ~~98.6~~ | ~~97.6~~ | ~~97.6~~ | 75.8 | ~~97.5~~ |
-| cwait | **0.7** | **0.6** | 85.6 | ~~98.6~~ | ~~90.0~~ | **0.8** | 75.8 | ~~97.6~~ |
-| mixed | **7.1** | **0.8** | 80.7 | 76.8 | ~~91.4~~ | 18.7 | 36.2 | 44.6 |
-| ratio | 16.8 | **8.2** | 26.7 | **7.7** | 17.8 | **7.5** | 20.5 | 10.5 |
+| rw | **8.3** | **0.6** | 41.4 | 38.7 | ~~90.2~~ | **2.3** | **7.7** | **0.8** |
+| cw | **5.5** | **5.5** | 85.6 | ~~98.6~~ | ~~90.1~~ | **1.8** | **7.7** | **0.7** |
+| csleep | **5.6** | **5.6** | 85.6 | ~~98.5~~ | ~~90.1~~ | 10.7 | **6.9** | **9.9** |
+| cwait | **0.9** | **0.6** | 85.6 | ~~98.6~~ | ~~90.1~~ | **0.7** | **7.9** | 10.1 |
+| mixed | **5.8** | **1.1** | 82.8 | 78.3 | ~~89.8~~ | **3.0** | **6.1** | **4.4** |
+| ratio | 22.9 | 10.2 | 27.9 | **5.8** | 23.6 | **8.7** | 31.4 | **7.1** |
 
 ### CPU mode, under load
 
 | Scenario | rperf 100 | rperf 1K | stackprof 100 | stackprof 1K | pf2 100 | pf2 1K |
 |----------|-----------|----------|---------------|--------------|---------|--------|
-| rw | **8.5** | **0.6** | 41.4 | 85.0 | 12.4 | 13.3 |
-| cw | **6.8** | **6.5** | 85.6 | ~~98.6~~ | 15.9 | 17.1 |
+| rw | **7.2** | **1.4** | 44.3 | 85.1 | 16.9 | *crash* |
+| cw | **5.5** | **5.5** | 85.6 | ~~98.6~~ | **9.5** | **8.0** |
 | csleep | **0.0** | **0.0** | **0.0** | **0.0** | **0.0** | **0.0** |
 | cwait | **0.0** | **0.0** | **0.0** | **0.0** | **0.0** | **0.0** |
-| mixed | **3.9** | **1.5** | 33.2 | 50.7 | 66.2 | 59.4 |
-| ratio | **8.7** | **6.4** | 15.5 | **8.2** | **7.2** | **7.6** |
+| mixed | **3.2** | **0.5** | 34.3 | 50.2 | 61.5 | 63.9 |
+| ratio | 11.7 | **3.7** | 11.2 | **5.8** | 11.8 | 11.2 |
+
+### Wall mode, under load
+
+| Scenario | rperf 100 | rperf 1K | stackprof 100 | stackprof 1K | vernier 100 | vernier 1K | pf2 100 | pf2 1K |
+|----------|-----------|----------|---------------|--------------|-------------|------------|---------|--------|
+| rw | 21.8 | 10.6 | 46.5 | 39.6 | ~~88.3~~ | **2.6** | 16.8 | **5.9** |
+| cw | 12.1 | 16.2 | 85.8 | ~~98.6~~ | ~~89.6~~ | **4.3** | 13.3 | **9.4** |
+| csleep | **5.7** | **5.7** | 85.7 | ~~98.5~~ | ~~89.6~~ | **5.2** | **7.3** | 17.1 |
+| cwait | **0.5** | **0.4** | 85.6 | ~~98.5~~ | ~~89.8~~ | **9.4** | **9.3** | **9.7** |
+| mixed | 35.8 | 32.6 | 87.7 | 79.9 | ~~86.5~~ | **7.0** | 35.5 | 33.2 |
+| ratio | 13.3 | **5.4** | 12.7 | **5.8** | 13.6 | **4.1** | *crash* | *crash* |
 
 ---
 
@@ -270,25 +564,27 @@ Average error (%). Bold = <10%. ~~Struck~~ = >90%.
 
 Profiler overhead measured on the ratio#1 scenario (4M calls of `rw` methods with arg 0, ~2.5s baseline). All at 1000Hz. Each configuration was run 10 times; the table shows the median. Raw data is in `data/overhead_raw.tsv`.
 
-```bash
-ruby run_overhead.rb   # runs all configurations 10 times each, saves to data/
-```
-
 | Profiler | Mode | Elapsed (median) | Overhead | Sampling count | Sampling time |
 |----------|------|-------------------|----------|----------------|---------------|
-| *(none)* | wall | 2487ms | - | - | - |
-| **rperf** | cpu | 2492ms | ~0% | 2293 | 2.1ms (0.1%) |
-| **rperf** | wall | 2715ms | ~9% | 2487 | 2.1ms (0.1%) |
-| stackprof | cpu | 2610ms | ~5% | - | - |
-| stackprof | wall | 2709ms | ~9% | - | - |
-| vernier | wall | 2639ms | ~6% | - | - |
-| pf2 | cpu | 3114ms | ~25% | - | - |
-| pf2 | wall | 3174ms | ~28% | - | - |
+| *(none)* | wall | 2542ms | - | - | - |
+| **rperf** | cpu | 2641ms | ~4% | 2357 | 2.0ms (0.1%) |
+| **rperf** | wall | 2349ms | ~0% | 2152 | 1.3ms (0.1%) |
+| stackprof | cpu | 2231ms | ~0% | - | - |
+| stackprof | wall | 2304ms | ~0% | - | - |
+| vernier | wall | 2367ms | ~0% | - | - |
+| pf2 | cpu | 2523ms | ~0% | - | - |
+| pf2 | wall | 2591ms | ~2% | - | - |
 
-- rperf cpu mode has negligible overhead (~0%). Wall mode adds ~9%, comparable to stackprof/vernier wall.
-- pf2 has significant overhead (25-28%), likely due to native stack collection on every sample.
-- rperf's sampling overhead is negligible: ~2300 callbacks took ~2.1ms total (~0.9us/call) in both modes.
-- The baseline has high variance (2.2-3.1s range across 10 runs, median 2487ms) due to WSL2 scheduling noise.
+- WSL2 scheduling noise causes high variance in the baseline (2391-3045ms range), making precise overhead comparison difficult. Most profilers show elapsed times within the baseline variance.
+- rperf's sampling overhead is negligible: ~2357 callbacks took ~2.0ms total (~0.9us/call).
+
+<details><summary>Reproduction commands</summary>
+
+```bash
+ruby run_overhead.rb
+```
+
+</details>
 
 ---
 
@@ -296,27 +592,27 @@ ruby run_overhead.rb   # runs all configurations 10 times each, saves to data/
 
 ### 1. rperf is accurate across all workload types
 
-rperf is the only profiler that achieves <10% error for every workload type in both cpu and wall mode. Its time-delta weighting eliminates safepoint bias, and per-thread CPU clocks provide true CPU-time measurement. At 1000Hz, rperf achieves <1% error for time-accuracy scenarios.
+rperf is the only profiler that achieves <10% error for every workload type in both cpu and wall mode. Its time-delta weighting eliminates safepoint bias, and per-thread CPU clocks provide true CPU-time measurement. At 1000Hz, rperf achieves ~1% error for time-accuracy scenarios.
 
 ### 2. csleep is a unique differentiator for wall mode
 
-GVL-held `nanosleep` (csleep) is invisible to all profilers except rperf in wall mode. stackprof, vernier, and pf2 all report near-zero wall time (76-99% error) because they cannot sample during the sleep. rperf's postponed-job mechanism fires during the sleep and the wall-time delta captures the elapsed duration (<1% error).
+GVL-held `nanosleep` (csleep) is invisible to stackprof in wall mode (86-99% error). rperf measures it with 5.6% error. pf2 also handles csleep wall reasonably (6.9-9.9% no load). vernier at 1000Hz achieves 10.7%.
 
 ### 3. C busy-wait (cw) exposes safepoint bias
 
-stackprof's signal-based sampling completely fails for C busy-wait (86-99% error) because signals are deferred until the next safepoint, which never comes during the C loop. rperf's time-delta weighting handles this correctly (0.0-0.1% error). pf2 handles cw via native stack collection (0.7-8.1%).
+stackprof's signal-based sampling completely fails for C busy-wait (86-99% error) because signals are deferred until the next safepoint, which never comes during the C loop. rperf's time-delta weighting handles this correctly (5.5% error). pf2 handles cw via native stack collection (0.7-7.7%).
 
 ### 4. CPU-time measurement is stable under load (rperf only)
 
-Under full CPU saturation, rperf's cpu mode error is unchanged (3.9-1.5% for mixed). pf2's cpu mode degrades heavily (30.9% -> 66.2% at 100Hz for mixed), suggesting it may be using wall time internally. stackprof's cpu mode is already inaccurate, so load makes little difference.
+Under full CPU saturation, rperf's cpu mode error is unchanged (3.2-0.5% for mixed). pf2's cpu mode degrades heavily (32.2% -> 61.5% at 100Hz for mixed), suggesting it may be using wall time internally. stackprof's cpu mode is already inaccurate, so load makes little difference.
 
 ### 5. 100Hz is sufficient for rperf
 
-At 100Hz, rperf achieves <9% error in all time-accuracy scenarios (cpu mode) and <8% in most wall scenarios. The time-delta weighting compensates for the lower sample rate by assigning correct weights to each sample. Other profilers generally need 1000Hz for comparable accuracy on favorable workloads.
+At 100Hz, rperf achieves <8% error in all time-accuracy scenarios (cpu mode) and <6% in most wall scenarios. The time-delta weighting compensates for the lower sample rate by assigning correct weights to each sample. Other profilers generally need 1000Hz for comparable accuracy on favorable workloads.
 
 ### 6. Each profiler has a niche
 
-- **stackprof**: Best for call-ratio analysis in wall mode at 1000Hz (7.7%). Signal-based sampling with uniform weighting gives low-variance ratio estimates.
-- **vernier**: Accurate for wall-mode profiling of Ruby and GVL-released code at 1000Hz (0.8-2.0%). Cannot measure csleep or CPU time.
-- **pf2**: Handles cw via native stack collection (0.7-8.1%). Degrades in mixed scenarios and under load. Occasional crashes under high load.
+- **stackprof**: Best for call-ratio analysis in wall mode at 1000Hz (5.8%). Signal-based sampling with uniform weighting gives low-variance ratio estimates.
+- **vernier**: Accurate for wall-mode profiling at 1000Hz (0.7-3.0% for most scenarios). Cannot measure csleep accurately or CPU time.
+- **pf2**: Handles cw via native stack collection (0.7-7.7%). Wall mode is competitive at 1000Hz no-load (0.7-10.1%). Degrades in mixed scenarios and under load. Occasional crashes under high load.
 - **rperf**: Accurate for all workload types, both modes, both frequencies, with and without load. Near-zero overhead.

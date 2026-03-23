@@ -7,6 +7,7 @@ require "json"
 require "open3"
 require "etc"
 require "optparse"
+require "csv"
 
 # Parse options
 scenario_file = File.join(__dir__, "scenarios_mixed.json")
@@ -16,6 +17,7 @@ profiler = "rperf"
 frequency = 1000
 cpu_load = false
 verbose = false
+csv_file = nil
 
 parser = OptionParser.new do |opts|
   opts.banner = "Usage: check_accuracy.rb [options] [scenario_ids...]"
@@ -48,6 +50,9 @@ parser = OptionParser.new do |opts|
   opts.on("-v", "--verbose", "Show per-method detail and raw output for all scenarios") do
     verbose = true
   end
+  opts.on("--csv FILE", "Append per-method CSV results to FILE") do |v|
+    csv_file = v
+  end
   opts.on("-h", "--help", "Show this help") do
     puts opts
     exit
@@ -57,6 +62,7 @@ parser.parse!(ARGV)
 args = ARGV
 
 scenarios = JSON.parse(File.read(scenario_file))
+scenario_type = File.basename(scenario_file, ".json").sub(/\Ascenarios_/, "")
 
 # Detect scenario type
 ratio_mode = scenarios.first&.dig("type") == "ratio"
@@ -336,28 +342,27 @@ selected.each do |scenario|
     next
   end
 
-  # Compare
+  # Compare — collect structured per-method results
+  method_results = []  # [{method:, expected:, actual:, error:}]
   if ratio_mode
     # Convert actual values to ratios
-    actual_total = actual_ms.values.select { |v| expected_ratio.key?(actual_ms.key(v)) rescue false }.sum
     actual_total = 0.0
     expected_ratio.each_key { |m| actual_total += (actual_ms[m] || 0.0) }
 
-    errors = []
     expected_ratio.each do |method, exp_r|
       act_r = actual_total > 0 ? (actual_ms[method] || 0.0) / actual_total : 0.0
       error = exp_r > 0 ? ((act_r - exp_r).abs / exp_r) : 0.0
-      errors << error
+      method_results << { method: method, expected: exp_r, actual: act_r, error: error }
     end
   else
-    errors = []
     expected_ms.each do |method, exp|
       act = actual_ms[method] || 0.0
       error = exp > 0 ? ((act - exp).abs / exp) : 0.0
-      errors << error
+      method_results << { method: method, expected: exp, actual: act, error: error }
     end
   end
 
+  errors = method_results.map { |r| r[:error] }
   avg_error = errors.empty? ? 0.0 : errors.sum / errors.size
   all_errors << avg_error
   pass = avg_error <= tolerance
@@ -369,27 +374,33 @@ selected.each do |scenario|
   puts format("--- Scenario #%-4d  %s (avg error: %.1f%%) ---", scenario_id, label, avg_error * 100)
 
   if show_detail
+    sorted = method_results.sort_by { |r| -r[:expected] }
     if ratio_mode
-      actual_total = 0.0
-      expected_ratio.each_key { |m| actual_total += (actual_ms[m] || 0.0) }
-
-      expected_ratio.sort_by { |_, v| -v }.each do |method, exp_r|
-        act_val = actual_ms[method] || 0.0
-        act_r = actual_total > 0 ? act_val / actual_total : 0.0
-        err = exp_r > 0 ? ((act_r - exp_r).abs / exp_r * 100) : 0.0
-        puts format("  %-20s  expected=%6.2f%%  actual=%6.2f%%  error=%5.1f%%", method, exp_r * 100, act_r * 100, err)
+      sorted.each do |r|
+        puts format("  %-20s  expected=%6.2f%%  actual=%6.2f%%  error=%5.1f%%",
+                     r[:method], r[:expected] * 100, r[:actual] * 100, r[:error] * 100)
       end
     else
-      expected_ms.sort_by { |_, v| -v }.each do |method, exp|
-        act = actual_ms[method] || 0.0
-        err = exp > 0 ? ((act - exp).abs / exp * 100) : 0.0
-        puts format("  %-20s  expected=%7.1fms  actual=%7.1fms  error=%5.1f%%", method, exp, act, err)
+      sorted.each do |r|
+        puts format("  %-20s  expected=%7.1fms  actual=%7.1fms  error=%5.1f%%",
+                     r[:method], r[:expected], r[:actual], r[:error] * 100)
       end
     end
     puts
     puts "  raw output:"
     raw_out.to_s.each_line { |l| puts "    #{l}" }
     puts
+  end
+
+  # Append CSV rows if requested
+  if csv_file
+    load_label = cpu_load ? "full" : "none"
+    CSV.open(csv_file, "a") do |csv|
+      method_results.each do |r|
+        csv << [profiler, profiling_mode, frequency, load_label,
+                scenario_type, scenario_id, r[:method], r[:expected], r[:actual], r[:error]]
+      end
+    end
   end
 
   # Cleanup profiler output
