@@ -77,6 +77,7 @@ data = Rperf.stop
 | `verbose:` | Boolean | `false` | Print statistics to stderr |
 | `format:` | Symbol | `nil` | `:pprof`, `:collapsed`, `:text`, or `nil` (auto-detect from output extension) |
 | `signal:` | Integer/Boolean | `nil` | Linux only: `nil` = timer signal (default), `false` = nanosleep thread, positive integer = specific RT signal number |
+| `aggregate:` | Boolean | `true` | Aggregate identical stacks during profiling to reduce memory. `false` returns raw per-sample data |
 
 ## Rperf.stop return value
 
@@ -88,8 +89,11 @@ data = Rperf.stop
   frequency: 1000,
   sampling_count: 1234,    # number of timer callbacks
   sampling_time_ns: 56789, # total time spent sampling (overhead)
+  trigger_count: 1234,     # number of timer triggers
   start_time_ns: 17740..., # CLOCK_REALTIME epoch nanos
   duration_ns: 10000000,   # profiling duration in nanos
+  unique_frames: 42,       # unique frame count (aggregate: true only)
+  unique_stacks: 120,      # unique stack count (aggregate: true only)
   samples: [               # Array of [frames, weight, thread_seq]
     [frames, weight, seq], #   frames: [[path, label], ...] deepest-first
     ...                    #   weight: Integer (nanoseconds)
@@ -101,6 +105,8 @@ Each sample has:
 - **frames**: An array of `[path, label]` pairs, ordered deepest-first (leaf frame at index 0)
 - **weight**: Time in nanoseconds attributed to this sample
 - **thread_seq**: Thread sequence number (1-based, assigned per profiling session)
+
+When `aggregate: true` (default), identical stacks are merged and their weights summed. The `samples` array contains one entry per unique `(stack, thread_seq)` combination. When `aggregate: false`, every raw sample is returned individually.
 
 ## Rperf.save
 
@@ -165,14 +171,15 @@ Rperf.save("wall.txt", wall_data)
 
 The CPU profile will focus on `compute_something`, while the wall profile will show the `sleep` calls as `[GVL blocked]` time.
 
-### Processing raw samples
+### Processing samples
 
-You can work with the raw sample data programmatically:
+You can work with the sample data programmatically. By default, samples are aggregated (identical stacks merged):
 
 ```ruby
 require "rperf"
 
 data = Rperf.start(mode: :cpu) { workload }
+# data[:samples] contains aggregated entries (one per unique stack)
 
 # Find the hottest function
 flat = Hash.new(0)

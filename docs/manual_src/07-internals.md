@@ -9,13 +9,16 @@ rperf consists of a C extension and a Ruby wrapper:
 ```mermaid
 graph TD
     subgraph "C Extension (ext/rperf/rperf.c)"
-        Timer["Timer<br/>(signal or nanosleep)"]
+        Timer["Timer<br/>(signal or pthread_cond_timedwait)"]
         PJ["rb_postponed_job_trigger"]
         Sample["Sample callback<br/>(rperf_sample_job)"]
         ThreadHook["Thread event hook<br/>(SUSPENDED/READY/RESUMED/EXITED)"]
         GCHook["GC event hook<br/>(ENTER/EXIT/START/END_MARK/END_SWEEP)"]
-        SampleBuf["Sample buffer"]
-        FramePool["Frame pool"]
+        BufA["Sample buffer A"]
+        BufB["Sample buffer B"]
+        Worker["Worker thread<br/>(timer + aggregation)"]
+        FrameTable["Frame table<br/>(VALUE → frame_id)"]
+        AggTable["Aggregation table<br/>(stack → weight)"]
     end
 
     subgraph "Ruby (lib/rperf.rb)"
@@ -26,13 +29,16 @@ graph TD
 
     Timer -->|triggers| PJ
     PJ -->|at safepoint| Sample
-    Sample -->|writes| SampleBuf
-    Sample -->|writes| FramePool
-    ThreadHook -->|writes| SampleBuf
-    GCHook -->|writes| SampleBuf
+    Sample -->|writes| BufA
+    ThreadHook -->|writes| BufA
+    GCHook -->|writes| BufA
+    BufA -->|swap when full| BufB
+    BufB -->|aggregated by| Worker
+    Worker -->|inserts| FrameTable
+    Worker -->|inserts| AggTable
     API -->|calls| Sample
-    SampleBuf -->|read at stop| Encoders
-    FramePool -->|resolved at stop| Encoders
+    AggTable -->|read at stop| Encoders
+    FrameTable -->|resolved at stop| Encoders
     Encoders --> StatOut
 ```
 
@@ -41,48 +47,49 @@ graph TD
 rperf uses a single global `rperf_profiler_t` struct. Only one profiling session can be active at a time ([single session](#index:single session) limitation). The struct holds:
 
 - Timer configuration (frequency, mode, signal number)
-- Sample buffer (dynamically growing array)
-- Frame pool (dynamically growing VALUE array)
+- Double-buffered sample storage (two sample buffers + frame pools, swapped when full)
+- Frame table (VALUE → uint32 frame_id, deduplicates frame references)
+- Aggregation table (unique stack → accumulated weight)
+- Worker thread handle (unified timer + aggregation thread)
 - Thread-specific key for per-thread data
 - GC phase tracking state
 - Sampling overhead counters
 
-## Timer implementation
+## Timer and worker thread
 
-rperf uses a timer to periodically trigger sampling. The timer implementation depends on the platform:
+rperf uses a single worker thread that handles both timer triggering and periodic sample aggregation. The timer mechanism depends on the platform:
 
 ### Linux: Signal-based timer (default)
 
-On Linux, rperf uses `timer_create` with `SIGEV_SIGNAL` to deliver a real-time signal (default: `SIGRTMIN+8`) at the configured frequency. A `sigaction` handler calls `rb_postponed_job_trigger` to schedule the sampling callback.
+On Linux, rperf uses `timer_create` with `SIGEV_THREAD_ID` to deliver a real-time signal (default: `SIGRTMIN+8`) exclusively to the worker thread at the configured frequency. The signal handler calls `rb_postponed_job_trigger` to schedule the sampling callback.
+
+Using `SIGEV_THREAD_ID` ensures the timer signal only targets the worker thread, preventing it from interrupting `nanosleep`, `read`, or other blocking syscalls in Ruby threads (e.g., inside `rb_thread_call_without_gvl`).
 
 ```mermaid
 sequenceDiagram
     participant Kernel as Linux Kernel
-    participant Signal as Signal Handler
+    participant Worker as Worker Thread
     participant VM as Ruby VM
     participant Job as Postponed Job
 
-    Kernel->>Signal: SIGRTMIN+8 (every 1ms at 1000Hz)
-    Signal->>VM: rb_postponed_job_trigger()
+    Kernel->>Worker: SIGRTMIN+8 (every 1ms at 1000Hz)
+    Worker->>VM: rb_postponed_job_trigger()
     Note over VM: Continues until safepoint...
     VM->>Job: rperf_sample_job()
     Job->>Job: rb_profile_frames() + record sample
+    Note over Worker: Also aggregates samples<br/>when swap_ready is set
 ```
 
-This approach provides precise timing (~1000us median interval at 1000Hz) with no extra thread.
+This approach provides precise timing (~1000us median interval at 1000Hz).
 
-### Fallback: nanosleep thread
+### Fallback: pthread_cond_timedwait
 
-On macOS, or when `signal: false` is set on Linux, rperf creates a dedicated pthread that loops with `nanosleep`:
+On macOS, or when `signal: false` is set on Linux, the worker thread uses `pthread_cond_timedwait` with an absolute deadline as the timer:
 
-```c
-while (prof->running) {
-    rb_postponed_job_trigger(prof->pj_handle);
-    nanosleep(&interval, NULL);
-}
-```
+- **Timeout** (deadline reached): trigger `rb_postponed_job_trigger` and advance deadline
+- **Signal** (swap_ready set): aggregate the standby buffer immediately
 
-This is simpler but has ~100us drift per tick due to nanosleep's imprecision.
+The deadline-based approach avoids drift when aggregation takes time. This mode has ~100us timing imprecision compared to the signal-based approach.
 
 ## Sampling: current-thread-only
 
@@ -155,23 +162,60 @@ GC samples always use wall time regardless of the profiling mode, because GC tim
 
 ## Deferred string resolution
 
-During sampling, rperf stores raw frame `VALUE`s (Ruby internal object references) in the [frame pool](#index:frame pool) — not strings. This [deferred string resolution](#index:deferred string resolution) keeps the hot path allocation-free and fast.
+During sampling, rperf stores raw frame `VALUE`s (Ruby internal object references) in the frame pool — not strings. This [deferred string resolution](#index:deferred string resolution) keeps the hot path allocation-free and fast.
 
 String resolution happens at stop time:
 
-1. `Rperf.stop` calls `_c_stop` which returns raw data
-2. For each frame VALUE, `rb_profile_frame_full_label` and `rb_profile_frame_path` are called to get human-readable strings
-3. These strings are then passed to the Ruby encoders
+1. `Rperf.stop` calls `_c_stop`
+2. The frame table maps each unique frame VALUE to a `[path, label]` string pair via `rb_profile_frame_full_label` and `rb_profile_frame_path`
+3. These resolved strings are passed to the Ruby encoders
 
 This means sampling only writes integers (VALUE pointers and timestamps) to pre-allocated buffers. No Ruby objects are created, no GC pressure is added during profiling.
 
-## Frame pool and GC safety
+## Sample aggregation
 
-The frame pool is a contiguous array of `VALUE`s that stores raw frame references from `rb_profile_frames`. Since these are Ruby object references, they must be protected from garbage collection.
+By default (`aggregate: true`), rperf periodically aggregates samples to keep memory usage bounded during long profiling sessions.
 
-rperf wraps the profiler struct in a `TypedData` object with a custom `dmark` function that calls `rb_gc_mark_locations` on the entire frame pool. This tells the GC that all VALUEs in the pool are reachable and must not be collected.
+### Double buffering
 
-The frame pool starts at ~1MB and doubles in size via `realloc` when needed. Similarly, the sample buffer starts with 1024 entries and grows by 2x.
+Two sample buffers alternate roles:
+
+1. The **active buffer** receives new samples from sampling callbacks
+2. When the active buffer reaches 10,000 samples, the buffers swap
+3. The **standby buffer** is processed by the worker thread in the background
+
+If the worker thread hasn't finished processing the standby buffer, the swap is skipped and the active buffer continues growing (fallback to unbounded mode).
+
+### Frame table and aggregation table
+
+The worker thread processes the standby buffer into two compact hash tables:
+
+- **Frame table** (`VALUE → uint32_t frame_id`): Deduplicates frame references. Each unique frame VALUE gets a small integer ID. The keys array is the only GC mark target for aggregated data.
+- **Aggregation table** (`(frame_ids[], thread_seq) → weight`): Merges identical stacks by summing their weights. Frame IDs (uint32_t) are half the size of VALUEs, and the stack pool stores them contiguously.
+
+Synthetic frames (`[GVL blocked]`, `[GVL wait]`, `[GC marking]`, `[GC sweeping]`) are converted to reserved frame IDs during aggregation, eliminating the `type` field from the sample representation.
+
+### Memory usage
+
+| Buffer | Initial size | Element size | Initial memory |
+|--------|-------------|-------------|----------------|
+| Sample buffer (×2) | 16,384 | 32B | 512KB × 2 |
+| Frame pool (×2) | 131,072 | 8B (VALUE) | 1MB × 2 |
+| Frame table keys | 65,536 | 8B (VALUE) | 512KB |
+| Frame table buckets | 131,072 | 4B (uint32) | 512KB |
+| Agg table buckets | 2,048 | 28B | 56KB |
+| Stack pool | 4,096 | 4B (uint32) | 16KB |
+
+Total: ~4.6MB with `aggregate: true`, ~1.5MB with `aggregate: false` (single buffer only).
+
+## GC safety
+
+Frame VALUEs must be protected from garbage collection. rperf wraps the profiler struct in a `TypedData` object with a custom `dmark` function that marks three regions:
+
+1. **Both frame pools** (active and standby buffers)
+2. **Frame table keys** (unique frame VALUEs, excluding synthetic frame slots)
+
+The frame table keys are pre-allocated (65,536 entries) and never reallocated, avoiding race conditions with the GC's mark phase which can run concurrently with the aggregation thread.
 
 ## Per-thread data
 
@@ -191,7 +235,7 @@ rperf registers a `pthread_atfork` child handler that silently stops profiling i
 
 - Clears the timer/signal state
 - Removes event hooks
-- Frees sample and frame buffers
+- Frees sample buffers, frame table, and aggregation table
 
 The parent process continues profiling unaffected. The child can start a fresh profiling session if needed.
 

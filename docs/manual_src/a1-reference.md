@@ -66,6 +66,7 @@ These are used internally by the CLI to configure the auto-started profiler:
 | `RPERF_VERBOSE` | `1` | Print statistics to stderr |
 | `RPERF_STAT` | `1` | Enable stat mode output |
 | `RPERF_STAT_COMMAND` | string | Command string shown in stat output header |
+| `RPERF_AGGREGATE` | `0` | Disable sample aggregation (return raw samples) |
 
 ## Profiling mode comparison
 
