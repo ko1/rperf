@@ -82,7 +82,7 @@ class TestRperf < Test::Unit::TestCase
 
   def test_restart_clears_thread_state
     # First session
-    Rperf.start(frequency: 1000)
+    Rperf.start(frequency: 1000, aggregate: false)
     1_000_000.times { 1 + 1 }
     data1 = Rperf.stop
 
@@ -90,17 +90,19 @@ class TestRperf < Test::Unit::TestCase
     sleep 0.2
 
     # Second session - weights should NOT include the 200ms gap
-    Rperf.start(frequency: 1000)
+    Rperf.start(frequency: 1000, aggregate: false)
     1_000_000.times { 1 + 1 }
     data2 = Rperf.stop
 
     assert_not_nil data1
     assert_not_nil data2
 
+    # Check raw per-sample weights (not aggregated totals).
+    # At 1000Hz each raw sample weight should be ~1ms.
+    # Without proper thread state reset, the first sample would carry
+    # the stale prev_cpu_ns from session 1, producing a huge weight.
     max_weight2 = data2[:samples].map { |_, w| w }.max || 0
 
-    # The max weight in session 2 should be reasonable (< 100ms).
-    # Without the fix, it would include the 200ms sleep gap.
     assert_operator max_weight2, :<, 100_000_000,
       "Max weight in second session (#{max_weight2}ns) should not include the gap between sessions"
   end
@@ -212,14 +214,14 @@ class TestRperf < Test::Unit::TestCase
     end
 
     # Session 1
-    Rperf.start(frequency: 1000)
+    Rperf.start(frequency: 1000, aggregate: false)
     5_000_000.times { 1 + 1 }
     data1 = Rperf.stop
 
     sleep 0.2
 
     # Session 2 - surviving worker thread must not carry stale state
-    Rperf.start(frequency: 1000)
+    Rperf.start(frequency: 1000, aggregate: false)
     5_000_000.times { 1 + 1 }
     data2 = Rperf.stop
 
@@ -230,6 +232,9 @@ class TestRperf < Test::Unit::TestCase
     assert_not_nil data2
     assert_operator data2[:samples].size, :>, 0
 
+    # Check raw per-sample weights. At 1000Hz each should be ~1ms.
+    # Without proper cleanup, surviving thread's first sample would
+    # include stale prev_cpu_ns from session 1.
     max_weight2 = data2[:samples].map { |_, w| w }.max || 0
     assert_operator max_weight2, :<, 200_000_000,
       "Surviving thread's max weight (#{max_weight2}ns) should not include inter-session gap"
