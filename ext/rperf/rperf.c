@@ -313,16 +313,19 @@ rperf_ensure_frame_pool_capacity(rperf_sample_buffer_t *buf, int needed)
 
 /* ---- Frame table operations (all malloc-based, no GVL needed) ---- */
 
-static void
+static int
 rperf_frame_table_init(rperf_frame_table_t *ft)
 {
     ft->capacity = RPERF_FRAME_TABLE_INITIAL;
     ft->keys = (VALUE *)calloc(ft->capacity, sizeof(VALUE));
+    if (!ft->keys) return -1;
     ft->count = RPERF_SYNTHETIC_COUNT; /* reserve slots for synthetic frames */
     ft->bucket_capacity = RPERF_FRAME_TABLE_INITIAL * 2;
     ft->buckets = (uint32_t *)malloc(ft->bucket_capacity * sizeof(uint32_t));
+    if (!ft->buckets) { free(ft->keys); ft->keys = NULL; return -1; }
     memset(ft->buckets, 0xFF, ft->bucket_capacity * sizeof(uint32_t)); /* EMPTY */
     ft->old_keys_count = 0;
+    return 0;
 }
 
 static void
@@ -341,6 +344,7 @@ rperf_frame_table_rehash(rperf_frame_table_t *ft)
 {
     size_t new_cap = ft->bucket_capacity * 2;
     uint32_t *new_buckets = (uint32_t *)malloc(new_cap * sizeof(uint32_t));
+    if (!new_buckets) return; /* keep using current buckets at higher load factor */
     memset(new_buckets, 0xFF, new_cap * sizeof(uint32_t));
 
     size_t i;
@@ -420,15 +424,18 @@ rperf_fnv1a_u32(const uint32_t *data, int len, int thread_seq)
     return h;
 }
 
-static void
+static int
 rperf_agg_table_init(rperf_agg_table_t *at)
 {
     at->bucket_capacity = RPERF_AGG_TABLE_INITIAL * 2;
     at->buckets = (rperf_agg_entry_t *)calloc(at->bucket_capacity, sizeof(rperf_agg_entry_t));
+    if (!at->buckets) return -1;
     at->count = 0;
     at->stack_pool_capacity = RPERF_STACK_POOL_INITIAL;
     at->stack_pool = (uint32_t *)malloc(at->stack_pool_capacity * sizeof(uint32_t));
+    if (!at->stack_pool) { free(at->buckets); at->buckets = NULL; return -1; }
     at->stack_pool_count = 0;
+    return 0;
 }
 
 static void
@@ -444,6 +451,7 @@ rperf_agg_table_rehash(rperf_agg_table_t *at)
 {
     size_t new_cap = at->bucket_capacity * 2;
     rperf_agg_entry_t *new_buckets = (rperf_agg_entry_t *)calloc(new_cap, sizeof(rperf_agg_entry_t));
+    if (!new_buckets) return; /* keep using current buckets at higher load factor */
 
     size_t i;
     for (i = 0; i < at->bucket_capacity; i++) {
@@ -1000,8 +1008,21 @@ rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig)
         }
 
         /* Initialize aggregation structures */
-        rperf_frame_table_init(&g_profiler.frame_table);
-        rperf_agg_table_init(&g_profiler.agg_table);
+        if (rperf_frame_table_init(&g_profiler.frame_table) < 0) {
+            rperf_sample_buffer_free(&g_profiler.buffers[0]);
+            rperf_sample_buffer_free(&g_profiler.buffers[1]);
+            CHECKED(pthread_mutex_destroy(&g_profiler.worker_mutex));
+            CHECKED(pthread_cond_destroy(&g_profiler.worker_cond));
+            rb_raise(rb_eNoMemError, "rperf: failed to allocate frame table");
+        }
+        if (rperf_agg_table_init(&g_profiler.agg_table) < 0) {
+            rperf_frame_table_free(&g_profiler.frame_table);
+            rperf_sample_buffer_free(&g_profiler.buffers[0]);
+            rperf_sample_buffer_free(&g_profiler.buffers[1]);
+            CHECKED(pthread_mutex_destroy(&g_profiler.worker_mutex));
+            CHECKED(pthread_cond_destroy(&g_profiler.worker_cond));
+            rb_raise(rb_eNoMemError, "rperf: failed to allocate aggregation table");
+        }
     }
 
     /* Register GC event hook */
