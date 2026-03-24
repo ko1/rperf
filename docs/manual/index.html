@@ -1028,7 +1028,7 @@ details.mermaid-source pre {
                 <a href="#04-library-usage--comparing-cpu-and-wall-profiles" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--comparing-cpu-and-wall-profiles')">4.5.2 Comparing CPU and wall profiles</a>
               </li>
               <li>
-                <a href="#04-library-usage--processing-raw-samples" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--processing-raw-samples')">4.5.3 Processing raw samples</a>
+                <a href="#04-library-usage--processing-samples" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--processing-samples')">4.5.3 Processing samples</a>
               </li>
               <li>
                 <a href="#04-library-usage--generating-collapsed-stacks-for-flamegraph" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--generating-collapsed-stacks-for-flamegraph')">4.5.4 Generating collapsed stacks for FlameGraph</a>
@@ -1123,13 +1123,13 @@ details.mermaid-source pre {
                 <a href="#07-internals--global-profiler-state" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--global-profiler-state')">7.2 Global profiler state</a>
               </li>
               <li>
-                <a href="#07-internals--timer-implementation" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--timer-implementation')">7.3 Timer implementation</a>
+                <a href="#07-internals--timer-and-worker-thread" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--timer-and-worker-thread')">7.3 Timer and worker thread</a>
               </li>
               <li>
                 <a href="#07-internals--linux-signal-based-timer-default" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--linux-signal-based-timer-default')">7.3.1 Linux: Signal-based timer (default)</a>
               </li>
               <li>
-                <a href="#07-internals--fallback-nanosleep-thread" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--fallback-nanosleep-thread')">7.3.2 Fallback: nanosleep thread</a>
+                <a href="#07-internals--fallback-pthread_cond_timedwait" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--fallback-pthread_cond_timedwait')">7.3.2 Fallback: pthread_cond_timedwait</a>
               </li>
               <li>
                 <a href="#07-internals--sampling-current-thread-only" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--sampling-current-thread-only')">7.4 Sampling: current-thread-only</a>
@@ -1153,28 +1153,40 @@ details.mermaid-source pre {
                 <a href="#07-internals--deferred-string-resolution" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--deferred-string-resolution')">7.7 Deferred string resolution</a>
               </li>
               <li>
-                <a href="#07-internals--frame-pool-and-gc-safety" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--frame-pool-and-gc-safety')">7.8 Frame pool and GC safety</a>
+                <a href="#07-internals--sample-aggregation" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--sample-aggregation')">7.8 Sample aggregation</a>
               </li>
               <li>
-                <a href="#07-internals--per-thread-data" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--per-thread-data')">7.9 Per-thread data</a>
+                <a href="#07-internals--double-buffering" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--double-buffering')">7.8.1 Double buffering</a>
               </li>
               <li>
-                <a href="#07-internals--fork-safety" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--fork-safety')">7.10 Fork safety</a>
+                <a href="#07-internals--frame-table-and-aggregation-table" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--frame-table-and-aggregation-table')">7.8.2 Frame table and aggregation table</a>
               </li>
               <li>
-                <a href="#07-internals--pprof-encoder" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--pprof-encoder')">7.11 pprof encoder</a>
+                <a href="#07-internals--memory-usage" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--memory-usage')">7.8.3 Memory usage</a>
               </li>
               <li>
-                <a href="#07-internals--known-limitations" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--known-limitations')">7.12 Known limitations</a>
+                <a href="#07-internals--gc-safety" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--gc-safety')">7.9 GC safety</a>
               </li>
               <li>
-                <a href="#07-internals--running-ec-race" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--running-ec-race')">7.12.1 Running EC race</a>
+                <a href="#07-internals--per-thread-data" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--per-thread-data')">7.10 Per-thread data</a>
               </li>
               <li>
-                <a href="#07-internals--single-session" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--single-session')">7.12.2 Single session</a>
+                <a href="#07-internals--fork-safety" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--fork-safety')">7.11 Fork safety</a>
               </li>
               <li>
-                <a href="#07-internals--method-level-granularity" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--method-level-granularity')">7.12.3 Method-level granularity</a>
+                <a href="#07-internals--pprof-encoder" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--pprof-encoder')">7.12 pprof encoder</a>
+              </li>
+              <li>
+                <a href="#07-internals--known-limitations" class="toc-h2" onclick="showChapterAndScroll('07-internals', '07-internals--known-limitations')">7.13 Known limitations</a>
+              </li>
+              <li>
+                <a href="#07-internals--running-ec-race" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--running-ec-race')">7.13.1 Running EC race</a>
+              </li>
+              <li>
+                <a href="#07-internals--single-session" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--single-session')">7.13.2 Single session</a>
+              </li>
+              <li>
+                <a href="#07-internals--method-level-granularity" class="toc-h3" onclick="showChapterAndScroll('07-internals', '07-internals--method-level-granularity')">7.13.3 Method-level granularity</a>
               </li>
             </ul>
           </li>
@@ -1509,9 +1521,6 @@ fib(35)
               31            [OS] context switches (10 voluntary, 21 involuntary)
                0 MB         [OS] disk I/O (0 MB read, 0 MB write)
 
- Top 1 by flat:
-           481.0 ms 100.0%  Object#fib (fib.rb)
-
   481 samples / 481 triggers, 0.1% profiler overhead
 </code></pre>
 
@@ -1522,8 +1531,9 @@ fib(35)
   <li><strong>Time breakdown</strong>: Where wall time was spent — CPU execution, GVL blocked (I/O/sleep), GVL wait (contention), GC marking, GC sweeping</li>
   <li><strong>Ruby stats</strong>: GC count, allocated/freed objects, YJIT ratio (if enabled)</li>
   <li><strong>OS stats</strong>: Peak memory, context switches, disk I/O</li>
-  <li><strong>Top functions</strong>: Hottest functions by flat time</li>
 </ul>
+
+<p>Use <code>--report</code> to add flat and cumulative top-50 function tables to the output.</p>
 
 <h3 id="03-cli-usage--example-mixed-cpu-and-io">3.1.2 Example: Mixed CPU and I/O</h3>
 
@@ -1571,6 +1581,14 @@ end
     <tr>
       <td><code>-f HZ</code></td>
       <td>Sampling frequency in Hz (default: 1000)</td>
+    </tr>
+    <tr>
+      <td><code>-m MODE</code></td>
+      <td><code>cpu</code> or <code>wall</code> (default: <code>wall</code>)</td>
+    </tr>
+    <tr>
+      <td><code>--report</code></td>
+      <td>Include flat/cumulative profile tables in output</td>
     </tr>
     <tr>
       <td><code>-v</code></td>
@@ -1640,12 +1658,12 @@ rperf record -o profile.txt ruby my_app.rb
 <pre><code>Total: 509.5ms (cpu)
 Samples: 509, Frequency: 1000Hz
 
-Flat:
-     509.5ms 100.0%  Object#fib (fib.rb)
+ Flat:
+           509.5 ms 100.0%  Object#fib (fib.rb)
 
-Cumulative:
-     509.5ms 100.0%  Object#fib (fib.rb)
-     509.5ms 100.0%  &lt;main&gt; (fib.rb)
+ Cumulative:
+           509.5 ms 100.0%  Object#fib (fib.rb)
+           509.5 ms 100.0%  &lt;main&gt; (fib.rb)
 </code></pre>
 
 <h3 id="03-cli-usage--example-wall-mode-text-output">3.2.5 Example: Wall mode text output</h3>
@@ -1656,22 +1674,22 @@ Cumulative:
 <pre><code>Total: 311.8ms (wall)
 Samples: 80, Frequency: 1000Hz
 
-Flat:
-     250.6ms  80.4%  [GVL blocked] (&lt;GVL&gt;)
-      44.1ms  14.1%  Object#cpu_work (mixed.rb)
-      13.9ms   4.5%  Integer#times (&lt;internal:numeric&gt;)
-       3.2ms   1.0%  Kernel#sleep (&lt;C method&gt;)
-       0.0ms   0.0%  [GVL wait] (&lt;GVL&gt;)
+ Flat:
+           250.6 ms  80.4%  [GVL blocked] (&lt;GVL&gt;)
+            44.1 ms  14.1%  Object#cpu_work (mixed.rb)
+            13.9 ms   4.5%  Integer#times (&lt;internal:numeric&gt;)
+             3.2 ms   1.0%  Kernel#sleep (&lt;C method&gt;)
+             0.0 ms   0.0%  [GVL wait] (&lt;GVL&gt;)
 
-Cumulative:
-     311.8ms 100.0%  Integer#times (&lt;internal:numeric&gt;)
-     311.8ms 100.0%  block in &lt;main&gt; (mixed.rb)
-     311.8ms 100.0%  &lt;main&gt; (mixed.rb)
-     253.8ms  81.4%  Kernel#sleep (&lt;C method&gt;)
-     253.8ms  81.4%  Object#io_work (mixed.rb)
-     250.6ms  80.4%  [GVL blocked] (&lt;GVL&gt;)
-      58.0ms  18.6%  Object#cpu_work (mixed.rb)
-       0.0ms   0.0%  [GVL wait] (&lt;GVL&gt;)
+ Cumulative:
+           311.8 ms 100.0%  Integer#times (&lt;internal:numeric&gt;)
+           311.8 ms 100.0%  block in &lt;main&gt; (mixed.rb)
+           311.8 ms 100.0%  &lt;main&gt; (mixed.rb)
+           253.8 ms  81.4%  Kernel#sleep (&lt;C method&gt;)
+           253.8 ms  81.4%  Object#io_work (mixed.rb)
+           250.6 ms  80.4%  [GVL blocked] (&lt;GVL&gt;)
+            58.0 ms  18.6%  Object#cpu_work (mixed.rb)
+             0.0 ms   0.0%  [GVL wait] (&lt;GVL&gt;)
 </code></pre>
 
 <p>In wall mode, <code>[GVL blocked]</code> appears as the dominant cost — this is the sleep time in <code>io_work</code>. The CPU time for <code>cpu_work</code> is clearly separated.</p>
@@ -1720,6 +1738,10 @@ Cumulative:
     <tr>
       <td><code>--format FMT</code></td>
       <td><code>pprof</code>, <code>collapsed</code>, or <code>text</code> (default: auto from extension)</td>
+    </tr>
+    <tr>
+      <td><code>-p, --print</code></td>
+      <td>Print text profile to stdout (same as <code>--format=text --output=/dev/stdout</code>)</td>
     </tr>
     <tr>
       <td><code>-v</code></td>
@@ -1943,6 +1965,12 @@ data = Rperf.stop
       <td><code>nil</code></td>
       <td>Linux only: <code>nil</code> = timer signal (default), <code>false</code> = nanosleep thread, positive integer = specific RT signal number</td>
     </tr>
+    <tr>
+      <td><code>aggregate:</code></td>
+      <td>Boolean</td>
+      <td><code>true</code></td>
+      <td>Aggregate identical stacks during profiling to reduce memory. <code>false</code> returns raw per-sample data</td>
+    </tr>
   </tbody>
 </table>
 
@@ -1955,8 +1983,11 @@ data = Rperf.stop
   frequency: 1000,
   sampling_count: 1234,    # number of timer callbacks
   sampling_time_ns: 56789, # total time spent sampling (overhead)
+  trigger_count: 1234,     # number of timer triggers
   start_time_ns: 17740..., # CLOCK_REALTIME epoch nanos
   duration_ns: 10000000,   # profiling duration in nanos
+  unique_frames: 42,       # unique frame count (aggregate: true only)
+  unique_stacks: 120,      # unique stack count (aggregate: true only)
   samples: [               # Array of [frames, weight, thread_seq]
     [frames, weight, seq], #   frames: [[path, label], ...] deepest-first
     ...                    #   weight: Integer (nanoseconds)
@@ -1970,6 +2001,8 @@ data = Rperf.stop
   <li><strong>weight</strong>: Time in nanoseconds attributed to this sample</li>
   <li><strong>thread_seq</strong>: Thread sequence number (1-based, assigned per profiling session)</li>
 </ul>
+
+<p>When <code>aggregate: true</code> (default), identical stacks are merged and their weights summed. The <code>samples</code> array contains one entry per unique <code>(stack, thread_seq)</code> combination. When <code>aggregate: false</code>, every raw sample is returned individually.</p>
 
 <h2 id="04-library-usage--rperfsave">4.4 Rperf.save</h2>
 
@@ -2030,17 +2063,18 @@ Rperf.save("wall.txt", wall_data)
 
 <p>The CPU profile will focus on <code>compute_something</code>, while the wall profile will show the <code>sleep</code> calls as <code>[GVL blocked]</code> time.</p>
 
-<h3 id="04-library-usage--processing-raw-samples">4.5.3 Processing raw samples</h3>
+<h3 id="04-library-usage--processing-samples">4.5.3 Processing samples</h3>
 
-<p>You can work with the raw sample data programmatically:</p>
+<p>You can work with the sample data programmatically. By default, samples are aggregated (identical stacks merged):</p>
 
 <pre><code class="language-ruby">require "rperf"
 
 data = Rperf.start(mode: :cpu) { workload }
+# data[:aggregated_samples] contains aggregated entries (one per unique stack)
 
 # Find the hottest function
 flat = Hash.new(0)
-data[:samples].each do |frames, weight, thread_seq|
+data[:aggregated_samples].each do |frames, weight, thread_seq|
   leaf_label = frames.first&amp;.last  # frames[0] is the leaf
   flat[leaf_label] += weight
 end
@@ -2048,6 +2082,15 @@ end
 top = flat.sort_by { |_, w| -w }.first(5)
 top.each do |label, weight_ns|
   puts "#{label}: #{weight_ns / 1_000_000.0}ms"
+end
+</code></pre>
+
+<p>To get raw (non-aggregated) per-sample data, pass <code>aggregate: false</code>. Each timer tick produces a separate entry:</p>
+
+<pre><code class="language-ruby">data = Rperf.start(mode: :cpu, aggregate: false) { workload }
+# data[:raw_samples] contains one entry per timer sample
+data[:raw_samples].each do |frames, weight, thread_seq|
+  puts "thread=#{thread_seq} weight=#{weight}ns depth=#{frames.size}"
 end
 </code></pre>
 
@@ -2201,12 +2244,12 @@ end
 <pre><code>Total: 509.5ms (cpu)
 Samples: 509, Frequency: 1000Hz
 
-Flat:
-     509.5ms 100.0%  Object#fib (fib.rb)
+ Flat:
+           509.5 ms 100.0%  Object#fib (fib.rb)
 
-Cumulative:
-     509.5ms 100.0%  Object#fib (fib.rb)
-     509.5ms 100.0%  &lt;main&gt; (fib.rb)
+ Cumulative:
+           509.5 ms 100.0%  Object#fib (fib.rb)
+           509.5 ms 100.0%  &lt;main&gt; (fib.rb)
 </code></pre>
 
 <p><strong>Sections</strong>:</p>
@@ -2482,13 +2525,16 @@ graph TD
 <div class="mermaid">
 graph TD
     subgraph "C Extension (ext/rperf/rperf.c)"
-        Timer["Timer<br/>(signal or nanosleep)"]
+        Timer["Timer<br/>(signal or pthread_cond_timedwait)"]
         PJ["rb_postponed_job_trigger"]
         Sample["Sample callback<br/>(rperf_sample_job)"]
         ThreadHook["Thread event hook<br/>(SUSPENDED/READY/RESUMED/EXITED)"]
         GCHook["GC event hook<br/>(ENTER/EXIT/START/END_MARK/END_SWEEP)"]
-        SampleBuf["Sample buffer"]
-        FramePool["Frame pool"]
+        BufA["Sample buffer A"]
+        BufB["Sample buffer B"]
+        Worker["Worker thread<br/>(timer + aggregation)"]
+        FrameTable["Frame table<br/>(VALUE → frame_id)"]
+        AggTable["Aggregation table<br/>(stack → weight)"]
     end
 
     subgraph "Ruby (lib/rperf.rb)"
@@ -2499,23 +2545,29 @@ graph TD
 
     Timer -->|triggers| PJ
     PJ -->|at safepoint| Sample
-    Sample -->|writes| SampleBuf
-    Sample -->|writes| FramePool
-    ThreadHook -->|writes| SampleBuf
-    GCHook -->|writes| SampleBuf
+    Sample -->|writes| BufA
+    ThreadHook -->|writes| BufA
+    GCHook -->|writes| BufA
+    BufA -->|swap when full| BufB
+    BufB -->|aggregated by| Worker
+    Worker -->|inserts| FrameTable
+    Worker -->|inserts| AggTable
     API -->|calls| Sample
-    SampleBuf -->|read at stop| Encoders
-    FramePool -->|resolved at stop| Encoders
+    AggTable -->|read at stop| Encoders
+    FrameTable -->|resolved at stop| Encoders
     Encoders --> StatOut
 </div><details class="mermaid-source"><summary>mermaid source</summary><pre>graph TD
     subgraph "C Extension (ext/rperf/rperf.c)"
-        Timer["Timer&lt;br/&gt;(signal or nanosleep)"]
+        Timer["Timer&lt;br/&gt;(signal or pthread_cond_timedwait)"]
         PJ["rb_postponed_job_trigger"]
         Sample["Sample callback&lt;br/&gt;(rperf_sample_job)"]
         ThreadHook["Thread event hook&lt;br/&gt;(SUSPENDED/READY/RESUMED/EXITED)"]
         GCHook["GC event hook&lt;br/&gt;(ENTER/EXIT/START/END_MARK/END_SWEEP)"]
-        SampleBuf["Sample buffer"]
-        FramePool["Frame pool"]
+        BufA["Sample buffer A"]
+        BufB["Sample buffer B"]
+        Worker["Worker thread&lt;br/&gt;(timer + aggregation)"]
+        FrameTable["Frame table&lt;br/&gt;(VALUE → frame_id)"]
+        AggTable["Aggregation table&lt;br/&gt;(stack → weight)"]
     end
 
     subgraph "Ruby (lib/rperf.rb)"
@@ -2526,13 +2578,16 @@ graph TD
 
     Timer --&gt;|triggers| PJ
     PJ --&gt;|at safepoint| Sample
-    Sample --&gt;|writes| SampleBuf
-    Sample --&gt;|writes| FramePool
-    ThreadHook --&gt;|writes| SampleBuf
-    GCHook --&gt;|writes| SampleBuf
+    Sample --&gt;|writes| BufA
+    ThreadHook --&gt;|writes| BufA
+    GCHook --&gt;|writes| BufA
+    BufA --&gt;|swap when full| BufB
+    BufB --&gt;|aggregated by| Worker
+    Worker --&gt;|inserts| FrameTable
+    Worker --&gt;|inserts| AggTable
     API --&gt;|calls| Sample
-    SampleBuf --&gt;|read at stop| Encoders
-    FramePool --&gt;|resolved at stop| Encoders
+    AggTable --&gt;|read at stop| Encoders
+    FrameTable --&gt;|resolved at stop| Encoders
     Encoders --&gt; StatOut
 </pre></details>
 
@@ -2542,59 +2597,64 @@ graph TD
 
 <ul>
   <li>Timer configuration (frequency, mode, signal number)</li>
-  <li>Sample buffer (dynamically growing array)</li>
-  <li>Frame pool (dynamically growing VALUE array)</li>
+  <li>Double-buffered sample storage (two sample buffers + frame pools, swapped when full)</li>
+  <li>Frame table (VALUE → uint32 frame_id, deduplicates frame references)</li>
+  <li>Aggregation table (unique stack → accumulated weight)</li>
+  <li>Worker thread handle (unified timer + aggregation thread)</li>
   <li>Thread-specific key for per-thread data</li>
   <li>GC phase tracking state</li>
   <li>Sampling overhead counters</li>
 </ul>
 
-<h2 id="07-internals--timer-implementation">7.3 Timer implementation</h2>
+<h2 id="07-internals--timer-and-worker-thread">7.3 Timer and worker thread</h2>
 
-<p>rperf uses a timer to periodically trigger sampling. The timer implementation depends on the platform:</p>
+<p>rperf uses a single worker thread that handles both timer triggering and periodic sample aggregation. The timer mechanism depends on the platform:</p>
 
 <h3 id="07-internals--linux-signal-based-timer-default">7.3.1 Linux: Signal-based timer (default)</h3>
 
-<p>On Linux, rperf uses <code>timer_create</code> with <code>SIGEV_SIGNAL</code> to deliver a real-time signal (default: <code>SIGRTMIN+8</code>) at the configured frequency. A <code>sigaction</code> handler calls <code>rb_postponed_job_trigger</code> to schedule the sampling callback.</p>
+<p>On Linux, rperf uses <code>timer_create</code> with <code>SIGEV_THREAD_ID</code> to deliver a real-time signal (default: <code>SIGRTMIN+8</code>) exclusively to the worker thread at the configured frequency. The signal handler calls <code>rb_postponed_job_trigger</code> to schedule the sampling callback.</p>
+
+<p>Using <code>SIGEV_THREAD_ID</code> ensures the timer signal only targets the worker thread, preventing it from interrupting <code>nanosleep</code>, <code>read</code>, or other blocking syscalls in Ruby threads (e.g., inside <code>rb_thread_call_without_gvl</code>).</p>
 
 <div class="mermaid">
 sequenceDiagram
     participant Kernel as Linux Kernel
-    participant Signal as Signal Handler
+    participant Worker as Worker Thread
     participant VM as Ruby VM
     participant Job as Postponed Job
 
-    Kernel->>Signal: SIGRTMIN+8 (every 1ms at 1000Hz)
-    Signal->>VM: rb_postponed_job_trigger()
+    Kernel->>Worker: SIGRTMIN+8 (every 1ms at 1000Hz)
+    Worker->>VM: rb_postponed_job_trigger()
     Note over VM: Continues until safepoint...
     VM->>Job: rperf_sample_job()
     Job->>Job: rb_profile_frames() + record sample
+    Note over Worker: Also aggregates samples<br/>when swap_ready is set
 </div><details class="mermaid-source"><summary>mermaid source</summary><pre>sequenceDiagram
     participant Kernel as Linux Kernel
-    participant Signal as Signal Handler
+    participant Worker as Worker Thread
     participant VM as Ruby VM
     participant Job as Postponed Job
 
-    Kernel-&gt;&gt;Signal: SIGRTMIN+8 (every 1ms at 1000Hz)
-    Signal-&gt;&gt;VM: rb_postponed_job_trigger()
+    Kernel-&gt;&gt;Worker: SIGRTMIN+8 (every 1ms at 1000Hz)
+    Worker-&gt;&gt;VM: rb_postponed_job_trigger()
     Note over VM: Continues until safepoint...
     VM-&gt;&gt;Job: rperf_sample_job()
     Job-&gt;&gt;Job: rb_profile_frames() + record sample
+    Note over Worker: Also aggregates samples&lt;br/&gt;when swap_ready is set
 </pre></details>
 
-<p>This approach provides precise timing (~1000us median interval at 1000Hz) with no extra thread.</p>
+<p>This approach provides precise timing (~1000us median interval at 1000Hz).</p>
 
-<h3 id="07-internals--fallback-nanosleep-thread">7.3.2 Fallback: nanosleep thread</h3>
+<h3 id="07-internals--fallback-pthread_cond_timedwait">7.3.2 Fallback: pthread_cond_timedwait</h3>
 
-<p>On macOS, or when <code>signal: false</code> is set on Linux, rperf creates a dedicated pthread that loops with <code>nanosleep</code>:</p>
+<p>On macOS, or when <code>signal: false</code> is set on Linux, the worker thread uses <code>pthread_cond_timedwait</code> with an absolute deadline as the timer:</p>
 
-<pre><code class="language-c">while (prof-&gt;running) {
-    rb_postponed_job_trigger(prof-&gt;pj_handle);
-    nanosleep(&amp;interval, NULL);
-}
-</code></pre>
+<ul>
+  <li><strong>Timeout</strong> (deadline reached): trigger <code>rb_postponed_job_trigger</code> and advance deadline</li>
+  <li><strong>Signal</strong> (swap_ready set): aggregate the standby buffer immediately</li>
+</ul>
 
-<p>This is simpler but has ~100us drift per tick due to nanosleep’s imprecision.</p>
+<p>The deadline-based approach avoids drift when aggregation takes time. This mode has ~100us timing imprecision compared to the signal-based approach.</p>
 
 <h2 id="07-internals--sampling-current-thread-only">7.4 Sampling: current-thread-only</h2>
 
@@ -2706,27 +2766,110 @@ stateDiagram-v2
 
 <h2 id="07-internals--deferred-string-resolution">7.7 Deferred string resolution</h2>
 
-<p>During sampling, rperf stores raw frame <code>VALUE</code>s (Ruby internal object references) in the <span id="07-internals--idx-1">frame pool</span> — not strings. This <span id="07-internals--idx-2">deferred string resolution</span> keeps the hot path allocation-free and fast.</p>
+<p>During sampling, rperf stores raw frame <code>VALUE</code>s (Ruby internal object references) in the frame pool — not strings. This <span id="07-internals--idx-1">deferred string resolution</span> keeps the hot path allocation-free and fast.</p>
 
 <p>String resolution happens at stop time:</p>
 
 <ol>
-  <li><code>Rperf.stop</code> calls <code>_c_stop</code> which returns raw data</li>
-  <li>For each frame VALUE, <code>rb_profile_frame_full_label</code> and <code>rb_profile_frame_path</code> are called to get human-readable strings</li>
-  <li>These strings are then passed to the Ruby encoders</li>
+  <li><code>Rperf.stop</code> calls <code>_c_stop</code></li>
+  <li>The frame table maps each unique frame VALUE to a <code>[path, label]</code> string pair via <code>rb_profile_frame_full_label</code> and <code>rb_profile_frame_path</code></li>
+  <li>These resolved strings are passed to the Ruby encoders</li>
 </ol>
 
 <p>This means sampling only writes integers (VALUE pointers and timestamps) to pre-allocated buffers. No Ruby objects are created, no GC pressure is added during profiling.</p>
 
-<h2 id="07-internals--frame-pool-and-gc-safety">7.8 Frame pool and GC safety</h2>
+<h2 id="07-internals--sample-aggregation">7.8 Sample aggregation</h2>
 
-<p>The frame pool is a contiguous array of <code>VALUE</code>s that stores raw frame references from <code>rb_profile_frames</code>. Since these are Ruby object references, they must be protected from garbage collection.</p>
+<p>By default (<code>aggregate: true</code>), rperf periodically aggregates samples to keep memory usage bounded during long profiling sessions.</p>
 
-<p>rperf wraps the profiler struct in a <code>TypedData</code> object with a custom <code>dmark</code> function that calls <code>rb_gc_mark_locations</code> on the entire frame pool. This tells the GC that all VALUEs in the pool are reachable and must not be collected.</p>
+<h3 id="07-internals--double-buffering">7.8.1 Double buffering</h3>
 
-<p>The frame pool starts at ~1MB and doubles in size via <code>realloc</code> when needed. Similarly, the sample buffer starts with 1024 entries and grows by 2x.</p>
+<p>Two sample buffers alternate roles:</p>
 
-<h2 id="07-internals--per-thread-data">7.9 Per-thread data</h2>
+<ol>
+  <li>The <strong>active buffer</strong> receives new samples from sampling callbacks</li>
+  <li>When the active buffer reaches 10,000 samples, the buffers swap</li>
+  <li>The <strong>standby buffer</strong> is processed by the worker thread in the background</li>
+</ol>
+
+<p>If the worker thread hasn’t finished processing the standby buffer, the swap is skipped and the active buffer continues growing (fallback to unbounded mode).</p>
+
+<h3 id="07-internals--frame-table-and-aggregation-table">7.8.2 Frame table and aggregation table</h3>
+
+<p>The worker thread processes the standby buffer into two compact hash tables:</p>
+
+<ul>
+  <li><strong>Frame table</strong> (<code>VALUE → uint32_t frame_id</code>): Deduplicates frame references. Each unique frame VALUE gets a small integer ID. The keys array is the only GC mark target for aggregated data.</li>
+  <li><strong>Aggregation table</strong> (<code>(frame_ids[], thread_seq) → weight</code>): Merges identical stacks by summing their weights. Frame IDs (uint32_t) are half the size of VALUEs, and the stack pool stores them contiguously.</li>
+</ul>
+
+<p>Synthetic frames (<code>[GVL blocked]</code>, <code>[GVL wait]</code>, <code>[GC marking]</code>, <code>[GC sweeping]</code>) are converted to reserved frame IDs during aggregation, eliminating the <code>type</code> field from the sample representation.</p>
+
+<h3 id="07-internals--memory-usage">7.8.3 Memory usage</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Buffer</th>
+      <th>Initial size</th>
+      <th>Element size</th>
+      <th>Initial memory</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Sample buffer (×2)</td>
+      <td>16,384</td>
+      <td>32B</td>
+      <td>512KB × 2</td>
+    </tr>
+    <tr>
+      <td>Frame pool (×2)</td>
+      <td>131,072</td>
+      <td>8B (VALUE)</td>
+      <td>1MB × 2</td>
+    </tr>
+    <tr>
+      <td>Frame table keys</td>
+      <td>65,536</td>
+      <td>8B (VALUE)</td>
+      <td>512KB</td>
+    </tr>
+    <tr>
+      <td>Frame table buckets</td>
+      <td>131,072</td>
+      <td>4B (uint32)</td>
+      <td>512KB</td>
+    </tr>
+    <tr>
+      <td>Agg table buckets</td>
+      <td>2,048</td>
+      <td>28B</td>
+      <td>56KB</td>
+    </tr>
+    <tr>
+      <td>Stack pool</td>
+      <td>4,096</td>
+      <td>4B (uint32)</td>
+      <td>16KB</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Total: ~4.6MB with <code>aggregate: true</code>, ~1.5MB with <code>aggregate: false</code> (single buffer only).</p>
+
+<h2 id="07-internals--gc-safety">7.9 GC safety</h2>
+
+<p>Frame VALUEs must be protected from garbage collection. rperf wraps the profiler struct in a <code>TypedData</code> object with a custom <code>dmark</code> function that marks three regions:</p>
+
+<ol>
+  <li><strong>Both frame pools</strong> (active and standby buffers)</li>
+  <li><strong>Frame table keys</strong> (unique frame VALUEs, excluding synthetic frame slots)</li>
+</ol>
+
+<p>The frame table keys are pre-allocated (65,536 entries) and never reallocated, avoiding race conditions with the GC’s mark phase which can run concurrently with the aggregation thread.</p>
+
+<h2 id="07-internals--per-thread-data">7.10 Per-thread data</h2>
 
 <p>Each thread gets a <code>rperf_thread_data_t</code> struct stored via Ruby’s thread-specific data API (<code>rb_internal_thread_specific_set</code>). This tracks:</p>
 
@@ -2740,19 +2883,19 @@ stateDiagram-v2
 
 <p>Thread data is created lazily on first encounter and freed on the <code>EXITED</code> event or at profiler stop.</p>
 
-<h2 id="07-internals--fork-safety">7.10 Fork safety</h2>
+<h2 id="07-internals--fork-safety">7.11 Fork safety</h2>
 
-<p>rperf registers a <code>pthread_atfork</code> child handler that silently stops profiling in the forked child process (<span id="07-internals--idx-3">fork safety</span>):</p>
+<p>rperf registers a <code>pthread_atfork</code> child handler that silently stops profiling in the forked child process (<span id="07-internals--idx-2">fork safety</span>):</p>
 
 <ul>
   <li>Clears the timer/signal state</li>
   <li>Removes event hooks</li>
-  <li>Frees sample and frame buffers</li>
+  <li>Frees sample buffers, frame table, and aggregation table</li>
 </ul>
 
 <p>The parent process continues profiling unaffected. The child can start a fresh profiling session if needed.</p>
 
-<h2 id="07-internals--pprof-encoder">7.11 pprof encoder</h2>
+<h2 id="07-internals--pprof-encoder">7.12 pprof encoder</h2>
 
 <p>rperf encodes the <span id="07-internals--cite-0">pprof<sup class="cite-ref"><a href="#bib-ren2010" title="Gang Ren and Eric Tune and Tipp Moseley and Yixin Shi and Silvius Rus and Robert Hundt. Google-Wide Profiling: A Continuous Profiling Infrastructure for Data Centers. IEEE Micro. Vol. 30. No. 4. pp. 65--79. 2010." onclick="showChapterAndScroll('__bibliography__', 'bib-ren2010'); return false;">[Gang, 2010]</a></sup></span> protobuf format entirely in Ruby, with no protobuf gem dependency. The encoder in <code>Rperf::PProf.encode</code>:</p>
 
@@ -2765,19 +2908,19 @@ stateDiagram-v2
 
 <p>This hand-written encoder is simple (~100 lines) and only runs once at stop time, so performance is not a concern.</p>
 
-<h2 id="07-internals--known-limitations">7.12 Known limitations</h2>
+<h2 id="07-internals--known-limitations">7.13 Known limitations</h2>
 
-<h3 id="07-internals--running-ec-race">7.12.1 Running EC race</h3>
+<h3 id="07-internals--running-ec-race">7.13.1 Running EC race</h3>
 
 <p>There is a known race condition in the Ruby VM where <code>rb_postponed_job_trigger</code> from the timer thread may set the interrupt flag on the wrong thread’s execution context. This happens when a new thread’s native thread starts before acquiring the GVL. The result is that timer samples may miss threads doing C busy-wait, with their CPU time leaking into the next SUSPENDED event’s stack.</p>
 
 <p>This is a Ruby VM bug, not a rperf bug, and affects all postponed-job-based profilers.</p>
 
-<h3 id="07-internals--single-session">7.12.2 Single session</h3>
+<h3 id="07-internals--single-session">7.13.2 Single session</h3>
 
 <p>Only one profiling session can be active at a time due to the global profiler state. Calling <code>Rperf.start</code> while already profiling is not supported.</p>
 
-<h3 id="07-internals--method-level-granularity">7.12.3 Method-level granularity</h3>
+<h3 id="07-internals--method-level-granularity">7.13.3 Method-level granularity</h3>
 
 <p>rperf profiles at the method level, not the line level. Frame labels use <code>rb_profile_frame_full_label</code> for qualified names (e.g., <code>Integer#times</code>, <code>MyClass#method_name</code>). Line numbers are not included.</p>
 
@@ -2795,11 +2938,17 @@ stateDiagram-v2
 <pre><code class="language-bash"># Quick performance overview
 rperf stat ruby my_app.rb
 
+# Performance overview with profile tables
+rperf stat --report ruby my_app.rb
+
 # Record to default file (rperf.data, pprof format, cpu mode)
 rperf record ruby my_app.rb
 
 # Record with options
 rperf record -m wall -f 500 -o profile.pb.gz ruby my_app.rb
+
+# Record and print text profile to stdout
+rperf record -p ruby my_app.rb
 
 # Record to text format
 rperf record -o profile.txt ruby my_app.rb
@@ -2889,9 +3038,19 @@ Rperf.save("profile.txt", data)
       <td>Enable stat mode output</td>
     </tr>
     <tr>
+      <td><code>RPERF_STAT_REPORT</code></td>
+      <td><code>1</code></td>
+      <td>Include profile tables in stat output</td>
+    </tr>
+    <tr>
       <td><code>RPERF_STAT_COMMAND</code></td>
       <td>string</td>
       <td>Command string shown in stat output header</td>
+    </tr>
+    <tr>
+      <td><code>RPERF_AGGREGATE</code></td>
+      <td><code>0</code></td>
+      <td>Disable sample aggregation (return raw samples)</td>
     </tr>
   </tbody>
 </table>
@@ -3038,7 +3197,7 @@ Rperf.save("profile.txt", data)
       <h2 class="index-letter">D</h2>
       <dl class="index-entries">
         <dt>deferred string resolution</dt>
-        <dd><a href="#07-internals--idx-2" onclick="showChapterAndScroll('07-internals', '07-internals--idx-2'); return false;">7. Internals</a></dd>
+        <dd><a href="#07-internals--idx-1" onclick="showChapterAndScroll('07-internals', '07-internals--idx-1'); return false;">7. Internals</a></dd>
       </dl>
     </div>
     <div class="index-group">
@@ -3047,9 +3206,7 @@ Rperf.save("profile.txt", data)
         <dt>flat time</dt>
         <dd><a href="#06-interpreting-results--idx-0" onclick="showChapterAndScroll('06-interpreting-results', '06-interpreting-results--idx-0'); return false;">6. Interpreting Results</a></dd>
         <dt>fork safety</dt>
-        <dd><a href="#07-internals--idx-3" onclick="showChapterAndScroll('07-internals', '07-internals--idx-3'); return false;">7. Internals</a></dd>
-        <dt>frame pool</dt>
-        <dd><a href="#07-internals--idx-1" onclick="showChapterAndScroll('07-internals', '07-internals--idx-1'); return false;">7. Internals</a></dd>
+        <dd><a href="#07-internals--idx-2" onclick="showChapterAndScroll('07-internals', '07-internals--idx-2'); return false;">7. Internals</a></dd>
       </dl>
     </div>
     <div class="index-group">
