@@ -135,9 +135,13 @@ format = nil
 signal = nil
 verbose = false
 aggregate = true
+stat_report = false
 
 parser = OptionParser.new do |opts|
-  opts.banner = USAGE
+  opts.banner = case subcommand
+                when "record" then "Usage: rperf record [options] command [args...]"
+                when "stat"   then "Usage: rperf stat [options] command [args...]"
+                end
 
   opts.on("-o", "--output PATH", "Output file#{subcommand == 'stat' ? ' (default: none)' : ' (default: rperf.data)'}") do |v|
     output = v
@@ -157,6 +161,11 @@ parser = OptionParser.new do |opts|
             "Output format: pprof, collapsed, or text (default: auto from extension)") do |v|
       format = v
     end
+
+    opts.on("-p", "--print", "Print text profile to stdout (same as --format=text --output=/dev/stdout)") do
+      format = "text"
+      output = "/dev/stdout"
+    end
   end
 
   opts.on("--signal VALUE", "Timer signal (Linux only): signal number, or 'false' for nanosleep thread") do |v|
@@ -165,6 +174,12 @@ parser = OptionParser.new do |opts|
 
   opts.on("--no-aggregate", "Disable sample aggregation (keep raw samples)") do
     aggregate = false
+  end
+
+  if subcommand == "stat"
+    opts.on("--report", "Include flat/cumulative profile tables in output") do
+      stat_report = true
+    end
   end
 
   opts.on("-v", "--verbose", "Print sampling statistics to stderr") do
@@ -209,6 +224,7 @@ ENV["RPERF_AGGREGATE"] = "0" unless aggregate
 if subcommand == "stat"
   ENV["RPERF_STAT"] = "1"
   ENV["RPERF_STAT_COMMAND"] = ARGV.join(" ")
+  ENV["RPERF_STAT_REPORT"] = "1" if stat_report
 end
 
 exec(*ARGV)

@@ -44,9 +44,6 @@ rperf stat ruby fib.rb
               31            [OS] context switches (10 voluntary, 21 involuntary)
                0 MB         [OS] disk I/O (0 MB read, 0 MB write)
 
- Top 1 by flat:
-           481.0 ms 100.0%  Object#fib (fib.rb)
-
   481 samples / 481 triggers, 0.1% profiler overhead
 ```
 
@@ -56,7 +53,8 @@ The output tells you:
 - **Time breakdown**: Where wall time was spent — CPU execution, GVL blocked (I/O/sleep), GVL wait (contention), GC marking, GC sweeping
 - **Ruby stats**: GC count, allocated/freed objects, YJIT ratio (if enabled)
 - **OS stats**: Peak memory, context switches, disk I/O
-- **Top functions**: Hottest functions by flat time
+
+Use `--report` to add flat and cumulative top-50 function tables to the output.
 
 ### Example: Mixed CPU and I/O
 
@@ -96,6 +94,8 @@ rperf stat [options] command [args...]
 |--------|-------------|
 | `-o PATH` | Also save profile to file (default: none) |
 | `-f HZ` | Sampling frequency in Hz (default: 1000) |
+| `-m MODE` | `cpu` or `wall` (default: `wall`) |
+| `--report` | Include flat/cumulative profile tables in output |
 | `-v` | Print additional sampling statistics |
 
 ## rperf record
@@ -164,12 +164,12 @@ The text output looks like this:
 Total: 509.5ms (cpu)
 Samples: 509, Frequency: 1000Hz
 
-Flat:
-     509.5ms 100.0%  Object#fib (fib.rb)
+ Flat:
+           509.5 ms 100.0%  Object#fib (fib.rb)
 
-Cumulative:
-     509.5ms 100.0%  Object#fib (fib.rb)
-     509.5ms 100.0%  <main> (fib.rb)
+ Cumulative:
+           509.5 ms 100.0%  Object#fib (fib.rb)
+           509.5 ms 100.0%  <main> (fib.rb)
 ```
 
 ### Example: Wall mode text output
@@ -182,22 +182,22 @@ rperf record -m wall -o wall_profile.txt ruby mixed.rb
 Total: 311.8ms (wall)
 Samples: 80, Frequency: 1000Hz
 
-Flat:
-     250.6ms  80.4%  [GVL blocked] (<GVL>)
-      44.1ms  14.1%  Object#cpu_work (mixed.rb)
-      13.9ms   4.5%  Integer#times (<internal:numeric>)
-       3.2ms   1.0%  Kernel#sleep (<C method>)
-       0.0ms   0.0%  [GVL wait] (<GVL>)
+ Flat:
+           250.6 ms  80.4%  [GVL blocked] (<GVL>)
+            44.1 ms  14.1%  Object#cpu_work (mixed.rb)
+            13.9 ms   4.5%  Integer#times (<internal:numeric>)
+             3.2 ms   1.0%  Kernel#sleep (<C method>)
+             0.0 ms   0.0%  [GVL wait] (<GVL>)
 
-Cumulative:
-     311.8ms 100.0%  Integer#times (<internal:numeric>)
-     311.8ms 100.0%  block in <main> (mixed.rb)
-     311.8ms 100.0%  <main> (mixed.rb)
-     253.8ms  81.4%  Kernel#sleep (<C method>)
-     253.8ms  81.4%  Object#io_work (mixed.rb)
-     250.6ms  80.4%  [GVL blocked] (<GVL>)
-      58.0ms  18.6%  Object#cpu_work (mixed.rb)
-       0.0ms   0.0%  [GVL wait] (<GVL>)
+ Cumulative:
+           311.8 ms 100.0%  Integer#times (<internal:numeric>)
+           311.8 ms 100.0%  block in <main> (mixed.rb)
+           311.8 ms 100.0%  <main> (mixed.rb)
+           253.8 ms  81.4%  Kernel#sleep (<C method>)
+           253.8 ms  81.4%  Object#io_work (mixed.rb)
+           250.6 ms  80.4%  [GVL blocked] (<GVL>)
+            58.0 ms  18.6%  Object#cpu_work (mixed.rb)
+             0.0 ms   0.0%  [GVL wait] (<GVL>)
 ```
 
 In wall mode, `[GVL blocked]` appears as the dominant cost — this is the sleep time in `io_work`. The CPU time for `cpu_work` is clearly separated.
@@ -232,6 +232,7 @@ rperf record [options] command [args...]
 | `-f HZ` | Sampling frequency in Hz (default: 1000) |
 | `-m MODE` | `cpu` or `wall` (default: `cpu`) |
 | `--format FMT` | `pprof`, `collapsed`, or `text` (default: auto from extension) |
+| `-p, --print` | Print text profile to stdout (same as `--format=text --output=/dev/stdout`) |
 | `-v` | Print sampling statistics to stderr |
 
 ## rperf report

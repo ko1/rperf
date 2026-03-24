@@ -404,7 +404,6 @@ class TestRperf < Test::Unit::TestCase
     assert_include output, "[Ruby] allocated objects"
     assert_include output, "[Ruby] freed objects"
     assert_include output, "[OS] peak memory"
-    assert_include output, "Top"
     assert_include output, "samples"
     assert_include output, "triggers"
     assert_include output, "profiler overhead"
@@ -449,7 +448,7 @@ class TestRperf < Test::Unit::TestCase
       assert_include content, "Flat:"
       assert_include content, "Cumulative:"
       # Weight lines should have ms and %
-      assert_match(/\d+\.\d+ms\s+\d+\.\d+%/, content)
+      assert_match(/[\d,]+\.\d+ ms\s+\d+\.\d+%/, content)
     end
   end
 

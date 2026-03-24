@@ -6,11 +6,17 @@
 # Quick performance overview
 rperf stat ruby my_app.rb
 
+# Performance overview with profile tables
+rperf stat --report ruby my_app.rb
+
 # Record to default file (rperf.data, pprof format, cpu mode)
 rperf record ruby my_app.rb
 
 # Record with options
 rperf record -m wall -f 500 -o profile.pb.gz ruby my_app.rb
+
+# Record and print text profile to stdout
+rperf record -p ruby my_app.rb
 
 # Record to text format
 rperf record -o profile.txt ruby my_app.rb
@@ -65,6 +71,7 @@ These are used internally by the CLI to configure the auto-started profiler:
 | `RPERF_FORMAT` | `pprof`, `collapsed`, `text` | Output format |
 | `RPERF_VERBOSE` | `1` | Print statistics to stderr |
 | `RPERF_STAT` | `1` | Enable stat mode output |
+| `RPERF_STAT_REPORT` | `1` | Include profile tables in stat output |
 | `RPERF_STAT_COMMAND` | string | Command string shown in stat output header |
 | `RPERF_AGGREGATE` | `0` | Disable sample aggregation (return raw samples) |
 

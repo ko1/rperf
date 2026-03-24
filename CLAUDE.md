@@ -73,7 +73,7 @@ See `benchmark/README.md` for full documentation.
 - Thread exit cleanup is handled by `RUBY_INTERNAL_THREAD_EVENT_EXITED` hook. Stop cleans up all live threads' thread-specific data.
 - GVL blocked/wait synthetic frames are only recorded in wall mode (CPU time doesn't advance while off-GVL).
 - GC samples always use wall time regardless of mode.
-- `stat` subcommand uses wall mode fixed, outputs user/sys/real + time breakdown + GC stats + top 5 flat.
+- `stat` subcommand defaults to wall mode, outputs user/sys/real + time breakdown + GC stats. `--report` adds flat/cumulative top-50 tables. `record -p` prints text profile to stdout.
 - `report` and `diff` subcommands are thin wrappers around `go tool pprof`.
 - Benchmark workload methods (rw/cw/csleep/cwait) are numbered 1-1000 to appear as distinct functions in profiler output.
 

@@ -108,12 +108,12 @@ The text format is a human-readable (and AI-readable) report showing flat and cu
 Total: 509.5ms (cpu)
 Samples: 509, Frequency: 1000Hz
 
-Flat:
-     509.5ms 100.0%  Object#fib (fib.rb)
+ Flat:
+           509.5 ms 100.0%  Object#fib (fib.rb)
 
-Cumulative:
-     509.5ms 100.0%  Object#fib (fib.rb)
-     509.5ms 100.0%  <main> (fib.rb)
+ Cumulative:
+           509.5 ms 100.0%  Object#fib (fib.rb)
+           509.5 ms 100.0%  <main> (fib.rb)
 ```
 
 **Sections**:

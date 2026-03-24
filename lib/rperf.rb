@@ -17,8 +17,6 @@ module Rperf
   @output = nil
   @stat = false
   @stat_start_mono = nil
-  STAT_TOP_N = 5
-  SYNTHETIC_LABELS = %w[[GVL\ blocked] [GVL\ wait] [GC\ marking] [GC\ sweeping]].freeze
 
   # Starts profiling.
   # format: :pprof, :collapsed, or :text. nil = auto-detect from output extension
@@ -202,7 +200,7 @@ module Rperf
       print_stat_breakdown(breakdown, total_weight)
       print_stat_runtime_info
       print_stat_system_info
-      print_stat_top(samples_raw, total_weight)
+      print_stat_report(data) if ENV["RPERF_STAT_REPORT"] == "1"
       print_stat_footer(samples_raw, real_ns, data)
     end
 
@@ -291,30 +289,12 @@ module Rperf
   end
   private_class_method :print_stat_system_info
 
-  def self.print_stat_top(samples_raw, total_weight)
-    flat = Hash.new(0)
-    samples_raw.each do |frames, weight|
-      leaf = frames.first
-      if leaf
-        _, label = leaf
-        next if SYNTHETIC_LABELS.include?(label)
-        flat[[label, leaf[0]]] += weight
-      end
-    end
 
-    return if flat.empty?
-
-    top = flat.sort_by { |_, w| -w }.first(STAT_TOP_N)
+  def self.print_stat_report(data)
     $stderr.puts
-    $stderr.puts " Top #{top.size} by flat:"
-    top.each do |key, weight|
-      label, path = key
-      pct = total_weight > 0 ? weight * 100.0 / total_weight : 0.0
-      loc = path.empty? ? "" : " (#{path})"
-      $stderr.puts STAT_PCT_LINE.call(format_ms(weight), "ms", pct, "#{label}#{loc}")
-    end
+    $stderr.puts Text.encode(data, header: false)
   end
-  private_class_method :print_stat_top
+  private_class_method :print_stat_report
 
   def self.print_stat_footer(samples_raw, real_ns, data)
     triggers = data[:trigger_count] || 0
@@ -410,7 +390,7 @@ module Rperf
   module Text
     module_function
 
-    def encode(data, top_n: 50)
+    def encode(data, top_n: 50, header: true)
       samples_raw = data[:samples]
       mode = data[:mode] || :cpu
       frequency = data[:frequency] || 0
@@ -420,10 +400,13 @@ module Rperf
       result = Rperf.send(:compute_flat_cum, samples_raw)
 
       out = String.new
-      total_ms = result[:total_weight] / 1_000_000.0
-      out << "Total: #{"%.1f" % total_ms}ms (#{mode})\n"
-      out << "Samples: #{samples_raw.size}, Frequency: #{frequency}Hz\n"
-      out << "\n"
+      if header
+        total_ms = result[:total_weight] / 1_000_000.0
+        out << "Total: #{"%.1f" % total_ms}ms (#{mode})\n"
+        sample_count = data[:sampling_count] || samples_raw.size
+        out << "Samples: #{sample_count}, Frequency: #{frequency}Hz\n"
+        out << "\n"
+      end
       out << format_table("Flat", result[:flat], result[:total_weight], top_n)
       out << "\n"
       out << format_table("Cumulative", result[:cum], result[:total_weight], top_n)
@@ -433,13 +416,12 @@ module Rperf
     def format_table(title, table, total_weight, top_n)
       sorted = table.sort_by { |_, w| -w }.first(top_n)
       out = String.new
-      out << "#{title}:\n"
+      out << " #{title}:\n"
       sorted.each do |key, weight|
         label, path = key
-        ms = weight / 1_000_000.0
         pct = total_weight > 0 ? weight * 100.0 / total_weight : 0.0
         loc = path.empty? ? "" : " (#{path})"
-        out << ("  %8.1fms %5.1f%%  %s%s\n" % [ms, pct, label, loc])
+        out << format("  %14s ms %5.1f%%  %s%s\n", Rperf.send(:format_ms, weight), pct, label, loc)
       end
       out
     end

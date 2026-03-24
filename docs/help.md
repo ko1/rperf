@@ -19,22 +19,27 @@ POSIX systems (Linux, macOS). Requires Ruby >= 3.4.0.
     -f, --frequency HZ      Sampling frequency in Hz (default: 1000)
     -m, --mode MODE         cpu or wall (default: cpu)
     --format FORMAT         pprof, collapsed, or text (default: auto from extension)
+    -p, --print             Print text profile to stdout
+                            (same as --format=text --output=/dev/stdout)
     --signal VALUE          Timer signal (Linux only): signal number, or 'false'
                             for nanosleep thread (default: auto)
     -v, --verbose           Print sampling statistics to stderr
 
 ### stat: Run command and print performance summary to stderr.
 
-Always uses wall mode. No file output by default.
+Uses wall mode by default. No file output by default.
 
     -o, --output PATH       Also save profile to file (default: none)
     -f, --frequency HZ      Sampling frequency in Hz (default: 1000)
+    -m, --mode MODE         cpu or wall (default: wall)
+    --report                Include flat/cumulative profile tables in output
     --signal VALUE          Timer signal (Linux only): signal number, or 'false'
                             for nanosleep thread (default: auto)
     -v, --verbose           Print additional sampling statistics
 
 Shows: user/sys/real time, time breakdown (CPU execution, GVL blocked,
-GVL wait, GC marking, GC sweeping), and top 5 hot functions.
+GVL wait, GC marking, GC sweeping), GC/memory/OS stats, and profiler overhead.
+Use --report to add flat and cumulative top-50 function tables.
 
 ### report: Open pprof profile with go tool pprof. Requires Go.
 
@@ -58,7 +63,9 @@ Default (no flag): opens diff in browser.
     rperf record -m wall -f 500 -o profile.pb.gz ruby server.rb
     rperf record -o profile.collapsed ruby app.rb
     rperf record -o profile.txt ruby app.rb
+    rperf record -p ruby app.rb
     rperf stat ruby app.rb
+    rperf stat --report ruby app.rb
     rperf stat -o profile.pb.gz ruby app.rb
     rperf report
     rperf report --top profile.pb.gz
@@ -168,14 +175,14 @@ Example output:
     Total: 1523.4ms (cpu)
     Samples: 4820, Frequency: 500Hz
 
-    Flat:
-         820.3ms  53.8%  Array#each (app/models/user.rb)
-         312.1ms  20.5%  JSON.parse (lib/json/parser.rb)
-         ...
+     Flat:
+               820.3 ms  53.8%  Array#each (app/models/user.rb)
+               312.1 ms  20.5%  JSON.parse (lib/json/parser.rb)
+               ...
 
-    Cumulative:
-        1401.2ms  92.0%  UsersController#index (app/controllers/users_controller.rb)
-         ...
+     Cumulative:
+             1,401.2 ms  92.0%  UsersController#index (app/controllers/users_controller.rb)
+               ...
 
 ### Format auto-detection
 
@@ -281,6 +288,7 @@ Used internally by the CLI to pass options to the auto-started profiler:
     RPERF_VERBOSE=1       Print statistics
     RPERF_SIGNAL=N|false  Timer signal number or 'false' for nanosleep (Linux only)
     RPERF_STAT=1          Enable stat mode (used by rperf stat)
+    RPERF_STAT_REPORT=1   Include profile tables in stat output
 
 ## TIPS
 
