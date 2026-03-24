@@ -2,25 +2,60 @@
   <img src="docs/logo.svg" alt="rperf logo" width="260">
 </p>
 
-# rperf
+<h1 align="center">rperf</h1>
 
-A safepoint-based sampling performance profiler for Ruby. Uses actual time deltas as sample weights to correct safepoint bias.
+<p align="center">
+  <strong>Know where your Ruby spends its time — accurately.</strong><br>
+  A sampling profiler that corrects safepoint bias using real time deltas.
+</p>
 
-- Requires Ruby >= 3.4.0
-- Output: pprof protobuf, collapsed stacks, or text report
-- Modes: CPU time (per-thread) and wall time (with GVL/GC tracking)
-- [Online manual](https://ko1.github.io/rperf/docs/manual/) | [GitHub](https://github.com/ko1/rperf)
+<p align="center">
+  <a href="https://rubygems.org/gems/rperf"><img src="https://img.shields.io/gem/v/rperf.svg" alt="Gem Version"></a>
+  <img src="https://img.shields.io/badge/Ruby-%3E%3D%203.4.0-cc342d" alt="Ruby >= 3.4.0">
+  <a href="https://ko1.github.io/rperf/docs/manual/"><img src="https://img.shields.io/badge/docs-manual-blue" alt="Manual"></a>
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
+</p>
+
+<p align="center">
+  pprof / collapsed stacks / text report &nbsp;·&nbsp; CPU mode & wall mode (GVL + GC tracking)
+</p>
+
+## See It in Action
+
+```bash
+$ gem install rperf
+$ rperf exec ruby fib.rb
+
+ Performance stats for 'ruby fib.rb':
+
+         2,326.0 ms   user
+            64.5 ms   sys
+         2,035.5 ms   real
+
+         2,034.2 ms 100.0%  CPU execution
+               1            [Ruby] detected threads
+             7.0 ms         [Ruby] GC time (7 count: 5 minor, 2 major)
+         106,078            [Ruby] allocated objects
+              22 MB         [OS] peak memory (maxrss)
+
+ Flat:
+         2,034.2 ms 100.0%  Object#fibonacci (fib.rb)
+
+ Cumulative:
+         2,034.2 ms 100.0%  Object#fibonacci (fib.rb)
+         2,034.2 ms 100.0%  <main> (fib.rb)
+
+  2034 samples / 2034 triggers, 0.1% profiler overhead
+```
 
 ## Quick Start
 
 ```bash
-gem install rperf
-
 # Performance summary (wall mode, prints to stderr)
 rperf stat ruby app.rb
 
-# Profile to file
-rperf record ruby app.rb                              # → rperf.data (pprof, cpu mode)
+# Record a pprof profile to file
+rperf record ruby app.rb                              # → rperf.data (cpu mode)
 rperf record -m wall -o profile.pb.gz ruby server.rb   # wall mode, custom output
 
 # View results (report/diff require Go: https://go.dev/dl/)
@@ -73,13 +108,13 @@ Inspired by Linux `perf` — familiar subcommand interface for profiling workflo
 
 ## How It Works
 
-### The Problem
+### The Challenge: Safepoint Sampling
 
-Ruby's sampling profilers collect stack traces at **safepoints**, not at the exact timer tick. Traditional profilers assign equal weight to every sample, so if a safepoint is delayed 5ms, that delay is invisible.
+Most Ruby profilers (e.g., stackprof) use signal handlers to capture stack traces at the exact moment the timer fires. rperf takes a different approach — it samples at **safepoints** (VM checkpoints), which is safer (no async-signal-safety concerns, reliable access to VM state) but means the sample timing can be delayed. Without correction, this delay would skew the results.
 
-### The Solution
+### The Fix: Weight = Real Time
 
-rperf uses **time deltas as sample weights**:
+rperf uses **actual elapsed time as sample weights** — so delayed samples carry proportionally more weight, and the profile matches reality:
 
 ```
 Timer (signal or thread)         VM thread (postponed job)
@@ -116,23 +151,21 @@ rperf hooks GVL and GC events to attribute non-CPU time:
 | `[GC marking]` | Time in GC mark phase |
 | `[GC sweeping]` | Time in GC sweep phase |
 
-## Pros & Cons
+## Why rperf?
 
-### Pros
+- **Accurate despite safepoints** — Safepoint sampling is *safer* (no async-signal-safety issues), but normally *inaccurate*. rperf compensates with real time-delta weights, so profiles faithfully reflect where time is actually spent.
+- **See the whole picture** (wall mode) — GVL contention, off-GVL I/O, GC marking/sweeping — all attributed to the call stacks responsible, via synthetic frames.
+- **Low overhead** — Signal-based timer on Linux (no extra thread). ~1–5 µs per sample.
+- **pprof compatible** — Works with `go tool pprof`, speedscope, and other standard tools out of the box.
+- **Zero code changes** — Profile any Ruby program via CLI or environment variables. Drop-in for Rails, too.
+- **`perf`-like CLI** — `record`, `stat`, `report`, `diff` — if you know Linux perf, you already know rperf.
 
-- **Safepoint-based, but accurate**: Unlike signal-based profilers (e.g., stackprof), rperf samples at safepoints. Safepoint sampling is safer — no async-signal-safety constraints, so backtraces and VM state (GC phase, GVL ownership) can be inspected reliably. The downside is less precise sampling timing, but rperf compensates by using actual time deltas as sample weights — so the profiling results faithfully reflect where time is actually spent.
-- **GVL & GC visibility** (wall mode): Attributes off-GVL time, GVL contention, and GC phases to the responsible call stacks with synthetic frames.
-- **Low overhead**: No extra thread on Linux (signal-based timer). Sampling overhead is ~1-5 us per sample.
-- **pprof compatible**: Output works with `go tool pprof`, speedscope, and other standard tools.
-- **No code changes required**: Profile any Ruby program via CLI (`rperf stat ruby app.rb`) or environment variables (`RPERF_ENABLED=1`).
-- **perf-like CLI**: Familiar subcommand interface — `record`, `stat`, `report`, `diff` — inspired by Linux perf.
+### Limitations
 
-### Cons
-
-- **Method-level only**: Profiles at the method level, not the line level. You can see which method is slow, but not which line within it.
-- **Ruby >= 3.4.0**: Requires recent Ruby for the internal APIs used (postponed jobs, thread event hooks).
-- **POSIX only**: Linux, macOS, etc. No Windows support.
-- **Safepoint sampling**: Cannot sample inside C extensions or during long-running C calls that don't reach a safepoint. Time spent there is attributed to the next sample.
+- **Method-level only** — no line-level granularity.
+- **Ruby >= 3.4.0** — uses recent VM internals (postponed jobs, thread event hooks).
+- **POSIX only** — Linux, macOS. No Windows.
+- **Safepoint-bound** — can't sample inside long-running C calls; that time is attributed to the next safepoint.
 
 ## Output Formats
 
