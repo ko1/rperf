@@ -63,6 +63,7 @@ Rperf.save("profile.txt", data)
 # Snapshot (read data without stopping)
 snap = Rperf.snapshot
 Rperf.save("snap.pb.gz", snap)
+snap = Rperf.snapshot(clear: true)  # reset after snapshot
 
 # Labels (annotate samples with context)
 Rperf.label(request: "abc") do

@@ -1457,9 +1457,36 @@ rb_rperf_stop(VALUE self)
 
 /* ---- Snapshot: read aggregated data without stopping ---- */
 
-static VALUE
-rb_rperf_snapshot(VALUE self)
+/* Clear aggregated data for the next interval.
+ * Caller must hold GVL + worker_mutex.
+ * Keeps allocations intact for reuse.  Does NOT touch frame_table
+ * (frame IDs must stay stable — dmark may be iterating keys outside GVL,
+ * and existing threads reference frame IDs via their thread_data). */
+static void
+rperf_clear_aggregated_data(rperf_profiler_t *prof)
 {
+    /* Clear agg_table entries (keep allocation) */
+    memset(prof->agg_table.buckets, 0,
+           prof->agg_table.bucket_capacity * sizeof(rperf_agg_entry_t));
+    prof->agg_table.count = 0;
+    prof->agg_table.stack_pool_count = 0;
+
+    /* Reset stats */
+    prof->stats.trigger_count = 0;
+    prof->stats.sampling_count = 0;
+    prof->stats.sampling_total_ns = 0;
+
+    /* Reset start timestamps so next snapshot's duration_ns covers
+     * only the period since this clear. */
+    clock_gettime(CLOCK_REALTIME, &prof->start_realtime);
+    clock_gettime(CLOCK_MONOTONIC, &prof->start_monotonic);
+}
+
+static VALUE
+rb_rperf_snapshot(VALUE self, VALUE vclear)
+{
+    VALUE result;
+
     if (!g_profiler.running) {
         return Qnil;
     }
@@ -1472,12 +1499,19 @@ rb_rperf_snapshot(VALUE self)
      * Lock worker_mutex to pause worker thread's aggregation. */
     CHECKED(pthread_mutex_lock(&g_profiler.worker_mutex));
     rperf_flush_buffers(&g_profiler);
+
+    /* Build result while mutex is held.  If clear is requested, we must
+     * also clear under the same lock to avoid a window where the worker
+     * could aggregate into the table between build and clear. */
+    result = rperf_build_aggregated_result(&g_profiler);
+
+    if (RTEST(vclear)) {
+        rperf_clear_aggregated_data(&g_profiler);
+    }
+
     CHECKED(pthread_mutex_unlock(&g_profiler.worker_mutex));
 
-    /* Safe to read agg_table/frame_table without lock:
-     * worker only touches them via swap_ready buffers (now empty),
-     * and GVL prevents new samples. */
-    return rperf_build_aggregated_result(&g_profiler);
+    return result;
 }
 
 /* ---- Label API ---- */
@@ -1591,7 +1625,7 @@ Init_rperf(void)
     VALUE mRperf = rb_define_module("Rperf");
     rb_define_module_function(mRperf, "_c_start", rb_rperf_start, 4);
     rb_define_module_function(mRperf, "_c_stop", rb_rperf_stop, 0);
-    rb_define_module_function(mRperf, "_c_snapshot", rb_rperf_snapshot, 0);
+    rb_define_module_function(mRperf, "_c_snapshot", rb_rperf_snapshot, 1);
     rb_define_module_function(mRperf, "_c_set_label", rb_rperf_set_label, 1);
     rb_define_module_function(mRperf, "_c_get_label", rb_rperf_get_label, 0);
     rb_define_module_function(mRperf, "_c_set_label_sets", rb_rperf_set_label_sets, 1);

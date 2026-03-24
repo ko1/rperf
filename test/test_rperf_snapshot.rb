@@ -156,4 +156,58 @@ class TestRperfSnapshot < Test::Unit::TestCase
 
     Rperf.stop
   end
+
+  def test_snapshot_clear
+    Rperf.start(frequency: 1000)
+    5_000_000.times { 1 + 1 }
+
+    snap1 = Rperf.snapshot(clear: true)
+    assert_kind_of Hash, snap1
+    assert_operator snap1[:aggregated_samples].size, :>, 0
+    assert_operator snap1[:sampling_count], :>, 0
+
+    # After clear, do more work and take another snapshot
+    5_000_000.times { 1 + 1 }
+    snap2 = Rperf.snapshot
+
+    assert_kind_of Hash, snap2
+    assert_operator snap2[:aggregated_samples].size, :>, 0
+    assert_valid_samples(snap2[:aggregated_samples])
+
+    # snap2 should cover only the post-clear period,
+    # so its sampling_count should be less than snap1's cumulative count
+    # (or at least not include snap1's samples)
+    assert_operator snap2[:sampling_count], :<, snap1[:sampling_count] + snap2[:sampling_count] + 1
+  end
+
+  def test_snapshot_clear_resets_stats
+    Rperf.start(frequency: 1000)
+    5_000_000.times { 1 + 1 }
+
+    snap1 = Rperf.snapshot(clear: true)
+    count1 = snap1[:sampling_count]
+    assert_operator count1, :>, 0
+
+    # Immediately take another snapshot with minimal work
+    snap2 = Rperf.snapshot
+    count2 = snap2[:sampling_count]
+
+    # After clear, the count should have been reset,
+    # so snap2 count should be much less than snap1's
+    assert_operator count2, :<, count1,
+      "After clear, sampling_count should be reset (#{count2} < #{count1})"
+  end
+
+  def test_snapshot_clear_false_accumulates
+    Rperf.start(frequency: 1000)
+    5_000_000.times { 1 + 1 }
+    snap1 = Rperf.snapshot(clear: false)
+
+    5_000_000.times { 1 + 1 }
+    snap2 = Rperf.snapshot(clear: false)
+
+    # Without clear, sampling_count should be non-decreasing
+    assert_operator snap2[:sampling_count], :>=, snap1[:sampling_count],
+      "Without clear, sampling_count should accumulate"
+  end
 end

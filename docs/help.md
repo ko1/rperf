@@ -143,10 +143,14 @@ nil if profiler was not running; otherwise a Hash:
   ] }
 ```
 
-### Rperf.snapshot
+### Rperf.snapshot(clear: false)
 
 Returns a snapshot of the current profiling data without stopping.
 Only works in aggregate mode (the default). Returns nil if not profiling.
+
+When `clear: true` is given, resets aggregated data after taking the snapshot.
+This enables interval-based profiling where each snapshot covers only the
+period since the last clear.
 
 ```ruby
 Rperf.start(frequency: 1000)
@@ -155,6 +159,17 @@ snap = Rperf.snapshot         # read data without stopping
 Rperf.save("snap.pb.gz", snap)
 # ... more work ...
 data = Rperf.stop
+```
+
+Interval-based usage:
+
+```ruby
+Rperf.start(frequency: 1000)
+loop do
+  sleep 10
+  snap = Rperf.snapshot(clear: true)  # each snapshot covers the last 10s
+  Rperf.save("profile-#{Time.now.to_i}.pb.gz", snap)
+end
 ```
 
 ### Rperf.label(**labels, &block)

@@ -141,6 +141,17 @@ Rperf.save("snap.pb.gz", snap)
 data = Rperf.stop
 ```
 
+With `clear: true`, the aggregated data is reset after taking the snapshot. This enables interval-based profiling where each snapshot covers only the period since the last clear:
+
+```ruby
+Rperf.start(frequency: 1000)
+loop do
+  sleep 10
+  snap = Rperf.snapshot(clear: true)
+  Rperf.save("profile-#{Time.now.to_i}.pb.gz", snap)
+end
+```
+
 ## Sample labels
 
 [`Rperf.label`](#index:Rperf.label) attaches key-value labels to the current thread's samples. Labels appear in [pprof](#index:pprof) sample labels, enabling per-context filtering (e.g., per-request profiling).

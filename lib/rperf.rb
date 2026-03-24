@@ -90,8 +90,12 @@ module Rperf
   # Only works in aggregate mode (the default). Returns nil if not profiling.
   # The returned data has the same format as stop's return value and can be
   # passed to save(), PProf.encode(), Collapsed.encode(), or Text.encode().
-  def self.snapshot
-    _c_snapshot
+  #
+  # +clear:+ if true, resets aggregated data after taking the snapshot.
+  # This allows interval-based profiling where each snapshot covers only
+  # the period since the last clear.
+  def self.snapshot(clear: false)
+    _c_snapshot(clear)
   end
 
   # Label set management for per-context profiling.
