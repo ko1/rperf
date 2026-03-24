@@ -66,6 +66,7 @@ typedef struct rperf_sample {
     int64_t weight;
     int type;           /* rperf_sample_type */
     int thread_seq;     /* thread sequence number (1-based) */
+    int label_set_id;   /* label set ID (0 = no labels) */
 } rperf_sample_t;
 
 /* ---- Sample buffer (double-buffered) ---- */
@@ -103,6 +104,7 @@ typedef struct rperf_agg_entry {
     uint32_t frame_start;     /* offset into stack_pool */
     int depth;                /* includes synthetic frame */
     int thread_seq;
+    int label_set_id;         /* label set ID (0 = no labels) */
     int64_t weight;           /* accumulated */
     uint32_t hash;            /* cached hash value */
     int used;                 /* 0 = empty, 1 = used */
@@ -124,6 +126,7 @@ typedef struct rperf_thread_data {
     int64_t suspended_at_ns;        /* wall time at SUSPENDED */
     int64_t ready_at_ns;            /* wall time at READY */
     int thread_seq;                 /* thread sequence number (1-based) */
+    int label_set_id;               /* current label set ID (0 = no labels) */
 } rperf_thread_data_t;
 
 /* ---- GC tracking state ---- */
@@ -132,6 +135,7 @@ typedef struct rperf_gc_state {
     int phase;                /* rperf_gc_phase */
     int64_t enter_ns;         /* wall time at GC_ENTER */
     int thread_seq;           /* thread_seq at GC_ENTER */
+    int label_set_id;         /* label_set_id at GC_ENTER */
 } rperf_gc_state_t;
 
 /* ---- Sampling overhead stats ---- */
@@ -175,6 +179,9 @@ typedef struct rperf_profiler {
     int next_thread_seq;
     /* Sampling overhead stats */
     rperf_stats_t stats;
+    /* Label sets: Ruby Array of Hash objects, managed from Ruby side.
+     * Index 0 is reserved (no labels). GC-marked via profiler_mark. */
+    VALUE label_sets;  /* Ruby Array or Qnil */
 } rperf_profiler_t;
 
 static rperf_profiler_t g_profiler;
@@ -194,6 +201,10 @@ rperf_profiler_mark(void *ptr)
             rb_gc_mark_locations(buf->frame_pool,
                                 buf->frame_pool + buf->frame_pool_count);
         }
+    }
+    /* Mark label_sets array */
+    if (prof->label_sets != Qnil) {
+        rb_gc_mark(prof->label_sets);
     }
     /* Mark frame_table keys (unique frame VALUEs).
      * Acquire count to synchronize with the release-store in insert,
@@ -431,7 +442,7 @@ rperf_frame_table_insert(rperf_frame_table_t *ft, VALUE fval)
 /* ---- Aggregation table operations (all malloc-based, no GVL needed) ---- */
 
 static uint32_t
-rperf_fnv1a_u32(const uint32_t *data, int len, int thread_seq)
+rperf_fnv1a_u32(const uint32_t *data, int len, int thread_seq, int label_set_id)
 {
     uint32_t h = 2166136261u;
     int i;
@@ -440,6 +451,8 @@ rperf_fnv1a_u32(const uint32_t *data, int len, int thread_seq)
         h *= 16777619u;
     }
     h ^= (uint32_t)thread_seq;
+    h *= 16777619u;
+    h ^= (uint32_t)label_set_id;
     h *= 16777619u;
     return h;
 }
@@ -506,7 +519,8 @@ rperf_agg_ensure_stack_pool(rperf_agg_table_t *at, int needed)
 /* Insert or merge a stack into the aggregation table */
 static void
 rperf_agg_table_insert(rperf_agg_table_t *at, const uint32_t *frame_ids,
-                       int depth, int thread_seq, int64_t weight, uint32_t hash)
+                       int depth, int thread_seq, int label_set_id,
+                       int64_t weight, uint32_t hash)
 {
     size_t idx = hash % at->bucket_capacity;
 
@@ -514,6 +528,7 @@ rperf_agg_table_insert(rperf_agg_table_t *at, const uint32_t *frame_ids,
         rperf_agg_entry_t *e = &at->buckets[idx];
         if (!e->used) break;
         if (e->hash == hash && e->depth == depth && e->thread_seq == thread_seq &&
+            e->label_set_id == label_set_id &&
             memcmp(at->stack_pool + e->frame_start, frame_ids,
                    depth * sizeof(uint32_t)) == 0) {
             /* Match — merge weight */
@@ -530,6 +545,7 @@ rperf_agg_table_insert(rperf_agg_table_t *at, const uint32_t *frame_ids,
     e->frame_start = (uint32_t)at->stack_pool_count;
     e->depth = depth;
     e->thread_seq = thread_seq;
+    e->label_set_id = label_set_id;
     e->weight = weight;
     e->hash = hash;
     e->used = 1;
@@ -581,10 +597,10 @@ rperf_aggregate_buffer(rperf_profiler_t *prof, rperf_sample_buffer_t *buf)
         if (overflow) break; /* frame_table full, stop aggregating this buffer */
 
         int total_depth = off + s->depth;
-        hash = rperf_fnv1a_u32(temp_ids, total_depth, s->thread_seq);
+        hash = rperf_fnv1a_u32(temp_ids, total_depth, s->thread_seq, s->label_set_id);
 
         rperf_agg_table_insert(&prof->agg_table, temp_ids, total_depth,
-                               s->thread_seq, s->weight, hash);
+                               s->thread_seq, s->label_set_id, s->weight, hash);
     }
 
     /* Reset buffer for reuse.
@@ -634,7 +650,7 @@ rperf_try_swap(rperf_profiler_t *prof)
 /* Write a sample into a specific buffer. No swap check. */
 static int
 rperf_write_sample(rperf_sample_buffer_t *buf, size_t frame_start, int depth,
-                   int64_t weight, int type, int thread_seq)
+                   int64_t weight, int type, int thread_seq, int label_set_id)
 {
     if (weight <= 0) return 0;
     if (rperf_ensure_sample_capacity(buf) < 0) return -1;
@@ -645,16 +661,17 @@ rperf_write_sample(rperf_sample_buffer_t *buf, size_t frame_start, int depth,
     sample->weight = weight;
     sample->type = type;
     sample->thread_seq = thread_seq;
+    sample->label_set_id = label_set_id;
     buf->sample_count++;
     return 0;
 }
 
 static void
 rperf_record_sample(rperf_profiler_t *prof, size_t frame_start, int depth,
-                    int64_t weight, int type, int thread_seq)
+                    int64_t weight, int type, int thread_seq, int label_set_id)
 {
     rperf_sample_buffer_t *buf = &prof->buffers[atomic_load_explicit(&prof->active_idx, memory_order_relaxed)];
-    rperf_write_sample(buf, frame_start, depth, weight, type, thread_seq);
+    rperf_write_sample(buf, frame_start, depth, weight, type, thread_seq, label_set_id);
     rperf_try_swap(prof);
 }
 
@@ -705,7 +722,7 @@ rperf_handle_suspended(rperf_profiler_t *prof, VALUE thread)
     /* Record normal sample (skip if first time — no prev_time) */
     if (!is_first) {
         int64_t weight = time_now - td->prev_time_ns;
-        rperf_record_sample(prof, frame_start, depth, weight, RPERF_SAMPLE_NORMAL, td->thread_seq);
+        rperf_record_sample(prof, frame_start, depth, weight, RPERF_SAMPLE_NORMAL, td->thread_seq, td->label_set_id);
     }
 
     /* Save timestamp for READY/RESUMED */
@@ -758,12 +775,12 @@ rperf_handle_resumed(rperf_profiler_t *prof, VALUE thread)
         if (td->ready_at_ns > 0 && td->ready_at_ns > td->suspended_at_ns) {
             int64_t blocked_ns = td->ready_at_ns - td->suspended_at_ns;
             rperf_write_sample(buf, frame_start, depth, blocked_ns,
-                               RPERF_SAMPLE_GVL_BLOCKED, td->thread_seq);
+                               RPERF_SAMPLE_GVL_BLOCKED, td->thread_seq, td->label_set_id);
         }
         if (td->ready_at_ns > 0 && wall_now > td->ready_at_ns) {
             int64_t wait_ns = wall_now - td->ready_at_ns;
             rperf_write_sample(buf, frame_start, depth, wait_ns,
-                               RPERF_SAMPLE_GVL_WAIT, td->thread_seq);
+                               RPERF_SAMPLE_GVL_WAIT, td->thread_seq, td->label_set_id);
         }
 
         rperf_try_swap(prof);
@@ -826,13 +843,14 @@ rperf_gc_event_hook(rb_event_flag_t event, VALUE data, VALUE self, ID id, VALUE 
         prof->gc.phase = RPERF_GC_NONE;
     }
     else if (event & RUBY_INTERNAL_EVENT_GC_ENTER) {
-        /* Save timestamp and thread_seq; backtrace is captured at GC_EXIT
+        /* Save timestamp, thread_seq, and label_set_id; backtrace is captured at GC_EXIT
          * to avoid buffer mismatch after a double-buffer swap. */
         prof->gc.enter_ns = rperf_wall_time_ns();
         {
             VALUE thread = rb_thread_current();
             rperf_thread_data_t *td = (rperf_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
             prof->gc.thread_seq = td ? td->thread_seq : 0;
+            prof->gc.label_set_id = td ? td->label_set_id : 0;
         }
     }
     else if (event & RUBY_INTERNAL_EVENT_GC_EXIT) {
@@ -861,7 +879,7 @@ rperf_gc_event_hook(rb_event_flag_t event, VALUE data, VALUE self, ID id, VALUE 
         }
         buf->frame_pool_count += depth;
 
-        rperf_record_sample(prof, frame_start, depth, weight, type, prof->gc.thread_seq);
+        rperf_record_sample(prof, frame_start, depth, weight, type, prof->gc.thread_seq, prof->gc.label_set_id);
         prof->gc.enter_ns = 0;
     }
 }
@@ -908,7 +926,7 @@ rperf_sample_job(void *arg)
     if (depth <= 0) return;
     buf->frame_pool_count += depth;
 
-    rperf_record_sample(prof, frame_start, depth, weight, RPERF_SAMPLE_NORMAL, td->thread_seq);
+    rperf_record_sample(prof, frame_start, depth, weight, RPERF_SAMPLE_NORMAL, td->thread_seq, td->label_set_id);
 
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts_end);
     prof->stats.sampling_count++;
@@ -1080,12 +1098,16 @@ rperf_build_aggregated_result(rperf_profiler_t *prof)
                 rb_ary_push(frames, RARRAY_AREF(resolved_ary, fid));
             }
 
-            VALUE sample = rb_ary_new3(3, frames, LONG2NUM(e->weight), INT2NUM(e->thread_seq));
+            VALUE sample = rb_ary_new3(4, frames, LONG2NUM(e->weight), INT2NUM(e->thread_seq), INT2NUM(e->label_set_id));
             rb_ary_push(samples_ary, sample);
         }
     }
 
     rb_hash_aset(result, ID2SYM(rb_intern("aggregated_samples")), samples_ary);
+
+    if (prof->label_sets != Qnil) {
+        rb_hash_aset(result, ID2SYM(rb_intern("label_sets")), prof->label_sets);
+    }
 
     return result;
 }
@@ -1122,6 +1144,7 @@ rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig)
     g_profiler.stats.trigger_count = 0;
     atomic_store_explicit(&g_profiler.active_idx, 0, memory_order_relaxed);
     atomic_store_explicit(&g_profiler.swap_ready, 0, memory_order_relaxed);
+    g_profiler.label_sets = Qnil;
 
     /* Initialize worker mutex/cond */
     CHECKED(pthread_mutex_init(&g_profiler.worker_mutex, NULL));
@@ -1417,10 +1440,13 @@ rb_rperf_stop(VALUE self)
                 rb_ary_push(frames, rperf_resolve_frame(fval));
             }
 
-            VALUE sample = rb_ary_new3(3, frames, LONG2NUM(s->weight), INT2NUM(s->thread_seq));
+            VALUE sample = rb_ary_new3(4, frames, LONG2NUM(s->weight), INT2NUM(s->thread_seq), INT2NUM(s->label_set_id));
             rb_ary_push(samples_ary, sample);
         }
         rb_hash_aset(result, ID2SYM(rb_intern("raw_samples")), samples_ary);
+        if (g_profiler.label_sets != Qnil) {
+            rb_hash_aset(result, ID2SYM(rb_intern("label_sets")), g_profiler.label_sets);
+        }
     }
 
     /* Cleanup */
@@ -1452,6 +1478,56 @@ rb_rperf_snapshot(VALUE self)
      * worker only touches them via swap_ready buffers (now empty),
      * and GVL prevents new samples. */
     return rperf_build_aggregated_result(&g_profiler);
+}
+
+/* ---- Label API ---- */
+
+/* _c_set_label(label_set_id) — set current thread's label_set_id.
+ * Called from Ruby with GVL held. */
+static VALUE
+rb_rperf_set_label(VALUE self, VALUE vid)
+{
+    if (!g_profiler.running) {
+        rb_raise(rb_eRuntimeError, "set_label requires profiling to be running");
+    }
+
+    int label_set_id = NUM2INT(vid);
+    VALUE thread = rb_thread_current();
+    rperf_thread_data_t *td = (rperf_thread_data_t *)rb_internal_thread_specific_get(thread, g_profiler.ts_key);
+    if (td == NULL) {
+        td = rperf_thread_data_create(&g_profiler, thread);
+        if (!td) rb_raise(rb_eNoMemError, "rperf: failed to allocate thread data");
+    }
+    td->label_set_id = label_set_id;
+    return vid;
+}
+
+/* _c_get_label() — get current thread's label_set_id.
+ * Returns 0 if not profiling or thread not yet seen. */
+static VALUE
+rb_rperf_get_label(VALUE self)
+{
+    if (!g_profiler.running) return INT2FIX(0);
+
+    VALUE thread = rb_thread_current();
+    rperf_thread_data_t *td = (rperf_thread_data_t *)rb_internal_thread_specific_get(thread, g_profiler.ts_key);
+    if (td == NULL) return INT2FIX(0);
+    return INT2NUM(td->label_set_id);
+}
+
+/* _c_set_label_sets(ary) — store label_sets Ruby Array for result building */
+static VALUE
+rb_rperf_set_label_sets(VALUE self, VALUE ary)
+{
+    g_profiler.label_sets = ary;
+    return ary;
+}
+
+/* _c_get_label_sets() — get label_sets Ruby Array */
+static VALUE
+rb_rperf_get_label_sets(VALUE self)
+{
+    return g_profiler.label_sets;
 }
 
 /* ---- Fork safety ---- */
@@ -1516,8 +1592,13 @@ Init_rperf(void)
     rb_define_module_function(mRperf, "_c_start", rb_rperf_start, 4);
     rb_define_module_function(mRperf, "_c_stop", rb_rperf_stop, 0);
     rb_define_module_function(mRperf, "_c_snapshot", rb_rperf_snapshot, 0);
+    rb_define_module_function(mRperf, "_c_set_label", rb_rperf_set_label, 1);
+    rb_define_module_function(mRperf, "_c_get_label", rb_rperf_get_label, 0);
+    rb_define_module_function(mRperf, "_c_set_label_sets", rb_rperf_set_label_sets, 1);
+    rb_define_module_function(mRperf, "_c_get_label_sets", rb_rperf_get_label_sets, 0);
 
     memset(&g_profiler, 0, sizeof(g_profiler));
+    g_profiler.label_sets = Qnil;
     g_profiler.pj_handle = rb_postponed_job_preregister(0, rperf_sample_job, &g_profiler);
     g_profiler.ts_key = rb_internal_thread_specific_key_create();
 

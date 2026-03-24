@@ -44,11 +44,17 @@ View comments with: `go tool pprof -comments profile.pb.gz`
 
 ### Sample labels
 
-Each sample carries a `thread_seq` numeric label — a thread sequence number (1-based) assigned when rperf first sees each thread during a profiling session. This allows per-thread analysis:
+Each sample carries a `thread_seq` numeric label — a thread sequence number (1-based) assigned when rperf first sees each thread during a profiling session. When [`Rperf.label`](#index:Rperf.label) is used, custom key-value string labels are also attached to samples.
 
 ```bash
 # Group flame graph by thread
 go tool pprof -tagroot=thread_seq profile.pb.gz
+
+# Filter by custom label
+go tool pprof -tagfocus=request=abc-123 profile.pb.gz
+
+# Group by custom label
+go tool pprof -tagroot=request profile.pb.gz
 ```
 
 ## Collapsed stacks

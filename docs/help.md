@@ -130,16 +130,71 @@ nil if profiler was not running; otherwise a Hash:
   detected_thread_count: 4,        # threads seen during profiling
   start_time_ns: 17740...,         # CLOCK_REALTIME epoch nanos
   duration_ns: 10000000,           # profiling duration in nanos
-  aggregated_samples: [            # when aggregate: true (default)
-    [frames, weight, seq],         #   frames: [[path, label], ...] deepest-first
-    ...                            #   weight: Integer (nanoseconds, merged per unique stack)
-  ],                               #   seq: Integer (thread sequence, 1-based)
+  aggregated_samples: [                  # when aggregate: true (default)
+    [frames, weight, seq, label_set_id], #   frames: [[path, label], ...] deepest-first
+    ...                                  #   weight: Integer (nanoseconds, merged per unique stack)
+  ],                                     #   seq: Integer (thread sequence, 1-based)
+                                         #   label_set_id: Integer (0 = no labels)
+  label_sets: [{}, {request: "abc"}, ...], # label set table (index = label_set_id)
   # --- OR ---
-  raw_samples: [           # when aggregate: false
-    [frames, weight, seq], #   one entry per timer sample (not merged)
+  raw_samples: [                   # when aggregate: false
+    [frames, weight, seq, label_set_id], # one entry per timer sample (not merged)
     ...
   ] }
 ```
+
+### Rperf.snapshot
+
+Returns a snapshot of the current profiling data without stopping.
+Only works in aggregate mode (the default). Returns nil if not profiling.
+
+```ruby
+Rperf.start(frequency: 1000)
+# ... work ...
+snap = Rperf.snapshot         # read data without stopping
+Rperf.save("snap.pb.gz", snap)
+# ... more work ...
+data = Rperf.stop
+```
+
+### Rperf.label(**labels, &block)
+
+Attaches key-value labels to the current thread's samples. Labels appear
+in pprof sample labels, enabling per-context filtering (e.g., per-request).
+
+```ruby
+# Block form — labels are restored when the block exits
+Rperf.label(request: "abc-123", endpoint: "/api/users") do
+  handle_request   # samples inside get these labels
+end
+# labels are restored to previous state here
+
+# Without block — labels persist until changed
+Rperf.label(request: "abc-123")
+
+# Merge — new labels merge with existing ones
+Rperf.label(phase: "db")      # adds phase, keeps request
+
+# Delete a key — set value to nil
+Rperf.label(request: nil)     # removes request key
+
+# Nested blocks — each block restores its entry state
+Rperf.label(request: "abc") do
+  Rperf.label(phase: "db") do
+    Rperf.labels  #=> {request: "abc", phase: "db"}
+  end
+  Rperf.labels    #=> {request: "abc"}
+end
+Rperf.labels      #=> {}
+```
+
+In pprof output, filter by label:
+
+    go tool pprof -tagfocus=request=abc-123 profile.pb.gz
+
+### Rperf.labels
+
+Returns the current thread's labels as a Hash. Empty hash if none set.
 
 ### Rperf.save(path, data, format: nil)
 
@@ -175,10 +230,13 @@ Embedded metadata:
 Sample labels:
 
     thread_seq      thread sequence number (1-based, assigned per profiling session)
+    <user labels>   custom key-value labels set via Rperf.label()
 
 View comments: `go tool pprof -comments profile.pb.gz`
 
 Group by thread: `go tool pprof -tagroot=thread_seq profile.pb.gz`
+
+Filter by label: `go tool pprof -tagfocus=request=abc-123 profile.pb.gz`
 
 ### collapsed
 

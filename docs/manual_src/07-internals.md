@@ -191,7 +191,7 @@ If the worker thread hasn't finished processing the standby buffer, the swap is 
 The worker thread processes the standby buffer into two compact hash tables:
 
 - **Frame table** (`VALUE → uint32_t frame_id`): Deduplicates frame references. Each unique frame VALUE gets a small integer ID. The keys array is the only GC mark target for aggregated data.
-- **Aggregation table** (`(frame_ids[], thread_seq) → weight`): Merges identical stacks by summing their weights. Frame IDs (uint32_t) are half the size of VALUEs, and the stack pool stores them contiguously.
+- **Aggregation table** (`(frame_ids[], thread_seq, label_set_id) → weight`): Merges identical stacks by summing their weights. Frame IDs (uint32_t) are half the size of VALUEs, and the stack pool stores them contiguously. The `label_set_id` is part of the key, so samples with the same stack but different labels are kept separate.
 
 Synthetic frames (`[GVL blocked]`, `[GVL wait]`, `[GC marking]`, `[GC sweeping]`) are converted to reserved frame IDs during aggregation, eliminating the `type` field from the sample representation.
 
@@ -226,6 +226,7 @@ Each thread gets a `rperf_thread_data_t` struct stored via Ruby's thread-specifi
 - `suspended_at_ns`: Wall timestamp when thread was suspended
 - `ready_at_ns`: Wall timestamp when thread became ready
 - `suspended_frame_start`/`depth`: Saved backtrace from SUSPENDED event
+- `label_set_id`: Current label set ID (0 = no labels)
 
 Thread data is created lazily on first encounter and freed on the `EXITED` event or at profiler stop.
 
@@ -249,6 +250,16 @@ rperf encodes the [pprof](#cite:ren2010) protobuf format entirely in Ruby, with 
 4. Encodes the Profile protobuf message field by field
 
 This hand-written encoder is simple (~100 lines) and only runs once at stop time, so performance is not a concern.
+
+## Sample labels
+
+`Rperf.label` enables per-context annotation of samples. The implementation is split between Ruby and C to keep the hot path minimal:
+
+1. **Ruby side**: Manages label sets as frozen Hash objects in an array (`@label_set_table`). A deduplication index (`@label_set_index`) maps each unique Hash to an integer ID. `Rperf.label(key: value)` merges the new labels with the current set, interns the result, and passes the integer ID to C.
+
+2. **C side**: Each `rperf_thread_data_t` stores a `label_set_id` (integer). When a sample is recorded, the current thread's `label_set_id` is copied into the sample — a single integer, adding zero allocation overhead to the hot path. The aggregation table includes `label_set_id` in its hash key, so identical stacks with different labels remain separate entries.
+
+3. **Encoding**: At encode time, the Ruby PProf encoder reads the `label_sets` array and writes each label as a pprof `Sample.Label` (key-value string pair). `go tool pprof -tagfocus` and `-tagroot` can filter and group by label.
 
 ## Known limitations
 

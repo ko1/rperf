@@ -59,6 +59,16 @@ data = Rperf.stop
 Rperf.save("profile.pb.gz", data)
 Rperf.save("profile.collapsed", data)
 Rperf.save("profile.txt", data)
+
+# Snapshot (read data without stopping)
+snap = Rperf.snapshot
+Rperf.save("snap.pb.gz", snap)
+
+# Labels (annotate samples with context)
+Rperf.label(request: "abc") do
+  # samples inside get request="abc" label
+end
+Rperf.labels       # get current labels
 ```
 
 ## Environment variables

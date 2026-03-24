@@ -42,6 +42,8 @@ module Rperf
     @format = format
     @stat = stat
     @stat_start_mono = Process.clock_gettime(Process::CLOCK_MONOTONIC) if @stat
+    @label_set_table = nil
+    @label_set_index = nil
     _c_start(frequency, c_mode, aggregate, c_signal)
 
     if block_given?
@@ -61,15 +63,15 @@ module Rperf
     # :aggregated_samples.  Build aggregated view so encoders always work.
     if data[:raw_samples] && !data[:aggregated_samples]
       merged = {}
-      data[:raw_samples].each do |frames, weight, thread_seq|
-        key = [frames, thread_seq || 0]
+      data[:raw_samples].each do |frames, weight, thread_seq, label_set_id|
+        key = [frames, thread_seq || 0, label_set_id || 0]
         if merged.key?(key)
           merged[key] += weight
         else
           merged[key] = weight
         end
       end
-      data[:aggregated_samples] = merged.map { |(frames, ts), w| [frames, w, ts] }
+      data[:aggregated_samples] = merged.map { |(frames, ts, lsi), w| [frames, w, ts, lsi] }
     end
 
     print_stats(data) if @verbose
@@ -91,6 +93,65 @@ module Rperf
   def self.snapshot
     _c_snapshot
   end
+
+  # Label set management for per-context profiling.
+  # Label sets are stored as an Array of Hashes, indexed by label_set_id.
+  # Index 0 is reserved (no labels).
+
+  @label_set_table = nil  # Array of frozen Hash
+  @label_set_index = nil  # Hash → id (for dedup)
+
+  def self._init_label_sets
+    @label_set_table = [{}]  # id 0 = no labels
+    @label_set_index = { {} => 0 }
+  end
+
+  def self._intern_label_set(hash)
+    frozen = hash.frozen? ? hash : hash.freeze
+    @label_set_index[frozen] ||= begin
+      id = @label_set_table.size
+      @label_set_table << frozen
+      _c_set_label_sets(@label_set_table)
+      id
+    end
+  end
+
+  # Sets labels on the current thread for profiling annotation.
+  # With a block: restores previous labels when the block exits.
+  # Without a block: sets labels persistently on the current thread.
+  # Labels are key-value pairs written into pprof sample labels.
+  #
+  #   Rperf.label(request: "abc") { handle_request }
+  #   Rperf.label(request: "abc")  # persistent set
+  #
+  # Values of nil remove that key. Existing labels are merged.
+  def self.label(**kw, &block)
+    _init_label_sets unless @label_set_table
+
+    cur_id = _c_get_label
+    cur_labels = @label_set_table[cur_id] || {}
+
+    new_labels = cur_labels.merge(kw).reject { |_, v| v.nil? }
+    new_id = _intern_label_set(new_labels)
+    _c_set_label(new_id)
+
+    if block
+      begin
+        yield
+      ensure
+        _c_set_label(cur_id)
+      end
+    end
+  end
+
+  # Returns the current thread's labels as a Hash.
+  # Returns an empty Hash if no labels are set or profiling is not running.
+  def self.labels
+    return {} unless @label_set_table
+    cur_id = _c_get_label
+    @label_set_table[cur_id] || {}
+  end
+
 
   # Saves profiling data to a file.
   # format: :pprof, :collapsed, or :text. nil = auto-detect from path extension
@@ -506,17 +567,30 @@ module Rperf
         end
       }
 
-      # Convert string frames to index frames and merge identical stacks per thread
+      # Convert string frames to index frames and merge identical stacks per thread/label
       merged = Hash.new(0)
       thread_seq_key = intern.("thread_seq")
-      samples_raw.each do |frames, weight, thread_seq|
-        key = [frames.map { |path, label| [intern.(path), intern.(label)] }, thread_seq || 0]
+      label_sets = data[:label_sets]  # Array of Hash (may be nil)
+      samples_raw.each do |frames, weight, thread_seq, label_set_id|
+        key = [frames.map { |path, label| [intern.(path), intern.(label)] }, thread_seq || 0, label_set_id || 0]
         merged[key] += weight
       end
       merged = merged.to_a
 
+      # Intern label set keys/values for pprof labels
+      label_key_indices = {}  # String key → string_table index
+      if label_sets
+        label_sets.each do |ls|
+          ls.each do |k, v|
+            sk = k.to_s
+            label_key_indices[sk] ||= intern.(sk)
+            intern.(v.to_s)  # ensure value is interned
+          end
+        end
+      end
+
       # Build location/function tables
-      locations, functions = build_tables(merged.map { |(frames, _), w| [frames, w] })
+      locations, functions = build_tables(merged.map { |(frames, _, _), w| [frames, w] })
 
       # Intern type label and unit
       type_label = mode == :wall ? "wall" : "cpu"
@@ -529,8 +603,8 @@ module Rperf
       # field 1: sample_type (repeated ValueType)
       buf << encode_message(1, encode_value_type(type_idx, ns_idx))
 
-      # field 2: sample (repeated Sample) with thread_seq label
-      merged.each do |(frames, thread_seq), weight|
+      # field 2: sample (repeated Sample) with thread_seq + user labels
+      merged.each do |(frames, thread_seq, label_set_id), weight|
         sample_buf = "".b
         loc_ids = frames.map { |f| locations[f] }
         sample_buf << encode_packed_uint64(1, loc_ids)
@@ -540,6 +614,17 @@ module Rperf
           label_buf << encode_int64(1, thread_seq_key)  # key
           label_buf << encode_int64(3, thread_seq)       # num
           sample_buf << encode_message(3, label_buf)
+        end
+        if label_sets && label_set_id && label_set_id > 0
+          ls = label_sets[label_set_id]
+          if ls
+            ls.each do |k, v|
+              label_buf = "".b
+              label_buf << encode_int64(1, label_key_indices[k.to_s])  # key
+              label_buf << encode_int64(2, string_index[v.to_s])       # str
+              sample_buf << encode_message(3, label_buf)
+            end
+          end
         end
         buf << encode_message(2, sample_buf)
       end
