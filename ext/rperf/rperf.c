@@ -622,10 +622,13 @@ rperf_try_swap(rperf_profiler_t *prof)
 
     /* Swap active buffer: release ensures buffer writes are visible to worker */
     atomic_store_explicit(&prof->active_idx, idx ^ 1, memory_order_release);
-    atomic_store_explicit(&prof->swap_ready, 1, memory_order_release);
 
-    /* Wake worker thread */
+    /* Set swap_ready under mutex and signal, preventing lost wakeup:
+     * the worker checks swap_ready while holding the same mutex. */
+    CHECKED(pthread_mutex_lock(&prof->worker_mutex));
+    atomic_store_explicit(&prof->swap_ready, 1, memory_order_release);
     CHECKED(pthread_cond_signal(&prof->worker_cond));
+    CHECKED(pthread_mutex_unlock(&prof->worker_mutex));
 }
 
 /* Write a sample into a specific buffer. No swap check. */
@@ -939,7 +942,8 @@ rperf_worker_signal_func(void *arg)
     CHECKED(pthread_cond_signal(&prof->worker_cond));
 
     while (prof->running) {
-        CHECKED(pthread_cond_wait(&prof->worker_cond, &prof->worker_mutex));
+        while (prof->running && !atomic_load_explicit(&prof->swap_ready, memory_order_acquire))
+            CHECKED(pthread_cond_wait(&prof->worker_cond, &prof->worker_mutex));
         rperf_try_aggregate(prof);
     }
     CHECKED(pthread_mutex_unlock(&prof->worker_mutex));
