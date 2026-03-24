@@ -149,6 +149,7 @@ typedef struct rperf_profiler {
     timer_t timer_id;
     int timer_signal;     /* >0: use timer signal, 0: use nanosleep thread */
     _Atomic pid_t worker_tid;    /* kernel TID of worker thread (for SIGEV_THREAD_ID) */
+    struct sigaction old_sigaction;  /* saved handler to restore on stop */
 #endif
     rb_postponed_job_handle_t pj_handle;
     int aggregate;               /* 1 = aggregate samples, 0 = raw */
@@ -1084,14 +1085,14 @@ rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig)
         memset(&sa, 0, sizeof(sa));
         sa.sa_handler = rperf_signal_handler;
         sa.sa_flags = SA_RESTART;
-        sigaction(g_profiler.timer_signal, &sa, NULL);
+        sigaction(g_profiler.timer_signal, &sa, &g_profiler.old_sigaction);
 
         /* Start worker thread first to get its kernel TID */
         g_profiler.worker_tid = 0;
         if (pthread_create(&g_profiler.worker_thread, NULL,
                            rperf_worker_signal_func, &g_profiler) != 0) {
             g_profiler.running = 0;
-            signal(g_profiler.timer_signal, SIG_DFL);
+            sigaction(g_profiler.timer_signal, &g_profiler.old_sigaction, NULL);
             goto timer_fail;
         }
 
@@ -1109,7 +1110,7 @@ rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig)
         sev._sigev_un._tid = g_profiler.worker_tid;
         if (timer_create(CLOCK_MONOTONIC, &sev, &g_profiler.timer_id) != 0) {
             g_profiler.running = 0;
-            signal(g_profiler.timer_signal, SIG_DFL);
+            sigaction(g_profiler.timer_signal, &g_profiler.old_sigaction, NULL);
             CHECKED(pthread_cond_signal(&g_profiler.worker_cond));
             CHECKED(pthread_join(g_profiler.worker_thread, NULL));
             goto timer_fail;
@@ -1171,7 +1172,7 @@ rb_rperf_stop(VALUE self)
 #if RPERF_USE_TIMER_SIGNAL
     if (g_profiler.timer_signal > 0) {
         timer_delete(g_profiler.timer_id);
-        signal(g_profiler.timer_signal, SIG_IGN);
+        sigaction(g_profiler.timer_signal, &g_profiler.old_sigaction, NULL);
     }
 #endif
 
