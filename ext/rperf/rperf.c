@@ -117,8 +117,6 @@ typedef struct rperf_thread_data {
     /* GVL event tracking */
     int64_t suspended_at_ns;        /* wall time at SUSPENDED */
     int64_t ready_at_ns;            /* wall time at READY */
-    size_t suspended_frame_start;   /* saved stack in frame_pool */
-    int suspended_frame_depth;      /* saved stack depth */
     int thread_seq;                 /* thread sequence number (1-based) */
 } rperf_thread_data_t;
 
@@ -127,8 +125,6 @@ typedef struct rperf_thread_data {
 typedef struct rperf_gc_state {
     int phase;                /* rperf_gc_phase */
     int64_t enter_ns;         /* wall time at GC_ENTER */
-    size_t frame_start;       /* saved stack at GC_ENTER */
-    int frame_depth;          /* saved stack depth */
     int thread_seq;           /* thread_seq at GC_ENTER */
 } rperf_gc_state_t;
 
@@ -682,10 +678,8 @@ rperf_handle_suspended(rperf_profiler_t *prof, VALUE thread)
         rperf_record_sample(prof, frame_start, depth, weight, RPERF_SAMPLE_NORMAL, td->thread_seq);
     }
 
-    /* Save stack and timestamp for READY/RESUMED */
+    /* Save timestamp for READY/RESUMED */
     td->suspended_at_ns = wall_now;
-    td->suspended_frame_start = frame_start;
-    td->suspended_frame_depth = depth;
     td->prev_time_ns = time_now;
     td->prev_wall_ns = wall_now;
 }
@@ -713,21 +707,31 @@ rperf_handle_resumed(rperf_profiler_t *prof, VALUE thread)
 
     int64_t wall_now = rperf_wall_time_ns();
 
-    /* Record GVL blocked/wait samples (wall mode only) */
-    if (prof->mode == 1 && td->suspended_frame_depth > 0) {
+    /* Record GVL blocked/wait samples (wall mode only).
+     * Capture backtrace here (not at SUSPENDED) so that frame_start always
+     * indexes into the current active buffer, avoiding mismatch after a
+     * double-buffer swap. The Ruby stack is unchanged while off-GVL. */
+    if (prof->mode == 1 && td->suspended_at_ns > 0) {
+        rperf_sample_buffer_t *buf = &prof->buffers[atomic_load_explicit(&prof->active_idx, memory_order_relaxed)];
+        if (rperf_ensure_frame_pool_capacity(buf, RPERF_MAX_STACK_DEPTH) < 0) goto skip_gvl;
+        size_t frame_start = buf->frame_pool_count;
+        int depth = rb_profile_frames(0, RPERF_MAX_STACK_DEPTH,
+                                      &buf->frame_pool[frame_start], NULL);
+        if (depth <= 0) goto skip_gvl;
+        buf->frame_pool_count += depth;
+
         if (td->ready_at_ns > 0 && td->ready_at_ns > td->suspended_at_ns) {
             int64_t blocked_ns = td->ready_at_ns - td->suspended_at_ns;
-            rperf_record_sample(prof, td->suspended_frame_start,
-                                td->suspended_frame_depth, blocked_ns,
+            rperf_record_sample(prof, frame_start, depth, blocked_ns,
                                 RPERF_SAMPLE_GVL_BLOCKED, td->thread_seq);
         }
         if (td->ready_at_ns > 0 && wall_now > td->ready_at_ns) {
             int64_t wait_ns = wall_now - td->ready_at_ns;
-            rperf_record_sample(prof, td->suspended_frame_start,
-                                td->suspended_frame_depth, wait_ns,
+            rperf_record_sample(prof, frame_start, depth, wait_ns,
                                 RPERF_SAMPLE_GVL_WAIT, td->thread_seq);
         }
     }
+skip_gvl:
 
     /* Reset prev times to current — next timer sample measures from resume */
     int64_t time_now = rperf_current_time_ns(prof, td);
@@ -735,7 +739,7 @@ rperf_handle_resumed(rperf_profiler_t *prof, VALUE thread)
     td->prev_wall_ns = wall_now;
 
     /* Clear suspended state */
-    td->suspended_frame_depth = 0;
+    td->suspended_at_ns = 0;
     td->ready_at_ns = 0;
 }
 
@@ -785,23 +789,9 @@ rperf_gc_event_hook(rb_event_flag_t event, VALUE data, VALUE self, ID id, VALUE 
         prof->gc.phase = RPERF_GC_NONE;
     }
     else if (event & RUBY_INTERNAL_EVENT_GC_ENTER) {
-        /* Capture backtrace and timestamp at GC entry */
+        /* Save timestamp and thread_seq; backtrace is captured at GC_EXIT
+         * to avoid buffer mismatch after a double-buffer swap. */
         prof->gc.enter_ns = rperf_wall_time_ns();
-
-        rperf_sample_buffer_t *buf = &prof->buffers[atomic_load_explicit(&prof->active_idx, memory_order_relaxed)];
-        if (rperf_ensure_frame_pool_capacity(buf, RPERF_MAX_STACK_DEPTH) < 0) return;
-        size_t frame_start = buf->frame_pool_count;
-        int depth = rb_profile_frames(0, RPERF_MAX_STACK_DEPTH,
-                                      &buf->frame_pool[frame_start], NULL);
-        if (depth <= 0) {
-            prof->gc.frame_depth = 0;
-            return;
-        }
-        buf->frame_pool_count += depth;
-        prof->gc.frame_start = frame_start;
-        prof->gc.frame_depth = depth;
-
-        /* Save thread_seq for the GC_EXIT sample */
         {
             VALUE thread = rb_thread_current();
             rperf_thread_data_t *td = (rperf_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
@@ -809,7 +799,7 @@ rperf_gc_event_hook(rb_event_flag_t event, VALUE data, VALUE self, ID id, VALUE 
         }
     }
     else if (event & RUBY_INTERNAL_EVENT_GC_EXIT) {
-        if (prof->gc.frame_depth <= 0) return;
+        if (prof->gc.enter_ns <= 0) return;
 
         int64_t wall_now = rperf_wall_time_ns();
         int64_t weight = wall_now - prof->gc.enter_ns;
@@ -817,9 +807,25 @@ rperf_gc_event_hook(rb_event_flag_t event, VALUE data, VALUE self, ID id, VALUE 
                    ? RPERF_SAMPLE_GC_SWEEPING
                    : RPERF_SAMPLE_GC_MARKING;
 
-        rperf_record_sample(prof, prof->gc.frame_start,
-                            prof->gc.frame_depth, weight, type, prof->gc.thread_seq);
-        prof->gc.frame_depth = 0;
+        /* Capture backtrace here (not at GC_ENTER) so that frame_start
+         * always indexes into the current active buffer. The Ruby stack
+         * is unchanged during GC. */
+        rperf_sample_buffer_t *buf = &prof->buffers[atomic_load_explicit(&prof->active_idx, memory_order_relaxed)];
+        if (rperf_ensure_frame_pool_capacity(buf, RPERF_MAX_STACK_DEPTH) < 0) {
+            prof->gc.enter_ns = 0;
+            return;
+        }
+        size_t frame_start = buf->frame_pool_count;
+        int depth = rb_profile_frames(0, RPERF_MAX_STACK_DEPTH,
+                                      &buf->frame_pool[frame_start], NULL);
+        if (depth <= 0) {
+            prof->gc.enter_ns = 0;
+            return;
+        }
+        buf->frame_pool_count += depth;
+
+        rperf_record_sample(prof, frame_start, depth, weight, type, prof->gc.thread_seq);
+        prof->gc.enter_ns = 0;
     }
 }
 
@@ -1032,7 +1038,7 @@ rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig)
 
     /* Register GC event hook */
     g_profiler.gc.phase = RPERF_GC_NONE;
-    g_profiler.gc.frame_depth = 0;
+    g_profiler.gc.enter_ns = 0;
     rb_add_event_hook(rperf_gc_event_hook,
                       RUBY_INTERNAL_EVENT_GC_START |
                       RUBY_INTERNAL_EVENT_GC_END_MARK |
@@ -1388,6 +1394,7 @@ rperf_after_fork_child(void)
 
     /* Reset GC state */
     g_profiler.gc.phase = 0;
+    g_profiler.gc.enter_ns = 0;
 
     /* Reset stats */
     g_profiler.stats.sampling_count = 0;
