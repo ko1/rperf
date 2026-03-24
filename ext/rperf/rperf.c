@@ -1173,16 +1173,27 @@ rb_rperf_stop(VALUE self)
     g_profiler.running = 0;
 #if RPERF_USE_TIMER_SIGNAL
     if (g_profiler.timer_signal > 0) {
+        /* Delete timer first to stop generating new signals.
+         * Do NOT restore signal handler yet — the worker thread may still have
+         * pending timer signals.  rperf_signal_handler handles them harmlessly. */
         timer_delete(g_profiler.timer_id);
-        sigaction(g_profiler.timer_signal, &g_profiler.old_sigaction, NULL);
     }
 #endif
 
-    /* Wake and join worker thread */
+    /* Wake and join worker thread.
+     * Any pending timer signals are still handled by rperf_signal_handler
+     * (just increments trigger_count + calls rb_postponed_job_trigger). */
     CHECKED(pthread_cond_signal(&g_profiler.worker_cond));
     CHECKED(pthread_join(g_profiler.worker_thread, NULL));
     CHECKED(pthread_mutex_destroy(&g_profiler.worker_mutex));
     CHECKED(pthread_cond_destroy(&g_profiler.worker_cond));
+
+#if RPERF_USE_TIMER_SIGNAL
+    if (g_profiler.timer_signal > 0) {
+        /* Worker thread is gone — safe to restore old signal handler now. */
+        sigaction(g_profiler.timer_signal, &g_profiler.old_sigaction, NULL);
+    }
+#endif
 
     if (g_profiler.thread_hook) {
         rb_internal_thread_remove_event_hook(g_profiler.thread_hook);
@@ -1342,9 +1353,20 @@ rperf_after_fork_child(void)
     g_profiler.running = 0;
 
 #if RPERF_USE_TIMER_SIGNAL
-    /* timer_create timers are not inherited across fork; restore old signal handler */
+    /* timer_create timers are not inherited across fork, but pending signals may be.
+     * Block the signal, drain any pending instances, then restore old handler. */
     if (g_profiler.timer_signal > 0) {
+        sigset_t block_set, old_set;
+        struct timespec zero_ts = {0, 0};
+
+        sigemptyset(&block_set);
+        sigaddset(&block_set, g_profiler.timer_signal);
+        pthread_sigmask(SIG_BLOCK, &block_set, &old_set);
+
+        while (sigtimedwait(&block_set, NULL, &zero_ts) > 0) {}
+
         sigaction(g_profiler.timer_signal, &g_profiler.old_sigaction, NULL);
+        pthread_sigmask(SIG_SETMASK, &old_set, NULL);
     }
 #endif
 
