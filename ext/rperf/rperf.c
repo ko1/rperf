@@ -112,7 +112,7 @@ typedef struct rperf_agg_table {
 } rperf_agg_table_t;
 
 typedef struct rperf_thread_data {
-    int64_t prev_cpu_ns;
+    int64_t prev_time_ns;
     int64_t prev_wall_ns;
     /* GVL event tracking */
     int64_t suspended_at_ns;        /* wall time at SUSPENDED */
@@ -627,7 +627,7 @@ rperf_thread_data_create(rperf_profiler_t *prof, VALUE thread)
 {
     rperf_thread_data_t *td = (rperf_thread_data_t *)calloc(1, sizeof(rperf_thread_data_t));
     if (!td) return NULL;
-    td->prev_cpu_ns = rperf_current_time_ns(prof, td);
+    td->prev_time_ns = rperf_current_time_ns(prof, td);
     td->prev_wall_ns = rperf_wall_time_ns();
     td->thread_seq = ++prof->next_thread_seq;
     rb_internal_thread_specific_set(thread, prof->ts_key, td);
@@ -665,7 +665,7 @@ rperf_handle_suspended(rperf_profiler_t *prof, VALUE thread)
 
     /* Record normal sample (skip if first time — no prev_time) */
     if (!is_first) {
-        int64_t weight = time_now - td->prev_cpu_ns;
+        int64_t weight = time_now - td->prev_time_ns;
         rperf_record_sample(prof, frame_start, depth, weight, RPERF_SAMPLE_NORMAL, td->thread_seq);
     }
 
@@ -673,7 +673,7 @@ rperf_handle_suspended(rperf_profiler_t *prof, VALUE thread)
     td->suspended_at_ns = wall_now;
     td->suspended_frame_start = frame_start;
     td->suspended_frame_depth = depth;
-    td->prev_cpu_ns = time_now;
+    td->prev_time_ns = time_now;
     td->prev_wall_ns = wall_now;
 }
 
@@ -718,7 +718,7 @@ rperf_handle_resumed(rperf_profiler_t *prof, VALUE thread)
 
     /* Reset prev times to current — next timer sample measures from resume */
     int64_t time_now = rperf_current_time_ns(prof, td);
-    if (time_now >= 0) td->prev_cpu_ns = time_now;
+    if (time_now >= 0) td->prev_time_ns = time_now;
     td->prev_wall_ns = wall_now;
 
     /* Clear suspended state */
@@ -836,8 +836,8 @@ rperf_sample_job(void *arg)
     int64_t time_now = rperf_current_time_ns(prof, td);
     if (time_now < 0) return;
 
-    int64_t weight = time_now - td->prev_cpu_ns;
-    td->prev_cpu_ns = time_now;
+    int64_t weight = time_now - td->prev_time_ns;
+    td->prev_time_ns = time_now;
     td->prev_wall_ns = rperf_wall_time_ns();
 
     if (weight <= 0) return;
