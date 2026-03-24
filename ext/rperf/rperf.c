@@ -693,12 +693,11 @@ rperf_thread_data_create(rperf_profiler_t *prof, VALUE thread)
 /* ---- Thread event hooks ---- */
 
 static void
-rperf_handle_suspended(rperf_profiler_t *prof, VALUE thread)
+rperf_handle_suspended(rperf_profiler_t *prof, VALUE thread, rperf_thread_data_t *td)
 {
     /* Has GVL — safe to call Ruby APIs */
     int64_t wall_now = rperf_wall_time_ns();
 
-    rperf_thread_data_t *td = (rperf_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
     int is_first = 0;
 
     if (td == NULL) {
@@ -732,21 +731,18 @@ rperf_handle_suspended(rperf_profiler_t *prof, VALUE thread)
 }
 
 static void
-rperf_handle_ready(rperf_profiler_t *prof, VALUE thread)
+rperf_handle_ready(rperf_profiler_t *prof, rperf_thread_data_t *td)
 {
     /* May NOT have GVL — only simple C operations allowed */
-    rperf_thread_data_t *td = (rperf_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
     if (!td) return;
 
     td->ready_at_ns = rperf_wall_time_ns();
 }
 
 static void
-rperf_handle_resumed(rperf_profiler_t *prof, VALUE thread)
+rperf_handle_resumed(rperf_profiler_t *prof, VALUE thread, rperf_thread_data_t *td)
 {
     /* Has GVL */
-    rperf_thread_data_t *td = (rperf_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
-
     if (td == NULL) {
         td = rperf_thread_data_create(prof, thread);
         if (!td) return;
@@ -798,9 +794,8 @@ skip_gvl:
 }
 
 static void
-rperf_handle_exited(rperf_profiler_t *prof, VALUE thread)
+rperf_handle_exited(rperf_profiler_t *prof, VALUE thread, rperf_thread_data_t *td)
 {
-    rperf_thread_data_t *td = (rperf_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
     if (td) {
         free(td);
         rb_internal_thread_specific_set(thread, prof->ts_key, NULL);
@@ -814,15 +809,16 @@ rperf_thread_event_hook(rb_event_flag_t event, const rb_internal_thread_event_da
     if (!prof->running) return;
 
     VALUE thread = data->thread;
+    rperf_thread_data_t *td = (rperf_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
 
     if (event & RUBY_INTERNAL_THREAD_EVENT_SUSPENDED)
-        rperf_handle_suspended(prof, thread);
+        rperf_handle_suspended(prof, thread, td);
     else if (event & RUBY_INTERNAL_THREAD_EVENT_READY)
-        rperf_handle_ready(prof, thread);
+        rperf_handle_ready(prof, td);
     else if (event & RUBY_INTERNAL_THREAD_EVENT_RESUMED)
-        rperf_handle_resumed(prof, thread);
+        rperf_handle_resumed(prof, thread, td);
     else if (event & RUBY_INTERNAL_THREAD_EVENT_EXITED)
-        rperf_handle_exited(prof, thread);
+        rperf_handle_exited(prof, thread, td);
 }
 
 /* ---- GC event hook ---- */
