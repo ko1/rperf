@@ -29,9 +29,9 @@ module Rperf
     @format = format
     @stat = stat
     @stat_start_mono = Process.clock_gettime(Process::CLOCK_MONOTONIC) if @stat
-    c_opts = { frequency: frequency, mode: mode, aggregate: aggregate }
-    c_opts[:signal] = signal unless signal.nil?
-    _c_start(**c_opts)
+    c_mode = mode == :cpu ? 0 : 1
+    c_signal = signal.nil? ? -1 : (signal ? signal.to_i : 0)
+    _c_start(frequency, c_mode, aggregate, c_signal)
 
     if block_given?
       begin
@@ -148,7 +148,7 @@ module Rperf
 
   # Samples from C are now [[path_str, label_str], ...], weight]
   def self.print_top(data)
-    samples_raw = data[:samples]
+    samples_raw = data[:aggregated_samples]
     return if !samples_raw || samples_raw.empty?
 
     result = compute_flat_cum(samples_raw)
@@ -180,7 +180,7 @@ module Rperf
   private_constant :STAT_PCT_LINE, :STAT_LINE
 
   def self.print_stat(data)
-    samples_raw = data[:samples] || []
+    samples_raw = data[:aggregated_samples] || []
     real_ns = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - @stat_start_mono) * 1_000_000_000).to_i
     times = Process.times
     user_ns = (times.utime * 1_000_000_000).to_i
@@ -391,7 +391,7 @@ module Rperf
     module_function
 
     def encode(data, top_n: 50, header: true)
-      samples_raw = data[:samples]
+      samples_raw = data[:aggregated_samples]
       mode = data[:mode] || :cpu
       frequency = data[:frequency] || 0
 
@@ -434,7 +434,7 @@ module Rperf
 
     def encode(data)
       merged = Hash.new(0)
-      data[:samples].each do |frames, weight|
+      data[:aggregated_samples].each do |frames, weight|
         key = frames.reverse.map { |_, label| label }.join(";")
         merged[key] += weight
       end
@@ -451,7 +451,7 @@ module Rperf
     module_function
 
     def encode(data)
-      samples_raw = data[:samples]
+      samples_raw = data[:aggregated_samples]
       frequency = data[:frequency]
       interval_ns = 1_000_000_000 / frequency
       mode = data[:mode] || :cpu

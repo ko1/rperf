@@ -179,11 +179,11 @@ You can work with the sample data programmatically. By default, samples are aggr
 require "rperf"
 
 data = Rperf.start(mode: :cpu) { workload }
-# data[:samples] contains aggregated entries (one per unique stack)
+# data[:aggregated_samples] contains aggregated entries (one per unique stack)
 
 # Find the hottest function
 flat = Hash.new(0)
-data[:samples].each do |frames, weight, thread_seq|
+data[:aggregated_samples].each do |frames, weight, thread_seq|
   leaf_label = frames.first&.last  # frames[0] is the leaf
   flat[leaf_label] += weight
 end
@@ -191,6 +191,16 @@ end
 top = flat.sort_by { |_, w| -w }.first(5)
 top.each do |label, weight_ns|
   puts "#{label}: #{weight_ns / 1_000_000.0}ms"
+end
+```
+
+To get raw (non-aggregated) per-sample data, pass `aggregate: false`. Each timer tick produces a separate entry:
+
+```ruby
+data = Rperf.start(mode: :cpu, aggregate: false) { workload }
+# data[:raw_samples] contains one entry per timer sample
+data[:raw_samples].each do |frames, weight, thread_seq|
+  puts "thread=#{thread_seq} weight=#{weight}ns depth=#{frames.size}"
 end
 ```
 

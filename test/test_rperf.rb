@@ -16,7 +16,7 @@ class TestRperf < Test::Unit::TestCase
     data = Rperf.stop
 
     assert_kind_of Hash, data
-    assert_include data, :samples
+    assert_include data, :aggregated_samples
     assert_include data, :frequency
     assert_equal 100, data[:frequency]
   end
@@ -27,7 +27,7 @@ class TestRperf < Test::Unit::TestCase
     data = Rperf.stop
 
     assert_not_nil data
-    samples = data[:samples]
+    samples = data[:aggregated_samples]
 
     # Should have at least some samples
     assert_operator samples.size, :>, 0, "Expected at least 1 sample"
@@ -67,7 +67,7 @@ class TestRperf < Test::Unit::TestCase
 
     data = Rperf.stop
     assert_not_nil data
-    assert_operator data[:samples].size, :>, 0, "Should have samples from threads"
+    assert_operator data[:aggregated_samples].size, :>, 0, "Should have samples from threads"
   end
 
   def test_double_start_raises
@@ -101,7 +101,7 @@ class TestRperf < Test::Unit::TestCase
     # At 1000Hz each raw sample weight should be ~1ms.
     # Without proper thread state reset, the first sample would carry
     # the stale prev_cpu_ns from session 1, producing a huge weight.
-    max_weight2 = data2[:samples].map { |_, w| w }.max || 0
+    max_weight2 = data2[:raw_samples].map { |_, w| w }.max || 0
 
     assert_operator max_weight2, :<, 100_000_000,
       "Max weight in second session (#{max_weight2}ns) should not include the gap between sessions"
@@ -111,7 +111,7 @@ class TestRperf < Test::Unit::TestCase
 
   # Sample buffer initial capacity is 1024.
   # With 4 threads at 5000Hz, ~20000 samples/sec → crosses boundary quickly.
-  # After aggregation, data[:samples] contains unique stacks (much fewer),
+  # After aggregation, data[:aggregated_samples] contains unique stacks (much fewer),
   # so we check sampling_count to verify buffer realloc was exercised.
   def test_sample_buffer_realloc
     duration = 1.0
@@ -123,7 +123,7 @@ class TestRperf < Test::Unit::TestCase
       busy_wait(duration)
       data = Rperf.stop
 
-      trials << "#{duration}s: samples=#{data[:samples].size}, trigger_count=#{data[:trigger_count]}, sampling_count=#{data[:sampling_count]}"
+      trials << "#{duration}s: samples=#{data[:aggregated_samples].size}, trigger_count=#{data[:trigger_count]}, sampling_count=#{data[:sampling_count]}"
       break if data[:sampling_count] > 1024
 
       duration *= 2
@@ -132,7 +132,7 @@ class TestRperf < Test::Unit::TestCase
     end
 
     # Verify all samples have valid data
-    assert_valid_samples(data[:samples])
+    assert_valid_samples(data[:aggregated_samples])
   end
 
   # Frame pool initial capacity is ~131K frames (1MB / 8 bytes per VALUE).
@@ -152,7 +152,7 @@ class TestRperf < Test::Unit::TestCase
       deep_recurse(stack_depth) { busy_wait(duration) }
       data = Rperf.stop
 
-      samples = data[:samples]
+      samples = data[:aggregated_samples]
       estimated_frames = data[:sampling_count] * stack_depth
       trials << "#{duration}s: samples=#{samples.size}, sampling_count=#{data[:sampling_count]}, estimated_frames=#{estimated_frames}"
       break if estimated_frames > initial_pool
@@ -163,7 +163,7 @@ class TestRperf < Test::Unit::TestCase
     end
 
     # Verify early and late samples both have valid frame data
-    samples = data[:samples]
+    samples = data[:aggregated_samples]
     assert_valid_samples(samples.first(10))
     assert_valid_samples(samples.last(10))
   end
@@ -176,7 +176,7 @@ class TestRperf < Test::Unit::TestCase
 
     data = Rperf.stop
     assert_not_nil data
-    samples = data[:samples]
+    samples = data[:aggregated_samples]
     assert_operator samples.size, :>, 0
 
     max_depth = samples.map { |frames, _| frames.size }.max
@@ -199,8 +199,8 @@ class TestRperf < Test::Unit::TestCase
 
     data = Rperf.stop
     assert_not_nil data
-    assert_operator data[:samples].size, :>, 0
-    assert_valid_samples(data[:samples])
+    assert_operator data[:aggregated_samples].size, :>, 0
+    assert_valid_samples(data[:aggregated_samples])
   end
 
   # Restart with threads that survive across sessions
@@ -230,12 +230,12 @@ class TestRperf < Test::Unit::TestCase
 
     assert_not_nil data1
     assert_not_nil data2
-    assert_operator data2[:samples].size, :>, 0
+    assert_operator data2[:raw_samples].size, :>, 0
 
     # Check raw per-sample weights. At 1000Hz each should be ~1ms.
     # Without proper cleanup, surviving thread's first sample would
     # include stale prev_cpu_ns from session 1.
-    max_weight2 = data2[:samples].map { |_, w| w }.max || 0
+    max_weight2 = data2[:raw_samples].map { |_, w| w }.max || 0
     assert_operator max_weight2, :<, 200_000_000,
       "Surviving thread's max weight (#{max_weight2}ns) should not include inter-session gap"
   end
@@ -248,7 +248,7 @@ class TestRperf < Test::Unit::TestCase
       data = Rperf.stop
 
       assert_not_nil data, "Cycle #{cycle}: stop should return data"
-      assert_operator data[:samples].size, :>, 0, "Cycle #{cycle}: should have samples"
+      assert_operator data[:aggregated_samples].size, :>, 0, "Cycle #{cycle}: should have samples"
     end
   end
 
@@ -266,7 +266,7 @@ class TestRperf < Test::Unit::TestCase
     data = Rperf.stop
     assert_not_nil data
 
-    labels = data[:samples].flat_map { |frames, _| frames.map { |_, label| label } }
+    labels = data[:aggregated_samples].flat_map { |frames, _| frames.map { |_, label| label } }
     has_blocked = labels.include?("[GVL blocked]")
     has_wait = labels.include?("[GVL wait]")
 
@@ -285,7 +285,7 @@ class TestRperf < Test::Unit::TestCase
     data = Rperf.stop
     assert_not_nil data
 
-    labels = data[:samples].flat_map { |frames, _| frames.map { |_, label| label } }
+    labels = data[:aggregated_samples].flat_map { |frames, _| frames.map { |_, label| label } }
     refute labels.include?("[GVL blocked]"),
       "CPU mode should NOT produce [GVL blocked] samples"
     refute labels.include?("[GVL wait]"),
@@ -304,7 +304,7 @@ class TestRperf < Test::Unit::TestCase
     data = Rperf.stop
     assert_not_nil data
 
-    gvl_samples = data[:samples].select { |frames, _|
+    gvl_samples = data[:aggregated_samples].select { |frames, _|
       frames.any? { |_, label| label == "[GVL blocked]" || label == "[GVL wait]" }
     }
 
@@ -369,7 +369,7 @@ class TestRperf < Test::Unit::TestCase
 
   def test_print_stat
     data = {
-      samples: [
+      aggregated_samples: [
         [[["/a.rb", "A#foo"], ["/b.rb", "B#bar"]], 100_000_000],
         [[["<GVL>", "[GVL blocked]"], ["/a.rb", "A#foo"]], 50_000_000],
         [[["<GC>", "[GC marking]"], ["/a.rb", "A#foo"]], 10_000_000],
@@ -413,7 +413,7 @@ class TestRperf < Test::Unit::TestCase
 
   def test_text_encode
     data = {
-      samples: [
+      aggregated_samples: [
         [[["/a.rb", "A#foo"], ["/b.rb", "B#bar"]], 1_000_000],
         [[["/a.rb", "A#foo"], ["/b.rb", "B#bar"]], 2_000_000],
         [[["/c.rb", "C#baz"]], 500_000],
@@ -469,7 +469,7 @@ class TestRperf < Test::Unit::TestCase
   end
 
   def test_text_encode_empty
-    data = { samples: [], frequency: 100, mode: :cpu }
+    data = { aggregated_samples: [], frequency: 100, mode: :cpu }
     result = Rperf::Text.encode(data)
     assert_equal "No samples recorded.\n", result
   end
@@ -478,7 +478,7 @@ class TestRperf < Test::Unit::TestCase
 
   def test_collapsed_encode
     data = {
-      samples: [
+      aggregated_samples: [
         [[["/a.rb", "A#foo"], ["/b.rb", "B#bar"]], 1000],
         [[["/a.rb", "A#foo"], ["/b.rb", "B#bar"]], 2000],
         [[["/c.rb", "C#baz"]], 500],
@@ -584,7 +584,7 @@ class TestRperf < Test::Unit::TestCase
     1_000_000.times { 1 + 1 }
     data = Rperf.stop
     assert_not_nil data, "Parent profiling should still work after fork"
-    assert_operator data[:samples].size, :>, 0
+    assert_operator data[:aggregated_samples].size, :>, 0
   end
 
   private

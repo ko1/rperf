@@ -112,10 +112,15 @@ nil if profiler was not running; otherwise a Hash:
   sampling_time_ns: 56789,
   start_time_ns: 17740..., # CLOCK_REALTIME epoch nanos
   duration_ns: 10000000,   # profiling duration in nanos
-  samples: [               # Array of [frames, weight, thread_seq]
+  aggregated_samples: [    # when aggregate: true (default)
     [frames, weight, seq], #   frames: [[path, label], ...] deepest-first
-    ...                    #   weight: Integer (nanoseconds)
-  ] }                      #   seq: Integer (thread sequence, 1-based)
+    ...                    #   weight: Integer (nanoseconds, merged per unique stack)
+  ],                       #   seq: Integer (thread sequence, 1-based)
+  # --- OR ---
+  raw_samples: [           # when aggregate: false
+    [frames, weight, seq], #   one entry per timer sample (not merged)
+    ...
+  ] }
 ```
 
 ### Rperf.save(path, data, format: nil)

@@ -117,6 +117,24 @@ typedef struct rperf_thread_data {
     int thread_seq;                 /* thread sequence number (1-based) */
 } rperf_thread_data_t;
 
+/* ---- GC tracking state ---- */
+
+typedef struct rperf_gc_state {
+    int phase;                /* rperf_gc_phase */
+    int64_t enter_ns;         /* wall time at GC_ENTER */
+    size_t frame_start;       /* saved stack at GC_ENTER */
+    int frame_depth;          /* saved stack depth */
+    int thread_seq;           /* thread_seq at GC_ENTER */
+} rperf_gc_state_t;
+
+/* ---- Sampling overhead stats ---- */
+
+typedef struct rperf_stats {
+    size_t trigger_count;
+    size_t sampling_count;
+    int64_t sampling_total_ns;
+} rperf_stats_t;
+
 typedef struct rperf_profiler {
     int frequency;
     int mode; /* 0 = cpu, 1 = wall */
@@ -141,20 +159,14 @@ typedef struct rperf_profiler {
     rb_internal_thread_specific_key_t ts_key;
     rb_internal_thread_event_hook_t *thread_hook;
     /* GC tracking */
-    int gc_phase;                /* rperf_gc_phase */
-    int64_t gc_enter_ns;         /* wall time at GC_ENTER */
-    size_t gc_frame_start;       /* saved stack at GC_ENTER */
-    int gc_frame_depth;          /* saved stack depth */
-    int gc_thread_seq;           /* thread_seq at GC_ENTER */
+    rperf_gc_state_t gc;
     /* Timing metadata for pprof */
     struct timespec start_realtime;   /* CLOCK_REALTIME at start */
     struct timespec start_monotonic;  /* CLOCK_MONOTONIC at start */
     /* Thread sequence counter */
     int next_thread_seq;
     /* Sampling overhead stats */
-    size_t trigger_count;
-    size_t sampling_count;
-    int64_t sampling_total_ns;
+    rperf_stats_t stats;
 } rperf_profiler_t;
 
 static rperf_profiler_t g_profiler;
@@ -722,17 +734,17 @@ rperf_gc_event_hook(rb_event_flag_t event, VALUE data, VALUE self, ID id, VALUE 
     if (!prof->running) return;
 
     if (event & RUBY_INTERNAL_EVENT_GC_START) {
-        prof->gc_phase = RPERF_GC_MARKING;
+        prof->gc.phase = RPERF_GC_MARKING;
     }
     else if (event & RUBY_INTERNAL_EVENT_GC_END_MARK) {
-        prof->gc_phase = RPERF_GC_SWEEPING;
+        prof->gc.phase = RPERF_GC_SWEEPING;
     }
     else if (event & RUBY_INTERNAL_EVENT_GC_END_SWEEP) {
-        prof->gc_phase = RPERF_GC_NONE;
+        prof->gc.phase = RPERF_GC_NONE;
     }
     else if (event & RUBY_INTERNAL_EVENT_GC_ENTER) {
         /* Capture backtrace and timestamp at GC entry */
-        prof->gc_enter_ns = rperf_wall_time_ns();
+        prof->gc.enter_ns = rperf_wall_time_ns();
 
         rperf_sample_buffer_t *buf = &prof->buffers[prof->active_idx];
         if (rperf_ensure_frame_pool_capacity(buf, RPERF_MAX_STACK_DEPTH) < 0) return;
@@ -740,32 +752,32 @@ rperf_gc_event_hook(rb_event_flag_t event, VALUE data, VALUE self, ID id, VALUE 
         int depth = rb_profile_frames(0, RPERF_MAX_STACK_DEPTH,
                                       &buf->frame_pool[frame_start], NULL);
         if (depth <= 0) {
-            prof->gc_frame_depth = 0;
+            prof->gc.frame_depth = 0;
             return;
         }
         buf->frame_pool_count += depth;
-        prof->gc_frame_start = frame_start;
-        prof->gc_frame_depth = depth;
+        prof->gc.frame_start = frame_start;
+        prof->gc.frame_depth = depth;
 
         /* Save thread_seq for the GC_EXIT sample */
         {
             VALUE thread = rb_thread_current();
             rperf_thread_data_t *td = (rperf_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
-            prof->gc_thread_seq = td ? td->thread_seq : 0;
+            prof->gc.thread_seq = td ? td->thread_seq : 0;
         }
     }
     else if (event & RUBY_INTERNAL_EVENT_GC_EXIT) {
-        if (prof->gc_frame_depth <= 0) return;
+        if (prof->gc.frame_depth <= 0) return;
 
         int64_t wall_now = rperf_wall_time_ns();
-        int64_t weight = wall_now - prof->gc_enter_ns;
-        int type = (prof->gc_phase == RPERF_GC_SWEEPING)
+        int64_t weight = wall_now - prof->gc.enter_ns;
+        int type = (prof->gc.phase == RPERF_GC_SWEEPING)
                    ? RPERF_SAMPLE_GC_SWEEPING
                    : RPERF_SAMPLE_GC_MARKING;
 
-        rperf_record_sample(prof, prof->gc_frame_start,
-                            prof->gc_frame_depth, weight, type, prof->gc_thread_seq);
-        prof->gc_frame_depth = 0;
+        rperf_record_sample(prof, prof->gc.frame_start,
+                            prof->gc.frame_depth, weight, type, prof->gc.thread_seq);
+        prof->gc.frame_depth = 0;
     }
 }
 
@@ -814,8 +826,8 @@ rperf_sample_job(void *arg)
     rperf_record_sample(prof, frame_start, depth, weight, RPERF_SAMPLE_NORMAL, td->thread_seq);
 
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts_end);
-    prof->sampling_count++;
-    prof->sampling_total_ns +=
+    prof->stats.sampling_count++;
+    prof->stats.sampling_total_ns +=
         ((int64_t)ts_end.tv_sec - ts_start.tv_sec) * 1000000000LL +
         (ts_end.tv_nsec - ts_start.tv_nsec);
 }
@@ -826,7 +838,7 @@ rperf_sample_job(void *arg)
 static void
 rperf_signal_handler(int sig)
 {
-    g_profiler.trigger_count++;
+    g_profiler.stats.trigger_count++;
     rb_postponed_job_trigger(g_profiler.pj_handle);
 }
 
@@ -876,7 +888,7 @@ rperf_worker_nanosleep_func(void *arg)
         int ret = pthread_cond_timedwait(&prof->worker_cond, &prof->worker_mutex, &deadline);
         assert(ret == 0 || ret == ETIMEDOUT);
         if (ret == ETIMEDOUT) {
-            prof->trigger_count++;
+            prof->stats.trigger_count++;
             rb_postponed_job_trigger(prof->pj_handle);
             /* Advance deadline by interval */
             deadline.tv_nsec += interval_ns;
@@ -909,57 +921,22 @@ rperf_resolve_frame(VALUE fval)
 
 /* ---- Ruby API ---- */
 
+/* _c_start(frequency, mode, aggregate, signal)
+ *   frequency: Integer (Hz)
+ *   mode:      0 = cpu, 1 = wall
+ *   aggregate: 0 or 1
+ *   signal:    Integer (RT signal number, 0 = nanosleep, -1 = default)
+ */
 static VALUE
-rb_rperf_start(int argc, VALUE *argv, VALUE self)
+rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig)
 {
-    VALUE opts;
-    int frequency = 1000;
-    int mode = 0; /* 0 = cpu, 1 = wall */
-    int aggregate = 1; /* default: aggregate */
+    int frequency = NUM2INT(vfreq);
+    int mode = NUM2INT(vmode);
+    int aggregate = RTEST(vagg) ? 1 : 0;
 #if RPERF_USE_TIMER_SIGNAL
-    int timer_signal = RPERF_TIMER_SIGNAL_DEFAULT;
+    int sig = NUM2INT(vsig);
+    int timer_signal = (sig < 0) ? RPERF_TIMER_SIGNAL_DEFAULT : sig;
 #endif
-
-    rb_scan_args(argc, argv, ":", &opts);
-    if (!NIL_P(opts)) {
-        VALUE vagg = rb_hash_aref(opts, ID2SYM(rb_intern("aggregate")));
-        if (!NIL_P(vagg)) {
-            aggregate = RTEST(vagg) ? 1 : 0;
-        }
-        VALUE vfreq = rb_hash_aref(opts, ID2SYM(rb_intern("frequency")));
-        if (!NIL_P(vfreq)) {
-            frequency = NUM2INT(vfreq);
-            if (frequency <= 0 || frequency > 1000000) {
-                rb_raise(rb_eArgError, "frequency must be between 1 and 1000000");
-            }
-        }
-        VALUE vmode = rb_hash_aref(opts, ID2SYM(rb_intern("mode")));
-        if (!NIL_P(vmode)) {
-            ID mode_id = SYM2ID(vmode);
-            if (mode_id == rb_intern("cpu")) {
-                mode = 0;
-            } else if (mode_id == rb_intern("wall")) {
-                mode = 1;
-            } else {
-                rb_raise(rb_eArgError, "mode must be :cpu or :wall");
-            }
-        }
-#if RPERF_USE_TIMER_SIGNAL
-        VALUE vsig = rb_hash_aref(opts, ID2SYM(rb_intern("signal")));
-        if (!NIL_P(vsig)) {
-            if (RTEST(vsig)) {
-                timer_signal = NUM2INT(vsig);
-                if (timer_signal < SIGRTMIN || timer_signal > SIGRTMAX) {
-                    rb_raise(rb_eArgError, "signal must be between SIGRTMIN(%d) and SIGRTMAX(%d)",
-                             SIGRTMIN, SIGRTMAX);
-                }
-            } else {
-                /* signal: false or signal: 0 → use nanosleep thread */
-                timer_signal = 0;
-            }
-        }
-#endif
-    }
 
     if (g_profiler.running) {
         rb_raise(rb_eRuntimeError, "Rperf is already running");
@@ -969,9 +946,9 @@ rb_rperf_start(int argc, VALUE *argv, VALUE self)
     g_profiler.mode = mode;
     g_profiler.aggregate = aggregate;
     g_profiler.next_thread_seq = 0;
-    g_profiler.sampling_count = 0;
-    g_profiler.sampling_total_ns = 0;
-    g_profiler.trigger_count = 0;
+    g_profiler.stats.sampling_count = 0;
+    g_profiler.stats.sampling_total_ns = 0;
+    g_profiler.stats.trigger_count = 0;
     g_profiler.active_idx = 0;
     g_profiler.swap_ready = 0;
 
@@ -999,8 +976,8 @@ rb_rperf_start(int argc, VALUE *argv, VALUE self)
     }
 
     /* Register GC event hook */
-    g_profiler.gc_phase = RPERF_GC_NONE;
-    g_profiler.gc_frame_depth = 0;
+    g_profiler.gc.phase = RPERF_GC_NONE;
+    g_profiler.gc.frame_depth = 0;
     rb_add_event_hook(rperf_gc_event_hook,
                       RUBY_INTERNAL_EVENT_GC_START |
                       RUBY_INTERNAL_EVENT_GC_END_MARK |
@@ -1194,9 +1171,9 @@ rb_rperf_stop(VALUE self)
     rb_hash_aset(result, ID2SYM(rb_intern("frequency")), INT2NUM(g_profiler.frequency));
 
     /* trigger_count, sampling_count, sampling_time_ns */
-    rb_hash_aset(result, ID2SYM(rb_intern("trigger_count")), SIZET2NUM(g_profiler.trigger_count));
-    rb_hash_aset(result, ID2SYM(rb_intern("sampling_count")), SIZET2NUM(g_profiler.sampling_count));
-    rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LONG2NUM(g_profiler.sampling_total_ns));
+    rb_hash_aset(result, ID2SYM(rb_intern("trigger_count")), SIZET2NUM(g_profiler.stats.trigger_count));
+    rb_hash_aset(result, ID2SYM(rb_intern("sampling_count")), SIZET2NUM(g_profiler.stats.sampling_count));
+    rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LONG2NUM(g_profiler.stats.sampling_total_ns));
 
     /* aggregation stats */
     if (g_profiler.aggregate) {
@@ -1285,7 +1262,9 @@ rb_rperf_stop(VALUE self)
             rb_ary_push(samples_ary, sample);
         }
     }
-    rb_hash_aset(result, ID2SYM(rb_intern("samples")), samples_ary);
+    rb_hash_aset(result,
+                 ID2SYM(rb_intern(g_profiler.aggregate ? "aggregated_samples" : "raw_samples")),
+                 samples_ary);
 
     /* Cleanup */
     rperf_sample_buffer_free(&g_profiler.buffers[0]);
@@ -1326,11 +1305,11 @@ rperf_after_fork_child(void)
     }
 
     /* Reset GC state */
-    g_profiler.gc_phase = 0;
+    g_profiler.gc.phase = 0;
 
     /* Reset stats */
-    g_profiler.sampling_count = 0;
-    g_profiler.sampling_total_ns = 0;
+    g_profiler.stats.sampling_count = 0;
+    g_profiler.stats.sampling_total_ns = 0;
     g_profiler.swap_ready = 0;
 }
 
@@ -1340,7 +1319,7 @@ void
 Init_rperf(void)
 {
     VALUE mRperf = rb_define_module("Rperf");
-    rb_define_module_function(mRperf, "_c_start", rb_rperf_start, -1);
+    rb_define_module_function(mRperf, "_c_start", rb_rperf_start, 4);
     rb_define_module_function(mRperf, "_c_stop", rb_rperf_stop, 0);
 
     memset(&g_profiler, 0, sizeof(g_profiler));
