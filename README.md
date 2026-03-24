@@ -102,6 +102,7 @@ Inspired by Linux `perf` — familiar subcommand interface for profiling workflo
 |---------|-------------|
 | `rperf record` | Profile a command and save to file |
 | `rperf stat` | Profile a command and print summary to stderr |
+| `rperf exec` | Profile a command and print full report to stderr |
 | `rperf report` | Open pprof profile with `go tool pprof` (requires Go) |
 | `rperf diff` | Compare two pprof profiles (requires Go) |
 | `rperf help` | Show full reference documentation |
@@ -165,7 +166,8 @@ rperf hooks GVL and GC events to attribute non-CPU time:
 - **Method-level only** — no line-level granularity.
 - **Ruby >= 3.4.0** — uses recent VM internals (postponed jobs, thread event hooks).
 - **POSIX only** — Linux, macOS. No Windows.
-- **Safepoint-bound** — can't sample inside long-running C calls; that time is attributed to the next safepoint.
+- **No fork support** — profiling does not follow fork(2) child processes.
+
 
 ## Output Formats
 
