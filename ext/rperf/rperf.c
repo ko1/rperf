@@ -79,7 +79,7 @@ typedef struct rperf_sample_buffer {
 #define RPERF_FRAME_TABLE_EMPTY UINT32_MAX
 
 typedef struct rperf_frame_table {
-    VALUE *keys;              /* unique VALUE array (GC mark target) */
+    _Atomic(VALUE *) keys;    /* unique VALUE array (GC mark target) */
     size_t count;             /* = next frame_id (starts after RPERF_SYNTHETIC_COUNT) */
     size_t capacity;
     uint32_t *buckets;        /* open addressing: stores index into keys[] */
@@ -199,7 +199,7 @@ rperf_profiler_mark(void *ptr)
      * data (old keys are kept alive in old_keys[]). */
     {
         size_t ft_count = __atomic_load_n(&prof->frame_table.count, __ATOMIC_ACQUIRE);
-        VALUE *ft_keys = prof->frame_table.keys;
+        VALUE *ft_keys = atomic_load_explicit(&prof->frame_table.keys, memory_order_acquire);
         if (ft_keys && ft_count > 0) {
             rb_gc_mark_locations(ft_keys + RPERF_SYNTHETIC_COUNT,
                                 ft_keys + ft_count);
@@ -317,12 +317,13 @@ static int
 rperf_frame_table_init(rperf_frame_table_t *ft)
 {
     ft->capacity = RPERF_FRAME_TABLE_INITIAL;
-    ft->keys = (VALUE *)calloc(ft->capacity, sizeof(VALUE));
-    if (!ft->keys) return -1;
+    VALUE *keys = (VALUE *)calloc(ft->capacity, sizeof(VALUE));
+    if (!keys) return -1;
+    atomic_store_explicit(&ft->keys, keys, memory_order_relaxed);
     ft->count = RPERF_SYNTHETIC_COUNT; /* reserve slots for synthetic frames */
     ft->bucket_capacity = RPERF_FRAME_TABLE_INITIAL * 2;
     ft->buckets = (uint32_t *)malloc(ft->bucket_capacity * sizeof(uint32_t));
-    if (!ft->buckets) { free(ft->keys); ft->keys = NULL; return -1; }
+    if (!ft->buckets) { free(keys); atomic_store_explicit(&ft->keys, NULL, memory_order_relaxed); return -1; }
     memset(ft->buckets, 0xFF, ft->bucket_capacity * sizeof(uint32_t)); /* EMPTY */
     ft->old_keys_count = 0;
     return 0;
@@ -334,7 +335,7 @@ rperf_frame_table_free(rperf_frame_table_t *ft)
     int i;
     for (i = 0; i < ft->old_keys_count; i++)
         free(ft->old_keys[i]);
-    free(ft->keys);
+    free(atomic_load_explicit(&ft->keys, memory_order_relaxed));
     free(ft->buckets);
     memset(ft, 0, sizeof(*ft));
 }
@@ -347,9 +348,10 @@ rperf_frame_table_rehash(rperf_frame_table_t *ft)
     if (!new_buckets) return; /* keep using current buckets at higher load factor */
     memset(new_buckets, 0xFF, new_cap * sizeof(uint32_t));
 
+    VALUE *keys = atomic_load_explicit(&ft->keys, memory_order_relaxed);
     size_t i;
     for (i = RPERF_SYNTHETIC_COUNT; i < ft->count; i++) {
-        uint32_t h = (uint32_t)(ft->keys[i] >> 3); /* shift out tag bits */
+        uint32_t h = (uint32_t)(keys[i] >> 3); /* shift out tag bits */
         size_t idx = h % new_cap;
         while (new_buckets[idx] != RPERF_FRAME_TABLE_EMPTY)
             idx = (idx + 1) % new_cap;
@@ -365,36 +367,38 @@ rperf_frame_table_rehash(rperf_frame_table_t *ft)
 static uint32_t
 rperf_frame_table_insert(rperf_frame_table_t *ft, VALUE fval)
 {
+    VALUE *keys = atomic_load_explicit(&ft->keys, memory_order_relaxed);
     uint32_t h = (uint32_t)(fval >> 3);
     size_t idx = h % ft->bucket_capacity;
 
     while (1) {
         uint32_t slot = ft->buckets[idx];
         if (slot == RPERF_FRAME_TABLE_EMPTY) break;
-        if (ft->keys[slot] == fval) return slot;
+        if (keys[slot] == fval) return slot;
         idx = (idx + 1) % ft->bucket_capacity;
     }
 
     /* Insert new entry.  Grow keys array if capacity is exhausted.
      * Cannot realloc in-place because GC dmark may concurrently read
-     * the old keys pointer.  Instead, allocate new, copy, swap pointer,
-     * and keep old array alive until stop. */
+     * the old keys pointer.  Instead, allocate new, copy, swap pointer
+     * atomically, and keep old array alive until stop. */
     if (ft->count >= ft->capacity) {
         size_t new_cap = ft->capacity * 2;
         VALUE *new_keys = (VALUE *)calloc(new_cap, sizeof(VALUE));
         if (!new_keys) return RPERF_FRAME_TABLE_EMPTY;
-        memcpy(new_keys, ft->keys, ft->capacity * sizeof(VALUE));
+        memcpy(new_keys, keys, ft->capacity * sizeof(VALUE));
         /* Save old keys for deferred free (GC dmark safety) */
         if (ft->old_keys_count < RPERF_FRAME_TABLE_OLD_KEYS_MAX)
-            ft->old_keys[ft->old_keys_count++] = ft->keys;
+            ft->old_keys[ft->old_keys_count++] = keys;
         else
-            free(ft->keys); /* unlikely: >16 doublings */
-        ft->keys = new_keys;
+            free(keys); /* unlikely: >16 doublings */
+        keys = new_keys;
+        atomic_store_explicit(&ft->keys, new_keys, memory_order_release);
         ft->capacity = new_cap;
     }
 
     uint32_t frame_id = (uint32_t)ft->count;
-    ft->keys[frame_id] = fval;
+    keys[frame_id] = fval;
     /* Store fence: ensure keys[frame_id] is visible before count is incremented,
      * so GC dmark never reads uninitialized keys[count-1]. */
     __atomic_store_n(&ft->count, ft->count + 1, __ATOMIC_RELEASE);
@@ -1260,7 +1264,7 @@ rb_rperf_stop(VALUE self)
         rb_ary_push(resolved_ary, rb_ary_new3(2, rb_str_new_lit("<GC>"),  rb_str_new_lit("[GC sweeping]")));
         /* Real frames */
         for (i = RPERF_SYNTHETIC_COUNT; i < ft->count; i++) {
-            rb_ary_push(resolved_ary, rperf_resolve_frame(ft->keys[i]));
+            rb_ary_push(resolved_ary, rperf_resolve_frame(atomic_load_explicit(&ft->keys, memory_order_relaxed)[i]));
         }
 
         rperf_agg_table_t *at = &g_profiler.agg_table;
