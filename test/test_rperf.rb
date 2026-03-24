@@ -121,6 +121,22 @@ class TestRperf < Test::Unit::TestCase
     assert_raise(ArgumentError) { Rperf.start(frequency: 1.5) }
   end
 
+  def test_signal_kill_raises
+    assert_raise(ArgumentError) { Rperf.start(signal: 9) }  # SIGKILL
+  end
+
+  def test_signal_stop_raises
+    assert_raise(ArgumentError) { Rperf.start(signal: 19) } # SIGSTOP
+  end
+
+  def test_signal_false_ok
+    data = Rperf.start(frequency: 500, signal: false) do
+      5_000_000.times { 1 + 1 }
+    end
+    assert_not_nil data
+    assert_operator data[:aggregated_samples].size, :>, 0
+  end
+
   def test_cli_frequency_zero
     exe = File.expand_path("../exe/rperf", __dir__)
     output = IO.popen([RbConfig.ruby, exe, "stat", "-f", "0", "true"], err: [:child, :out], &:read)

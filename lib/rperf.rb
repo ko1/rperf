@@ -25,6 +25,12 @@ module Rperf
   #   otherwise (.pb.gz etc) → pprof protobuf (gzip compressed)
   def self.start(frequency: 1000, mode: :cpu, output: nil, verbose: false, format: nil, stat: false, signal: nil, aggregate: true)
     raise ArgumentError, "frequency must be a positive integer (got #{frequency.inspect})" unless frequency.is_a?(Integer) && frequency > 0
+    if signal.is_a?(Integer) && signal > 0
+      uncatchable = [Signal.list["KILL"], Signal.list["STOP"]].compact
+      if uncatchable.include?(signal)
+        raise ArgumentError, "signal #{signal} (#{Signal.signame(signal)}) cannot be caught; use a different signal"
+      end
+    end
     @verbose = verbose || ENV["RPERF_VERBOSE"] == "1"
     @output = output
     @format = format

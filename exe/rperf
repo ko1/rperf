@@ -213,6 +213,15 @@ if frequency <= 0
   exit 1
 end
 
+if signal && signal != "false"
+  sig_num = signal.to_i
+  uncatchable = [Signal.list["KILL"], Signal.list["STOP"]].compact
+  if uncatchable.include?(sig_num)
+    $stderr.puts "Error: signal #{sig_num} (#{Signal.signame(sig_num)}) cannot be caught; use a different signal"
+    exit 1
+  end
+end
+
 # Add lib dir to RUBYLIB so -rrperf can find the extension
 lib_dir = File.expand_path("../lib", __dir__)
 ENV["RUBYLIB"] = [lib_dir, ENV["RUBYLIB"]].compact.join(File::PATH_SEPARATOR)
