@@ -23,7 +23,7 @@ module Rperf
   #   .collapsed → collapsed stacks (FlameGraph / speedscope compatible)
   #   .txt       → text report (human/AI readable flat + cumulative table)
   #   otherwise (.pb.gz etc) → pprof protobuf (gzip compressed)
-  def self.start(frequency: 1000, mode: :cpu, output: nil, verbose: false, format: nil, stat: false, signal: nil, aggregate: true)
+  def self.start(frequency: 1000, mode: :cpu, output: nil, verbose: false, format: nil, stat: false, signal: nil, aggregate: true, defer: false)
     raise ArgumentError, "frequency must be a positive integer (got #{frequency.inspect})" unless frequency.is_a?(Integer) && frequency > 0
     raise ArgumentError, "frequency must be <= 10000 (10KHz), got #{frequency}" if frequency > 10_000
     raise ArgumentError, "mode must be :cpu or :wall, got #{mode.inspect}" unless %i[cpu wall].include?(mode)
@@ -44,7 +44,7 @@ module Rperf
     @stat_start_mono = Process.clock_gettime(Process::CLOCK_MONOTONIC) if @stat
     @label_set_table = nil
     @label_set_index = nil
-    _c_start(frequency, c_mode, aggregate, c_signal)
+    _c_start(frequency, c_mode, aggregate, c_signal, defer)
 
     if block_given?
       begin
@@ -145,6 +145,38 @@ module Rperf
       ensure
         _c_set_label(cur_id)
       end
+    end
+  end
+
+  # Profiles the given block: activates timer sampling for the duration
+  # and optionally applies labels. Use with start(defer: true) to profile
+  # only specific sections of code.
+  #
+  #   Rperf.start(defer: true, mode: :wall)
+  #   Rperf.profile(endpoint: "/users") { handle_request }
+  #   data = Rperf.stop
+  #
+  # Nesting is supported: timer stays active until the outermost profile exits.
+  # Requires a block. Raises if profiling is not started.
+  def self.profile(**kw, &block)
+    raise ArgumentError, "Rperf.profile requires a block" unless block
+    raise RuntimeError, "Rperf is not started" unless _c_running?
+
+    _init_label_sets unless @label_set_table
+
+    cur_id = _c_get_label
+    cur_labels = @label_set_table[cur_id] || {}
+    new_labels = cur_labels.merge(kw).reject { |_, v| v.nil? }
+    new_id = _intern_label_set(new_labels)
+    _c_set_label(new_id)
+
+    _c_profile_inc
+
+    begin
+      yield
+    ensure
+      _c_profile_dec
+      _c_set_label(cur_id)
     end
   end
 

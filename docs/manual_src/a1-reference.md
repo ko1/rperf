@@ -65,6 +65,13 @@ snap = Rperf.snapshot
 Rperf.save("snap.pb.gz", snap)
 snap = Rperf.snapshot(clear: true)  # reset after snapshot
 
+# Deferred start + targeted profiling
+Rperf.start(defer: true, mode: :wall)
+Rperf.profile(endpoint: "/users") do
+  # only this block is sampled
+end
+data = Rperf.stop
+
 # Labels (annotate samples with context)
 Rperf.label(request: "abc") do
   # samples inside get request="abc" label
@@ -72,9 +79,9 @@ end
 Rperf.labels       # get current labels
 
 # Rack middleware (labels requests by endpoint)
-require "rperf/middleware"
-use Rperf::Middleware                    # Rails: config.middleware.use Rperf::Middleware
-use Rperf::Middleware, label_key: :route # custom label key
+require "rperf/rack"
+use Rperf::RackMiddleware                    # Rails: config.middleware.use Rperf::RackMiddleware
+use Rperf::RackMiddleware, label_key: :route # custom label key
 
 # Active Job (labels jobs by class name)
 require "rperf/active_job"

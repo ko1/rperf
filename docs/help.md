@@ -117,6 +117,7 @@ Rperf.save("profile.txt", data)
     output:     File path to write on stop (String or nil)
     verbose:    Print statistics to stderr (true/false, default: false)
     format:     :pprof, :collapsed, :text, or nil for auto-detect (Symbol or nil)
+    defer:      Start with timer paused; use Rperf.profile to activate (default: false)
 
 ### Rperf.stop return value
 
@@ -210,6 +211,33 @@ In pprof output, use labels for filtering and grouping:
     go tool pprof -tagroot=request profile.pb.gz
     go tool pprof -tagleaf=request profile.pb.gz
 
+### Rperf.start with defer: true
+
+With `defer: true`, the profiler infrastructure is set up but the sampling
+timer does not start. Use `Rperf.profile` to activate the timer for specific
+sections. Outside `profile` blocks, overhead is zero.
+
+### Rperf.profile(**labels, &block)
+
+Activates the sampling timer for the block duration and applies labels.
+Designed for use with `start(defer: true)` to profile only specific
+code paths.
+
+```ruby
+Rperf.start(defer: true, mode: :wall)
+
+Rperf.profile(endpoint: "/users") do
+  handle_request   # sampled with endpoint="/users"
+end
+# timer paused — zero overhead
+
+data = Rperf.stop
+```
+
+Nesting is supported: timer stays active until the outermost block exits.
+Also works with `start(defer: false)` — applies labels only (timer already
+running). Raises `RuntimeError` if not started, `ArgumentError` without block.
+
 ### Rperf.labels
 
 Returns the current thread's labels as a Hash. Empty hash if none set.
@@ -219,20 +247,20 @@ Returns the current thread's labels as a Hash. Empty hash if none set.
 Writes data to path. format: :pprof, :collapsed, or :text.
 nil auto-detects from extension.
 
-### Rperf::Middleware (Rack)
+### Rperf::RackMiddleware (Rack)
 
-Labels samples with the request endpoint. Requires `require "rperf/middleware"`.
+Labels samples with the request endpoint. Requires `require "rperf/rack"`.
 
 ```ruby
 # Rails
-Rails.application.config.middleware.use Rperf::Middleware
+Rails.application.config.middleware.use Rperf::RackMiddleware
 
 # Sinatra
-use Rperf::Middleware
+use Rperf::RackMiddleware
 ```
 
-The middleware only sets labels — start profiling separately.
-Option: `label_key:` (default: `:endpoint`).
+The middleware uses `Rperf.profile` to activate timer and set labels.
+Start profiling separately. Option: `label_key:` (default: `:endpoint`).
 
 ### Rperf::ActiveJobMiddleware
 

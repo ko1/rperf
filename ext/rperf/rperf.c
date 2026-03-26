@@ -36,6 +36,7 @@
 #define RPERF_FRAME_TABLE_OLD_KEYS_INITIAL 16
 #define RPERF_AGG_TABLE_INITIAL 1024
 #define RPERF_STACK_POOL_INITIAL 4096
+#define RPERF_PAUSED(prof) ((prof)->profile_refcount == 0)
 
 /* Synthetic frame IDs (reserved in frame_table, 0-based) */
 #define RPERF_SYNTHETIC_GVL_BLOCKED 0
@@ -182,6 +183,11 @@ typedef struct rperf_profiler {
     /* Label sets: Ruby Array of Hash objects, managed from Ruby side.
      * Index 0 is reserved (no labels). GC-marked via profiler_mark. */
     VALUE label_sets;  /* Ruby Array or Qnil */
+    /* Profile refcount: controls timer active/paused state.
+     * start(defer:false) sets to 1, start(defer:true) sets to 0.
+     * profile_inc/dec transitions 0↔1 arm/disarm the timer.
+     * Modified only under GVL, so plain int is safe. */
+    int profile_refcount;
 } rperf_profiler_t;
 
 static rperf_profiler_t g_profiler;
@@ -718,8 +724,8 @@ rperf_handle_suspended(rperf_profiler_t *prof, VALUE thread, rperf_thread_data_t
     if (depth <= 0) return;
     buf->frame_pool_count += depth;
 
-    /* Record normal sample (skip if first time — no prev_time) */
-    if (!is_first) {
+    /* Record normal sample (skip if first time — no prev_time, or if paused) */
+    if (!is_first && !RPERF_PAUSED(prof)) {
         int64_t weight = time_now - td->prev_time_ns;
         rperf_record_sample(prof, frame_start, depth, weight, RPERF_SAMPLE_NORMAL, td->thread_seq, td->label_set_id);
     }
@@ -758,7 +764,7 @@ rperf_handle_resumed(rperf_profiler_t *prof, VALUE thread, rperf_thread_data_t *
      * Both samples are written directly into the same buffer before calling
      * rperf_try_swap, so that a swap triggered by the first sample cannot
      * move the second into a different buffer with a stale frame_start. */
-    if (prof->mode == 1 && td->suspended_at_ns > 0) {
+    if (prof->mode == 1 && td->suspended_at_ns > 0 && !RPERF_PAUSED(prof)) {
         rperf_sample_buffer_t *buf = &prof->buffers[atomic_load_explicit(&prof->active_idx, memory_order_relaxed)];
         if (rperf_ensure_frame_pool_capacity(buf, RPERF_MAX_STACK_DEPTH) < 0) goto skip_gvl;
         size_t frame_start = buf->frame_pool_count;
@@ -851,6 +857,7 @@ rperf_gc_event_hook(rb_event_flag_t event, VALUE data, VALUE self, ID id, VALUE 
     }
     else if (event & RUBY_INTERNAL_EVENT_GC_EXIT) {
         if (prof->gc.enter_ns <= 0) return;
+        if (RPERF_PAUSED(prof)) { prof->gc.enter_ns = 0; return; }
 
         int64_t wall_now = rperf_wall_time_ns();
         int64_t weight = wall_now - prof->gc.enter_ns;
@@ -888,6 +895,7 @@ rperf_sample_job(void *arg)
     rperf_profiler_t *prof = (rperf_profiler_t *)arg;
 
     if (!prof->running) return;
+    if (RPERF_PAUSED(prof)) return;
 
     /* Measure sampling overhead */
     struct timespec ts_start, ts_end;
@@ -985,19 +993,31 @@ rperf_worker_nanosleep_func(void *arg)
 
     CHECKED(pthread_mutex_lock(&prof->worker_mutex));
     while (prof->running) {
-        int ret = pthread_cond_timedwait(&prof->worker_cond, &prof->worker_mutex, &deadline);
-        if (ret != 0 && ret != ETIMEDOUT) {
-            fprintf(stderr, "rperf: pthread_cond_timedwait failed: %s\n", strerror(ret));
-            abort();
-        }
-        if (ret == ETIMEDOUT) {
-            prof->stats.trigger_count++;
-            rb_postponed_job_trigger(prof->pj_handle);
-            /* Advance deadline by interval */
+        if (RPERF_PAUSED(prof)) {
+            /* Paused: wait indefinitely until signaled (resume or stop) */
+            CHECKED(pthread_cond_wait(&prof->worker_cond, &prof->worker_mutex));
+            /* Reset deadline on wake to avoid burst of catch-up triggers */
+            clock_gettime(CLOCK_REALTIME, &deadline);
             deadline.tv_nsec += interval_ns;
             if (deadline.tv_nsec >= 1000000000L) {
                 deadline.tv_sec++;
                 deadline.tv_nsec -= 1000000000L;
+            }
+        } else {
+            int ret = pthread_cond_timedwait(&prof->worker_cond, &prof->worker_mutex, &deadline);
+            if (ret != 0 && ret != ETIMEDOUT) {
+                fprintf(stderr, "rperf: pthread_cond_timedwait failed: %s\n", strerror(ret));
+                abort();
+            }
+            if (ret == ETIMEDOUT) {
+                prof->stats.trigger_count++;
+                rb_postponed_job_trigger(prof->pj_handle);
+                /* Advance deadline by interval */
+                deadline.tv_nsec += interval_ns;
+                if (deadline.tv_nsec >= 1000000000L) {
+                    deadline.tv_sec++;
+                    deadline.tv_nsec -= 1000000000L;
+                }
             }
         }
         rperf_try_aggregate(prof);
@@ -1110,14 +1130,15 @@ rperf_build_aggregated_result(rperf_profiler_t *prof)
 
 /* ---- Ruby API ---- */
 
-/* _c_start(frequency, mode, aggregate, signal)
+/* _c_start(frequency, mode, aggregate, signal, defer)
  *   frequency: Integer (Hz)
  *   mode:      0 = cpu, 1 = wall
  *   aggregate: 0 or 1
  *   signal:    Integer (RT signal number, 0 = nanosleep, -1 = default)
+ *   defer:     if truthy, start with timer paused (profile_refcount = 0)
  */
 static VALUE
-rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig)
+rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig, VALUE vdefer)
 {
     int frequency = NUM2INT(vfreq);
     int mode = NUM2INT(vmode);
@@ -1222,6 +1243,7 @@ rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig)
     clock_gettime(CLOCK_MONOTONIC, &g_profiler.start_monotonic);
 
     g_profiler.running = 1;
+    g_profiler.profile_refcount = RTEST(vdefer) ? 0 : 1;
 
 #if RPERF_USE_TIMER_SIGNAL
     g_profiler.timer_signal = timer_signal;
@@ -1269,7 +1291,12 @@ rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig)
         }
 
         its.it_value.tv_sec = 0;
-        its.it_value.tv_nsec = 1000000000L / g_profiler.frequency;
+        if (RPERF_PAUSED(&g_profiler)) {
+            /* defer mode: create timer but don't arm it */
+            its.it_value.tv_nsec = 0;
+        } else {
+            its.it_value.tv_nsec = 1000000000L / g_profiler.frequency;
+        }
         its.it_interval = its.it_value;
         if (timer_settime(g_profiler.timer_id, 0, &its, NULL) != 0) {
             timer_delete(g_profiler.timer_id);
@@ -1558,6 +1585,94 @@ rb_rperf_get_label_sets(VALUE self)
     return g_profiler.label_sets;
 }
 
+/* ---- Profile refcount API (timer pause/resume) ---- */
+
+/* Helper: arm the timer with the configured interval */
+static void
+rperf_arm_timer(rperf_profiler_t *prof)
+{
+#if RPERF_USE_TIMER_SIGNAL
+    if (prof->timer_signal > 0) {
+        struct itimerspec its;
+        its.it_value.tv_sec = 0;
+        its.it_value.tv_nsec = 1000000000L / prof->frequency;
+        its.it_interval = its.it_value;
+        timer_settime(prof->timer_id, 0, &its, NULL);
+        return;
+    }
+#endif
+    /* nanosleep mode: signal the worker to wake from cond_wait */
+    CHECKED(pthread_mutex_lock(&prof->worker_mutex));
+    CHECKED(pthread_cond_signal(&prof->worker_cond));
+    CHECKED(pthread_mutex_unlock(&prof->worker_mutex));
+}
+
+/* Helper: disarm the timer (stop firing) */
+static void
+rperf_disarm_timer(rperf_profiler_t *prof)
+{
+#if RPERF_USE_TIMER_SIGNAL
+    if (prof->timer_signal > 0) {
+        struct itimerspec its;
+        memset(&its, 0, sizeof(its));
+        timer_settime(prof->timer_id, 0, &its, NULL);
+        return;
+    }
+#endif
+    /* nanosleep mode: worker will see RPERF_PAUSED on next iteration */
+}
+
+/* Helper: reset prev_time_ns for all threads (called on resume to avoid
+ * inflated weight from pause duration).  Must be called with GVL held. */
+static void
+rperf_reset_thread_times(rperf_profiler_t *prof)
+{
+    VALUE threads = rb_funcall(rb_cThread, rb_intern("list"), 0);
+    long tc = RARRAY_LEN(threads);
+    for (long i = 0; i < tc; i++) {
+        VALUE thread = RARRAY_AREF(threads, i);
+        rperf_thread_data_t *td = (rperf_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
+        if (td) {
+            td->prev_time_ns = rperf_current_time_ns(prof, td);
+            td->prev_wall_ns = rperf_wall_time_ns();
+        }
+    }
+}
+
+/* _c_profile_inc() — increment profile refcount; resume timer on 0→1.
+ * Called with GVL held. */
+static VALUE
+rb_rperf_profile_inc(VALUE self)
+{
+    if (!g_profiler.running) return Qfalse;
+    g_profiler.profile_refcount++;
+    if (g_profiler.profile_refcount == 1) {
+        rperf_reset_thread_times(&g_profiler);
+        rperf_arm_timer(&g_profiler);
+    }
+    return Qtrue;
+}
+
+/* _c_profile_dec() — decrement profile refcount; pause timer on 1→0.
+ * Called with GVL held. */
+static VALUE
+rb_rperf_profile_dec(VALUE self)
+{
+    if (!g_profiler.running) return Qfalse;
+    g_profiler.profile_refcount--;
+    if (g_profiler.profile_refcount == 0) {
+        rperf_disarm_timer(&g_profiler);
+    }
+    return Qtrue;
+}
+
+/* _c_running?() — check if profiler is running. */
+static VALUE
+rb_rperf_running_p(VALUE self)
+{
+    return g_profiler.running ? Qtrue : Qfalse;
+}
+
 /* ---- Fork safety ---- */
 
 static void
@@ -1608,6 +1723,7 @@ rperf_after_fork_child(void)
     /* Reset stats */
     g_profiler.stats.sampling_count = 0;
     g_profiler.stats.sampling_total_ns = 0;
+    g_profiler.profile_refcount = 0;
     atomic_store_explicit(&g_profiler.swap_ready, 0, memory_order_relaxed);
 }
 
@@ -1617,13 +1733,16 @@ void
 Init_rperf(void)
 {
     VALUE mRperf = rb_define_module("Rperf");
-    rb_define_module_function(mRperf, "_c_start", rb_rperf_start, 4);
+    rb_define_module_function(mRperf, "_c_start", rb_rperf_start, 5);
     rb_define_module_function(mRperf, "_c_stop", rb_rperf_stop, 0);
     rb_define_module_function(mRperf, "_c_snapshot", rb_rperf_snapshot, 1);
     rb_define_module_function(mRperf, "_c_set_label", rb_rperf_set_label, 1);
     rb_define_module_function(mRperf, "_c_get_label", rb_rperf_get_label, 0);
     rb_define_module_function(mRperf, "_c_set_label_sets", rb_rperf_set_label_sets, 1);
     rb_define_module_function(mRperf, "_c_get_label_sets", rb_rperf_get_label_sets, 0);
+    rb_define_module_function(mRperf, "_c_profile_inc", rb_rperf_profile_inc, 0);
+    rb_define_module_function(mRperf, "_c_profile_dec", rb_rperf_profile_dec, 0);
+    rb_define_module_function(mRperf, "_c_running?", rb_rperf_running_p, 0);
 
     memset(&g_profiler, 0, sizeof(g_profiler));
     g_profiler.label_sets = Qnil;

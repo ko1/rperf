@@ -2,7 +2,7 @@ require "rperf"
 
 class Rperf::SidekiqMiddleware
   def call(_worker, job, _queue)
-    Rperf.label(job: job["class"]) do
+    Rperf.profile(job: job["class"]) do
       yield
     end
   end

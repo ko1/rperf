@@ -78,6 +78,7 @@ data = Rperf.stop
 | `format:` | Symbol | `nil` | `:pprof`, `:collapsed`, `:text`, or `nil` (auto-detect from output extension) |
 | `signal:` | Integer/Boolean | `nil` | Linux only: `nil` = timer signal (default), `false` = nanosleep thread, positive integer = specific RT signal number |
 | `aggregate:` | Boolean | `true` | Aggregate identical stacks during profiling to reduce memory. `false` returns raw per-sample data |
+| `defer:` | Boolean | `false` | Start with timer paused. Use [`Rperf.profile`](#index:Rperf.profile) blocks to activate sampling for specific sections |
 
 ## Rperf.stop return value
 
@@ -229,6 +230,100 @@ Rperf.labels  #=> {request: "abc", phase: "db"}
 ```
 
 Returns an empty Hash if no labels are set.
+
+## Deferred start and Rperf.profile
+
+### Why defer?
+
+Normally, `Rperf.start` immediately begins firing the sampling timer. Every timer tick interrupts the application to capture a stack trace — this is the profiling overhead. For long-running servers, you may not want to pay this cost for all code at all times. You might only care about specific endpoints, jobs, or code paths.
+
+`defer: true` solves this. It sets up the profiler infrastructure (buffers, hooks, worker thread) but **does not start the timer**. The timer only fires inside [`Rperf.profile`](#index:Rperf.profile) blocks. Outside those blocks, overhead is zero — no signals, no interrupts, no stack captures.
+
+```
+start(defer: false)     start(defer: true)
+┌─────────────────┐     ┌─────────────────┐
+│ start            │     │ start            │
+│ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │     │                  │  ← timer not firing
+│ ▓ sampling ▓▓▓▓ │     │ ┌──profile──┐   │
+│ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │     │ │▓▓sampling▓│   │  ← timer active
+│ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │     │ └───────────┘   │
+│ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │     │                  │  ← timer not firing
+│ stop             │     │ stop             │
+└─────────────────┘     └─────────────────┘
+```
+
+This is especially useful with [framework integrations](#index:Framework Integration): the middleware wraps each request/job in a `profile` block, so only actual request processing is sampled.
+
+### Rperf.profile
+
+[`Rperf.profile`](#index:Rperf.profile) activates the timer for the duration of the block and optionally applies labels. It combines timer control with label assignment in a single call.
+
+```ruby
+require "rperf"
+
+Rperf.start(defer: true, mode: :wall)
+
+# Timer activates here, samples get endpoint="/users" label
+Rperf.profile(endpoint: "/users") do
+  handle_request
+end
+# Timer paused — zero overhead
+
+Rperf.profile(endpoint: "/health") do
+  check_health
+end
+
+data = Rperf.stop
+Rperf.save("profile.pb.gz", data)
+```
+
+### Nesting
+
+`profile` blocks can be nested. The timer stays active until the outermost block exits. Labels merge just like [`Rperf.label`](#index:Rperf.label):
+
+```ruby
+Rperf.profile(endpoint: "/users") do
+  Rperf.profile(phase: "db") do
+    # sampled with {endpoint: "/users", phase: "db"}
+    query_db
+  end
+  # sampled with {endpoint: "/users"}
+  render_response
+end
+# timer paused again
+```
+
+### Combining with Rperf.label
+
+`profile` controls the timer; `label` only adds tags. They can be used together:
+
+```ruby
+Rperf.start(defer: true, mode: :wall)
+
+Rperf.profile(endpoint: "/users") do
+  Rperf.label(phase: "auth") do
+    authenticate     # sampled, labeled with endpoint + phase
+  end
+  Rperf.label(phase: "db") do
+    query_db         # sampled, labeled with endpoint + phase
+  end
+end
+```
+
+### Without defer
+
+`profile` also works with a normal (non-deferred) start. In that case, the timer is already running and `profile` only applies labels — equivalent to `Rperf.label` with a block:
+
+```ruby
+Rperf.start(mode: :wall)
+Rperf.profile(endpoint: "/users") do
+  handle_request   # sampled (timer was already running)
+end
+```
+
+### Error handling
+
+`profile` raises `RuntimeError` if profiling is not started, and `ArgumentError` if no block is given. Labels and timer state are properly restored even if an exception is raised inside the block.
 
 ## Practical examples
 

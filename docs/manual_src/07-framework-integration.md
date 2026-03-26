@@ -1,24 +1,24 @@
 # Framework Integration
 
-rperf provides optional integrations that automatically label samples with context from web frameworks and job processors. These integrations only set [labels](#index:Rperf.label) — they do not start or stop profiling. Start profiling separately (e.g., in an initializer).
+rperf provides optional integrations that automatically profile and label samples with context from web frameworks and job processors. They use [`Rperf.profile`](#index:Rperf.profile), which both activates the timer and sets labels. This works seamlessly with `start(defer: true)` — only requests/jobs that pass through the middleware are sampled. Start profiling separately (e.g., in an initializer).
 
 ## Rack middleware
 
-`Rperf::Middleware` labels each request with its endpoint (`METHOD /path`).
+`Rperf::RackMiddleware` profiles each request and labels it with its endpoint (`METHOD /path`).
 
 ```ruby
-require "rperf/middleware"
+require "rperf/rack"
 ```
 
 ### Rails
 
 ```ruby
 # config/initializers/rperf.rb
-require "rperf/middleware"
+require "rperf/rack"
 
-Rperf.start(mode: :wall, frequency: 99)
+Rperf.start(defer: true, mode: :wall, frequency: 99)
 
-Rails.application.config.middleware.use Rperf::Middleware
+Rails.application.config.middleware.use Rperf::RackMiddleware
 
 at_exit do
   data = Rperf.stop
@@ -37,10 +37,10 @@ go tool pprof -tagroot=endpoint tmp/profile.pb.gz   # group by endpoint
 
 ```ruby
 require "sinatra"
-require "rperf/middleware"
+require "rperf/rack"
 
-Rperf.start(mode: :wall, frequency: 99)
-use Rperf::Middleware
+Rperf.start(defer: true, mode: :wall, frequency: 99)
+use Rperf::RackMiddleware
 
 at_exit do
   data = Rperf.stop
@@ -57,18 +57,23 @@ end
 By default the middleware uses the label key `:endpoint`. You can change it:
 
 ```ruby
-use Rperf::Middleware, label_key: :route
+use Rperf::RackMiddleware, label_key: :route
 ```
 
 ## Active Job
 
-`Rperf::ActiveJobMiddleware` labels each job with its class name (e.g., `SendEmailJob`). Works with any Active Job backend — Sidekiq, GoodJob, Solid Queue, etc.
+`Rperf::ActiveJobMiddleware` profiles each job and labels it with its class name (e.g., `SendEmailJob`). Works with any Active Job backend — Sidekiq, GoodJob, Solid Queue, etc.
 
 ```ruby
 require "rperf/active_job"
 ```
 
-Include it in your base job class:
+Start profiling in an initializer, then include it in your base job class:
+
+```ruby
+# config/initializers/rperf.rb
+Rperf.start(defer: true, mode: :wall, frequency: 99)
+```
 
 ```ruby
 # app/jobs/application_job.rb
@@ -96,7 +101,7 @@ go tool pprof -tagroot=job profile.pb.gz   # group by job class
 
 ## Sidekiq
 
-`Rperf::SidekiqMiddleware` labels each job with its worker class name. This covers both Active Job-backed workers and plain Sidekiq workers.
+`Rperf::SidekiqMiddleware` profiles each job and labels it with its worker class name. This covers both Active Job-backed workers and plain Sidekiq workers.
 
 ```ruby
 require "rperf/sidekiq"
@@ -106,6 +111,8 @@ Register it as a Sidekiq server middleware:
 
 ```ruby
 # config/initializers/sidekiq.rb
+Rperf.start(defer: true, mode: :wall, frequency: 99)
+
 Sidekiq.configure_server do |config|
   config.server_middleware do |chain|
     chain.add Rperf::SidekiqMiddleware
@@ -116,19 +123,53 @@ end
 > [!NOTE]
 > If you use Active Job with Sidekiq, choose one or the other — using both will result in duplicate labels. The Sidekiq middleware is more general (covers non-Active Job workers too).
 
+## On-demand profiling with Rperf.profile
+
+If you want to profile only specific endpoints or jobs — with zero overhead elsewhere — use [`Rperf.start(defer: true)`](#index:Rperf.start) and [`Rperf.profile`](#index:Rperf.profile):
+
+```ruby
+# config/initializers/rperf.rb
+require "rperf"
+
+Rperf.start(defer: true, mode: :wall, frequency: 99)
+
+# Export profiles periodically
+Thread.new do
+  loop do
+    sleep 60
+    snap = Rperf.snapshot(clear: true)
+    Rperf.save("tmp/profile-#{Time.now.to_i}.pb.gz", snap) if snap
+  end
+end
+```
+
+Then wrap specific code paths with `profile`:
+
+```ruby
+class UsersController < ApplicationController
+  def index
+    Rperf.profile(endpoint: "GET /users") do
+      @users = User.all
+    end
+  end
+end
+```
+
+Only the `profile` blocks are sampled — other requests and background work have zero timer overhead.
+
 ## Full Rails example
 
 A typical Rails setup with both web and job profiling:
 
 ```ruby
 # config/initializers/rperf.rb
-require "rperf/middleware"
+require "rperf/rack"
 require "rperf/sidekiq"
 
-Rperf.start(mode: :wall, frequency: 99)
+Rperf.start(defer: true, mode: :wall, frequency: 99)
 
 # Label web requests
-Rails.application.config.middleware.use Rperf::Middleware
+Rails.application.config.middleware.use Rperf::RackMiddleware
 
 # Label Sidekiq jobs
 Sidekiq.configure_server do |config|

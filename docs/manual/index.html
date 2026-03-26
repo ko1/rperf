@@ -1049,19 +1049,40 @@ details.mermaid-source pre {
                 <a href="#04-library-usage--reading-labels" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--reading-labels')">4.6.6 Reading labels</a>
               </li>
               <li>
-                <a href="#04-library-usage--practical-examples" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--practical-examples')">4.7 Practical examples</a>
+                <a href="#04-library-usage--deferred-start-and-rperfprofile" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--deferred-start-and-rperfprofile')">4.7 Deferred start and Rperf.profile</a>
               </li>
               <li>
-                <a href="#04-library-usage--profiling-a-web-request-handler" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--profiling-a-web-request-handler')">4.7.1 Profiling a web request handler</a>
+                <a href="#04-library-usage--why-defer" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--why-defer')">4.7.1 Why defer?</a>
               </li>
               <li>
-                <a href="#04-library-usage--comparing-cpu-and-wall-profiles" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--comparing-cpu-and-wall-profiles')">4.7.2 Comparing CPU and wall profiles</a>
+                <a href="#04-library-usage--rperfprofile" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--rperfprofile')">4.7.2 Rperf.profile</a>
               </li>
               <li>
-                <a href="#04-library-usage--processing-samples" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--processing-samples')">4.7.3 Processing samples</a>
+                <a href="#04-library-usage--nesting" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--nesting')">4.7.3 Nesting</a>
               </li>
               <li>
-                <a href="#04-library-usage--generating-collapsed-stacks-for-flamegraph" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--generating-collapsed-stacks-for-flamegraph')">4.7.4 Generating collapsed stacks for FlameGraph</a>
+                <a href="#04-library-usage--combining-with-rperflabel" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--combining-with-rperflabel')">4.7.4 Combining with Rperf.label</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--without-defer" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--without-defer')">4.7.5 Without defer</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--error-handling" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--error-handling')">4.7.6 Error handling</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--practical-examples" class="toc-h2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--practical-examples')">4.8 Practical examples</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--profiling-a-web-request-handler" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--profiling-a-web-request-handler')">4.8.1 Profiling a web request handler</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--comparing-cpu-and-wall-profiles" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--comparing-cpu-and-wall-profiles')">4.8.2 Comparing CPU and wall profiles</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--processing-samples" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--processing-samples')">4.8.3 Processing samples</a>
+              </li>
+              <li>
+                <a href="#04-library-usage--generating-collapsed-stacks-for-flamegraph" class="toc-h3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--generating-collapsed-stacks-for-flamegraph')">4.8.4 Generating collapsed stacks for FlameGraph</a>
               </li>
             </ul>
           </li>
@@ -1160,7 +1181,10 @@ details.mermaid-source pre {
                 <a href="#07-framework-integration--sidekiq" class="toc-h2" onclick="showChapterAndScroll('07-framework-integration', '07-framework-integration--sidekiq')">7.3 Sidekiq</a>
               </li>
               <li>
-                <a href="#07-framework-integration--full-rails-example" class="toc-h2" onclick="showChapterAndScroll('07-framework-integration', '07-framework-integration--full-rails-example')">7.4 Full Rails example</a>
+                <a href="#07-framework-integration--on-demand-profiling-with-rperfprofile" class="toc-h2" onclick="showChapterAndScroll('07-framework-integration', '07-framework-integration--on-demand-profiling-with-rperfprofile')">7.4 On-demand profiling with Rperf.profile</a>
+              </li>
+              <li>
+                <a href="#07-framework-integration--full-rails-example" class="toc-h2" onclick="showChapterAndScroll('07-framework-integration', '07-framework-integration--full-rails-example')">7.5 Full Rails example</a>
               </li>
             </ul>
           </li>
@@ -2104,6 +2128,12 @@ data = Rperf.stop
       <td><code>true</code></td>
       <td>Aggregate identical stacks during profiling to reduce memory. <code>false</code> returns raw per-sample data</td>
     </tr>
+    <tr>
+      <td><code>defer:</code></td>
+      <td>Boolean</td>
+      <td><code>false</code></td>
+      <td>Start with timer paused. Use <span id="04-library-usage--idx-2"><code>Rperf.profile</code></span> blocks to activate sampling for specific sections</td>
+    </tr>
   </tbody>
 </table>
 
@@ -2143,7 +2173,7 @@ data = Rperf.stop
 
 <h2 id="04-library-usage--rperfsave">4.4 Rperf.save</h2>
 
-<p><span id="04-library-usage--idx-2"><code>Rperf.save</code></span> writes profiling data to a file in any supported format:</p>
+<p><span id="04-library-usage--idx-3"><code>Rperf.save</code></span> writes profiling data to a file in any supported format:</p>
 
 <pre><code class="language-ruby">Rperf.save("profile.pb.gz", data)        # pprof format
 Rperf.save("profile.collapsed", data)    # collapsed stacks
@@ -2157,7 +2187,7 @@ Rperf.save("profile.txt", data)          # text report
 
 <h2 id="04-library-usage--rperfsnapshot">4.5 Rperf.snapshot</h2>
 
-<p><span id="04-library-usage--idx-3"><code>Rperf.snapshot</code></span> returns the current profiling data without stopping. Only works in aggregate mode (the default). Returns <code>nil</code> if not profiling.</p>
+<p><span id="04-library-usage--idx-4"><code>Rperf.snapshot</code></span> returns the current profiling data without stopping. Only works in aggregate mode (the default). Returns <code>nil</code> if not profiling.</p>
 
 <pre><code class="language-ruby">Rperf.start(frequency: 1000)
 # ... work ...
@@ -2179,7 +2209,7 @@ end
 
 <h2 id="04-library-usage--sample-labels">4.6 Sample labels</h2>
 
-<p><span id="04-library-usage--idx-4"><code>Rperf.label</code></span> attaches key-value labels to the current thread’s samples. Labels appear in <span id="04-library-usage--idx-5">pprof</span> sample labels, enabling per-context filtering (e.g., per-request profiling). If profiling is not running, <code>label</code> is silently ignored — safe to call unconditionally (e.g., from Rack middleware).</p>
+<p><span id="04-library-usage--idx-5"><code>Rperf.label</code></span> attaches key-value labels to the current thread’s samples. Labels appear in <span id="04-library-usage--idx-6">pprof</span> sample labels, enabling per-context filtering (e.g., per-request profiling). If profiling is not running, <code>label</code> is silently ignored — safe to call unconditionally (e.g., from Rack middleware).</p>
 
 <h3 id="04-library-usage--block-form">4.6.1 Block form</h3>
 
@@ -2242,16 +2272,105 @@ go tool pprof -tagignore=request=healthcheck profile.pb.gz
 
 <h3 id="04-library-usage--reading-labels">4.6.6 Reading labels</h3>
 
-<p><span id="04-library-usage--idx-6"><code>Rperf.labels</code></span> returns the current thread’s labels as a Hash:</p>
+<p><span id="04-library-usage--idx-7"><code>Rperf.labels</code></span> returns the current thread’s labels as a Hash:</p>
 
 <pre><code class="language-ruby">Rperf.labels  #=&gt; {request: "abc", phase: "db"}
 </code></pre>
 
 <p>Returns an empty Hash if no labels are set.</p>
 
-<h2 id="04-library-usage--practical-examples">4.7 Practical examples</h2>
+<h2 id="04-library-usage--deferred-start-and-rperfprofile">4.7 Deferred start and Rperf.profile</h2>
 
-<h3 id="04-library-usage--profiling-a-web-request-handler">4.7.1 Profiling a web request handler</h3>
+<h3 id="04-library-usage--why-defer">4.7.1 Why defer?</h3>
+
+<p>Normally, <code>Rperf.start</code> immediately begins firing the sampling timer. Every timer tick interrupts the application to capture a stack trace — this is the profiling overhead. For long-running servers, you may not want to pay this cost for all code at all times. You might only care about specific endpoints, jobs, or code paths.</p>
+
+<p><code>defer: true</code> solves this. It sets up the profiler infrastructure (buffers, hooks, worker thread) but <strong>does not start the timer</strong>. The timer only fires inside <span id="04-library-usage--idx-8"><code>Rperf.profile</code></span> blocks. Outside those blocks, overhead is zero — no signals, no interrupts, no stack captures.</p>
+
+<pre><code>start(defer: false)     start(defer: true)
+┌─────────────────┐     ┌─────────────────┐
+│ start            │     │ start            │
+│ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │     │                  │  ← timer not firing
+│ ▓ sampling ▓▓▓▓ │     │ ┌──profile──┐   │
+│ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │     │ │▓▓sampling▓│   │  ← timer active
+│ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │     │ └───────────┘   │
+│ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │     │                  │  ← timer not firing
+│ stop             │     │ stop             │
+└─────────────────┘     └─────────────────┘
+</code></pre>
+
+<p>This is especially useful with <span id="04-library-usage--idx-9">framework integrations</span>: the middleware wraps each request/job in a <code>profile</code> block, so only actual request processing is sampled.</p>
+
+<h3 id="04-library-usage--rperfprofile">4.7.2 Rperf.profile</h3>
+
+<p><span id="04-library-usage--idx-10"><code>Rperf.profile</code></span> activates the timer for the duration of the block and optionally applies labels. It combines timer control with label assignment in a single call.</p>
+
+<pre><code class="language-ruby">require "rperf"
+
+Rperf.start(defer: true, mode: :wall)
+
+# Timer activates here, samples get endpoint="/users" label
+Rperf.profile(endpoint: "/users") do
+  handle_request
+end
+# Timer paused — zero overhead
+
+Rperf.profile(endpoint: "/health") do
+  check_health
+end
+
+data = Rperf.stop
+Rperf.save("profile.pb.gz", data)
+</code></pre>
+
+<h3 id="04-library-usage--nesting">4.7.3 Nesting</h3>
+
+<p><code>profile</code> blocks can be nested. The timer stays active until the outermost block exits. Labels merge just like <span id="04-library-usage--idx-11"><code>Rperf.label</code></span>:</p>
+
+<pre><code class="language-ruby">Rperf.profile(endpoint: "/users") do
+  Rperf.profile(phase: "db") do
+    # sampled with {endpoint: "/users", phase: "db"}
+    query_db
+  end
+  # sampled with {endpoint: "/users"}
+  render_response
+end
+# timer paused again
+</code></pre>
+
+<h3 id="04-library-usage--combining-with-rperflabel">4.7.4 Combining with Rperf.label</h3>
+
+<p><code>profile</code> controls the timer; <code>label</code> only adds tags. They can be used together:</p>
+
+<pre><code class="language-ruby">Rperf.start(defer: true, mode: :wall)
+
+Rperf.profile(endpoint: "/users") do
+  Rperf.label(phase: "auth") do
+    authenticate     # sampled, labeled with endpoint + phase
+  end
+  Rperf.label(phase: "db") do
+    query_db         # sampled, labeled with endpoint + phase
+  end
+end
+</code></pre>
+
+<h3 id="04-library-usage--without-defer">4.7.5 Without defer</h3>
+
+<p><code>profile</code> also works with a normal (non-deferred) start. In that case, the timer is already running and <code>profile</code> only applies labels — equivalent to <code>Rperf.label</code> with a block:</p>
+
+<pre><code class="language-ruby">Rperf.start(mode: :wall)
+Rperf.profile(endpoint: "/users") do
+  handle_request   # sampled (timer was already running)
+end
+</code></pre>
+
+<h3 id="04-library-usage--error-handling">4.7.6 Error handling</h3>
+
+<p><code>profile</code> raises <code>RuntimeError</code> if profiling is not started, and <code>ArgumentError</code> if no block is given. Labels and timer state are properly restored even if an exception is raised inside the block.</p>
+
+<h2 id="04-library-usage--practical-examples">4.8 Practical examples</h2>
+
+<h3 id="04-library-usage--profiling-a-web-request-handler">4.8.1 Profiling a web request handler</h3>
 
 <pre><code class="language-ruby">require "rperf"
 
@@ -2271,7 +2390,7 @@ end
 
 <p>Using wall mode here captures not just CPU time but also database I/O and any GVL contention.</p>
 
-<h3 id="04-library-usage--comparing-cpu-and-wall-profiles">4.7.2 Comparing CPU and wall profiles</h3>
+<h3 id="04-library-usage--comparing-cpu-and-wall-profiles">4.8.2 Comparing CPU and wall profiles</h3>
 
 <pre><code class="language-ruby">require "rperf"
 
@@ -2294,7 +2413,7 @@ Rperf.save("wall.txt", wall_data)
 
 <p>The CPU profile will focus on <code>compute_something</code>, while the wall profile will show the <code>sleep</code> calls as <code>[GVL blocked]</code> time.</p>
 
-<h3 id="04-library-usage--processing-samples">4.7.3 Processing samples</h3>
+<h3 id="04-library-usage--processing-samples">4.8.3 Processing samples</h3>
 
 <p>You can work with the sample data programmatically. By default, samples are aggregated (identical stacks merged):</p>
 
@@ -2325,7 +2444,7 @@ data[:raw_samples].each do |frames, weight, thread_seq|
 end
 </code></pre>
 
-<h3 id="04-library-usage--generating-collapsed-stacks-for-flamegraph">4.7.4 Generating collapsed stacks for FlameGraph</h3>
+<h3 id="04-library-usage--generating-collapsed-stacks-for-flamegraph">4.8.4 Generating collapsed stacks for FlameGraph</h3>
 
 <pre><code class="language-ruby">require "rperf"
 
@@ -2749,23 +2868,23 @@ Samples: 509, Frequency: 1000Hz
   <section class="chapter" id="chapter-07-framework-integration" style="display: none;">
     <h1 id="07-framework-integration--framework-integration">7. Framework Integration</h1>
 
-<p>rperf provides optional integrations that automatically label samples with context from web frameworks and job processors. These integrations only set <span id="07-framework-integration--idx-0">labels</span> — they do not start or stop profiling. Start profiling separately (e.g., in an initializer).</p>
+<p>rperf provides optional integrations that automatically profile and label samples with context from web frameworks and job processors. They use <span id="07-framework-integration--idx-0"><code>Rperf.profile</code></span>, which both activates the timer and sets labels. This works seamlessly with <code>start(defer: true)</code> — only requests/jobs that pass through the middleware are sampled. Start profiling separately (e.g., in an initializer).</p>
 
 <h2 id="07-framework-integration--rack-middleware">7.1 Rack middleware</h2>
 
-<p><code>Rperf::Middleware</code> labels each request with its endpoint (<code>METHOD /path</code>).</p>
+<p><code>Rperf::RackMiddleware</code> profiles each request and labels it with its endpoint (<code>METHOD /path</code>).</p>
 
-<pre><code class="language-ruby">require "rperf/middleware"
+<pre><code class="language-ruby">require "rperf/rack"
 </code></pre>
 
 <h3 id="07-framework-integration--rails">7.1.1 Rails</h3>
 
 <pre><code class="language-ruby"># config/initializers/rperf.rb
-require "rperf/middleware"
+require "rperf/rack"
 
-Rperf.start(mode: :wall, frequency: 99)
+Rperf.start(defer: true, mode: :wall, frequency: 99)
 
-Rails.application.config.middleware.use Rperf::Middleware
+Rails.application.config.middleware.use Rperf::RackMiddleware
 
 at_exit do
   data = Rperf.stop
@@ -2782,10 +2901,10 @@ go tool pprof -tagroot=endpoint tmp/profile.pb.gz   # group by endpoint
 <h3 id="07-framework-integration--sinatra">7.1.2 Sinatra</h3>
 
 <pre><code class="language-ruby">require "sinatra"
-require "rperf/middleware"
+require "rperf/rack"
 
-Rperf.start(mode: :wall, frequency: 99)
-use Rperf::Middleware
+Rperf.start(defer: true, mode: :wall, frequency: 99)
+use Rperf::RackMiddleware
 
 at_exit do
   data = Rperf.stop
@@ -2801,17 +2920,21 @@ end
 
 <p>By default the middleware uses the label key <code>:endpoint</code>. You can change it:</p>
 
-<pre><code class="language-ruby">use Rperf::Middleware, label_key: :route
+<pre><code class="language-ruby">use Rperf::RackMiddleware, label_key: :route
 </code></pre>
 
 <h2 id="07-framework-integration--active-job">7.2 Active Job</h2>
 
-<p><code>Rperf::ActiveJobMiddleware</code> labels each job with its class name (e.g., <code>SendEmailJob</code>). Works with any Active Job backend — Sidekiq, GoodJob, Solid Queue, etc.</p>
+<p><code>Rperf::ActiveJobMiddleware</code> profiles each job and labels it with its class name (e.g., <code>SendEmailJob</code>). Works with any Active Job backend — Sidekiq, GoodJob, Solid Queue, etc.</p>
 
 <pre><code class="language-ruby">require "rperf/active_job"
 </code></pre>
 
-<p>Include it in your base job class:</p>
+<p>Start profiling in an initializer, then include it in your base job class:</p>
+
+<pre><code class="language-ruby"># config/initializers/rperf.rb
+Rperf.start(defer: true, mode: :wall, frequency: 99)
+</code></pre>
 
 <pre><code class="language-ruby"># app/jobs/application_job.rb
 class ApplicationJob &lt; ActiveJob::Base
@@ -2836,7 +2959,7 @@ go tool pprof -tagroot=job profile.pb.gz   # group by job class
 
 <h2 id="07-framework-integration--sidekiq">7.3 Sidekiq</h2>
 
-<p><code>Rperf::SidekiqMiddleware</code> labels each job with its worker class name. This covers both Active Job-backed workers and plain Sidekiq workers.</p>
+<p><code>Rperf::SidekiqMiddleware</code> profiles each job and labels it with its worker class name. This covers both Active Job-backed workers and plain Sidekiq workers.</p>
 
 <pre><code class="language-ruby">require "rperf/sidekiq"
 </code></pre>
@@ -2844,6 +2967,8 @@ go tool pprof -tagroot=job profile.pb.gz   # group by job class
 <p>Register it as a Sidekiq server middleware:</p>
 
 <pre><code class="language-ruby"># config/initializers/sidekiq.rb
+Rperf.start(defer: true, mode: :wall, frequency: 99)
+
 Sidekiq.configure_server do |config|
   config.server_middleware do |chain|
     chain.add Rperf::SidekiqMiddleware
@@ -2856,18 +2981,50 @@ end
 <p>If you use Active Job with Sidekiq, choose one or the other — using both will result in duplicate labels. The Sidekiq middleware is more general (covers non-Active Job workers too).</p>
 </div>
 
-<h2 id="07-framework-integration--full-rails-example">7.4 Full Rails example</h2>
+<h2 id="07-framework-integration--on-demand-profiling-with-rperfprofile">7.4 On-demand profiling with Rperf.profile</h2>
+
+<p>If you want to profile only specific endpoints or jobs — with zero overhead elsewhere — use <span id="07-framework-integration--idx-1"><code>Rperf.start(defer: true)</code></span> and <span id="07-framework-integration--idx-2"><code>Rperf.profile</code></span>:</p>
+
+<pre><code class="language-ruby"># config/initializers/rperf.rb
+require "rperf"
+
+Rperf.start(defer: true, mode: :wall, frequency: 99)
+
+# Export profiles periodically
+Thread.new do
+  loop do
+    sleep 60
+    snap = Rperf.snapshot(clear: true)
+    Rperf.save("tmp/profile-#{Time.now.to_i}.pb.gz", snap) if snap
+  end
+end
+</code></pre>
+
+<p>Then wrap specific code paths with <code>profile</code>:</p>
+
+<pre><code class="language-ruby">class UsersController &lt; ApplicationController
+  def index
+    Rperf.profile(endpoint: "GET /users") do
+      @users = User.all
+    end
+  end
+end
+</code></pre>
+
+<p>Only the <code>profile</code> blocks are sampled — other requests and background work have zero timer overhead.</p>
+
+<h2 id="07-framework-integration--full-rails-example">7.5 Full Rails example</h2>
 
 <p>A typical Rails setup with both web and job profiling:</p>
 
 <pre><code class="language-ruby"># config/initializers/rperf.rb
-require "rperf/middleware"
+require "rperf/rack"
 require "rperf/sidekiq"
 
-Rperf.start(mode: :wall, frequency: 99)
+Rperf.start(defer: true, mode: :wall, frequency: 99)
 
 # Label web requests
-Rails.application.config.middleware.use Rperf::Middleware
+Rails.application.config.middleware.use Rperf::RackMiddleware
 
 # Label Sidekiq jobs
 Sidekiq.configure_server do |config|
@@ -3524,6 +3681,13 @@ snap = Rperf.snapshot
 Rperf.save("snap.pb.gz", snap)
 snap = Rperf.snapshot(clear: true)  # reset after snapshot
 
+# Deferred start + targeted profiling
+Rperf.start(defer: true, mode: :wall)
+Rperf.profile(endpoint: "/users") do
+  # only this block is sampled
+end
+data = Rperf.stop
+
 # Labels (annotate samples with context)
 Rperf.label(request: "abc") do
   # samples inside get request="abc" label
@@ -3531,9 +3695,9 @@ end
 Rperf.labels       # get current labels
 
 # Rack middleware (labels requests by endpoint)
-require "rperf/middleware"
-use Rperf::Middleware                    # Rails: config.middleware.use Rperf::Middleware
-use Rperf::Middleware, label_key: :route # custom label key
+require "rperf/rack"
+use Rperf::RackMiddleware                    # Rails: config.middleware.use Rperf::RackMiddleware
+use Rperf::RackMiddleware, label_key: :route # custom label key
 
 # Active Job (labels jobs by class name)
 require "rperf/active_job"
@@ -3764,6 +3928,8 @@ end
     <div class="index-group">
       <h2 class="index-letter">F</h2>
       <dl class="index-entries">
+        <dt>Framework Integration</dt>
+        <dd><a href="#04-library-usage--idx-9" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-9'); return false;">4. Ruby API</a></dd>
         <dt>flat time</dt>
         <dd><a href="#05-interpreting-results--idx-0" onclick="showChapterAndScroll('05-interpreting-results', '05-interpreting-results--idx-0'); return false;">5. Interpreting Results</a></dd>
         <dt>fork safety</dt>
@@ -3787,7 +3953,7 @@ end
         <dt>pprof</dt>
         <dd><a href="#01-introduction--idx-8" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-8'); return false;">1. Introduction</a></dd>
         <dd><a href="#01-introduction--idx-16" onclick="showChapterAndScroll('01-introduction', '01-introduction--idx-16'); return false;">1. Introduction</a></dd>
-        <dd><a href="#04-library-usage--idx-5" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-5'); return false;">4. Ruby API</a></dd>
+        <dd><a href="#04-library-usage--idx-6" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-6'); return false;">4. Ruby API</a></dd>
         <dd><a href="#06-output-formats--idx-0" onclick="showChapterAndScroll('06-output-formats', '06-output-formats--idx-0'); return false;">6. Output Formats</a></dd>
       </dl>
     </div>
@@ -3795,17 +3961,24 @@ end
       <h2 class="index-letter">R</h2>
       <dl class="index-entries">
         <dt>Rperf.label</dt>
-        <dd><a href="#04-library-usage--idx-4" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-4'); return false;">4. Ruby API</a></dd>
+        <dd><a href="#04-library-usage--idx-5" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-5'); return false;">4. Ruby API</a></dd>
+        <dd><a href="#04-library-usage--idx-11" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-11'); return false;">4. Ruby API</a></dd>
         <dd><a href="#06-output-formats--idx-1" onclick="showChapterAndScroll('06-output-formats', '06-output-formats--idx-1'); return false;">6. Output Formats</a></dd>
-        <dd><a href="#07-framework-integration--idx-0" onclick="showChapterAndScroll('07-framework-integration', '07-framework-integration--idx-0'); return false;">7. Framework Integration</a></dd>
         <dt>Rperf.labels</dt>
-        <dd><a href="#04-library-usage--idx-6" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-6'); return false;">4. Ruby API</a></dd>
-        <dt>Rperf.save</dt>
+        <dd><a href="#04-library-usage--idx-7" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-7'); return false;">4. Ruby API</a></dd>
+        <dt>Rperf.profile</dt>
         <dd><a href="#04-library-usage--idx-2" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-2'); return false;">4. Ruby API</a></dd>
-        <dt>Rperf.snapshot</dt>
+        <dd><a href="#04-library-usage--idx-8" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-8'); return false;">4. Ruby API</a></dd>
+        <dd><a href="#04-library-usage--idx-10" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-10'); return false;">4. Ruby API</a></dd>
+        <dd><a href="#07-framework-integration--idx-0" onclick="showChapterAndScroll('07-framework-integration', '07-framework-integration--idx-0'); return false;">7. Framework Integration</a></dd>
+        <dd><a href="#07-framework-integration--idx-2" onclick="showChapterAndScroll('07-framework-integration', '07-framework-integration--idx-2'); return false;">7. Framework Integration</a></dd>
+        <dt>Rperf.save</dt>
         <dd><a href="#04-library-usage--idx-3" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-3'); return false;">4. Ruby API</a></dd>
+        <dt>Rperf.snapshot</dt>
+        <dd><a href="#04-library-usage--idx-4" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-4'); return false;">4. Ruby API</a></dd>
         <dt>Rperf.start</dt>
         <dd><a href="#04-library-usage--idx-0" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-0'); return false;">4. Ruby API</a></dd>
+        <dd><a href="#07-framework-integration--idx-1" onclick="showChapterAndScroll('07-framework-integration', '07-framework-integration--idx-1'); return false;">7. Framework Integration</a></dd>
         <dt>Rperf.stop</dt>
         <dd><a href="#04-library-usage--idx-1" onclick="showChapterAndScroll('04-library-usage', '04-library-usage--idx-1'); return false;">4. Ruby API</a></dd>
         <dt>rperf</dt>

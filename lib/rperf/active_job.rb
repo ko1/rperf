@@ -5,7 +5,7 @@ module Rperf::ActiveJobMiddleware
 
   included do
     around_perform do |job, block|
-      Rperf.label(job: job.class.name) do
+      Rperf.profile(job: job.class.name) do
         block.call
       end
     end
