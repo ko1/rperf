@@ -2547,26 +2547,36 @@ data = Rperf.stop
 <p><code>Rperf.stop</code> returns <code>nil</code> if the profiler was not running. Otherwise it returns a Hash:</p>
 
 <pre><code class="language-ruby">{
-  mode: :cpu,               # or :wall
+  mode: :cpu,                # or :wall
   frequency: 1000,
-  sampling_count: 1234,     # number of timer callbacks
-  sampling_time_ns: 56789,  # total time spent sampling (overhead)
-  trigger_count: 1234,      # number of timer triggers
-  detected_thread_count: 4, # threads seen during profiling
-  start_time_ns: 17740...,  # CLOCK_REALTIME epoch nanos
-  duration_ns: 10000000,    # profiling duration in nanos
-  unique_frames: 42,        # unique frame count (aggregate: true only)
-  unique_stacks: 120,       # unique stack count (aggregate: true only)
-  samples: [                          # Array of [frames, weight, thread_seq, label_set_id]
-    [frames, weight, seq, lsi],       #   frames: [[path, label], ...] deepest-first
-    ...                               #   weight: Integer (nanoseconds)
-  ],                                  #   seq: Integer (thread sequence, 1-based)
-                                      #   lsi: Integer (label set ID, 0 = no labels)
-  label_sets: [{}, {request: "abc"}], # label set table (index = label_set_id, present when labels used)
+  trigger_count: 1234,       # number of timer triggers
+  sampling_count: 1234,      # number of timer callbacks
+  sampling_time_ns: 56789,   # total time spent sampling (overhead)
+  detected_thread_count: 4,  # threads seen during profiling
+  start_time_ns: 17740...,   # CLOCK_REALTIME epoch nanos
+  duration_ns: 10000000,     # profiling duration in nanos
+
+  # aggregate: true (default) — present only in this mode
+  unique_frames: 42,         # unique frame count
+  unique_stacks: 120,        # unique stack count
+  aggregated_samples: [                   # Array of [frames, weight, thread_seq, label_set_id]
+    [frames, weight, seq, lsi],           #   frames: [[path, label], ...] deepest-first
+    ...                                   #   weight: Integer (nanoseconds)
+  ],                                      #   seq: Integer (thread sequence, 1-based)
+                                          #   lsi: Integer (label set ID, 0 = no labels)
+
+  # aggregate: false — present only in this mode (C returns raw_samples;
+  # Ruby's stop also builds aggregated_samples from them for encoder use)
+  raw_samples: [                          # same element format as aggregated_samples
+    [frames, weight, seq, lsi],
+    ...
+  ],
+
+  label_sets: [{}, {request: "abc"}],     # label set table (present when labels used)
 }
 </code></pre>
 
-<p>Each sample has:</p>
+<p>Each sample (in both <code>aggregated_samples</code> and <code>raw_samples</code>) has:</p>
 <ul>
   <li><strong>frames</strong>: An array of <code>[path, label]</code> pairs, ordered deepest-first (leaf frame at index 0)</li>
   <li><strong>weight</strong>: Time in nanoseconds attributed to this sample</li>
@@ -2574,7 +2584,7 @@ data = Rperf.stop
   <li><strong>label_set_id</strong>: Label set ID (0 = no labels). Index into the <code>label_sets</code> array</li>
 </ul>
 
-<p>When <code>aggregate: true</code> (default), identical stacks are merged and their weights summed. The <code>samples</code> array contains one entry per unique <code>(stack, thread_seq, label_set_id)</code> combination. When <code>aggregate: false</code>, every raw sample is returned individually.</p>
+<p>When <code>aggregate: true</code> (default), identical stacks are merged and their weights summed. The <code>aggregated_samples</code> array contains one entry per unique <code>(stack, thread_seq, label_set_id)</code> combination. When <code>aggregate: false</code>, the C extension returns <code>raw_samples</code> with every individual timer sample; Ruby’s <code>Rperf.stop</code> also builds <code>aggregated_samples</code> from them so encoders always work.</p>
 
 <h2 id="en--04-library-usage--rperfsave">4.4 Rperf.save</h2>
 
@@ -5465,26 +5475,36 @@ data = Rperf.stop
 <p><code>Rperf.stop</code> はプロファイラが動作していなかった場合は <code>nil</code> を返します。それ以外の場合は Hash を返します:</p>
 
 <pre><code class="language-ruby">{
-  mode: :cpu,               # または :wall
+  mode: :cpu,                # または :wall
   frequency: 1000,
-  sampling_count: 1234,     # タイマーコールバックの回数
-  sampling_time_ns: 56789,  # サンプリングに費やした合計時間（オーバーヘッド）
-  trigger_count: 1234,      # タイマートリガーの回数
-  detected_thread_count: 4, # プロファイリング中に検出されたスレッド数
-  start_time_ns: 17740...,  # CLOCK_REALTIME エポック（ナノ秒）
-  duration_ns: 10000000,    # プロファイリング時間（ナノ秒）
-  unique_frames: 42,        # ユニークフレーム数（aggregate: true の場合のみ）
-  unique_stacks: 120,       # ユニークスタック数（aggregate: true の場合のみ）
-  samples: [                          # [frames, weight, thread_seq, label_set_id] の配列
-    [frames, weight, seq, lsi],       #   frames: [[path, label], ...] 最深部が先頭
-    ...                               #   weight: Integer（ナノ秒）
-  ],                                  #   seq: Integer（スレッド連番、1 始まり）
-                                      #   lsi: Integer（ラベルセット ID、0 = ラベルなし）
-  label_sets: [{}, {request: "abc"}], # ラベルセットテーブル（index = label_set_id、ラベル使用時に存在）
+  trigger_count: 1234,       # タイマートリガーの回数
+  sampling_count: 1234,      # タイマーコールバックの回数
+  sampling_time_ns: 56789,   # サンプリングに費やした合計時間（オーバーヘッド）
+  detected_thread_count: 4,  # プロファイリング中に検出されたスレッド数
+  start_time_ns: 17740...,   # CLOCK_REALTIME エポック（ナノ秒）
+  duration_ns: 10000000,     # プロファイリング時間（ナノ秒）
+
+  # aggregate: true（デフォルト）— このモードでのみ存在
+  unique_frames: 42,         # ユニークフレーム数
+  unique_stacks: 120,        # ユニークスタック数
+  aggregated_samples: [                   # [frames, weight, thread_seq, label_set_id] の配列
+    [frames, weight, seq, lsi],           #   frames: [[path, label], ...] 最深部が先頭
+    ...                                   #   weight: Integer（ナノ秒）
+  ],                                      #   seq: Integer（スレッド連番、1 始まり）
+                                          #   lsi: Integer（ラベルセット ID、0 = ラベルなし）
+
+  # aggregate: false — このモードでのみ存在（C は raw_samples を返す。
+  # Ruby の stop はエンコーダー用に aggregated_samples も構築する）
+  raw_samples: [                          # aggregated_samples と同じ要素形式
+    [frames, weight, seq, lsi],
+    ...
+  ],
+
+  label_sets: [{}, {request: "abc"}],     # ラベルセットテーブル（ラベル使用時に存在）
 }
 </code></pre>
 
-<p>各サンプルには以下が含まれます:</p>
+<p>各サンプル（<code>aggregated_samples</code> と <code>raw_samples</code> の両方）には以下が含まれます:</p>
 <ul>
   <li><strong>frames</strong>: <code>[path, label]</code> ペアの配列、最深部が先頭（リーフフレームがインデックス 0）</li>
   <li><strong>weight</strong>: このサンプルに帰属する時間（ナノ秒）</li>
@@ -5492,7 +5512,7 @@ data = Rperf.stop
   <li><strong>label_set_id</strong>: ラベルセット ID（0 = ラベルなし）。<code>label_sets</code> 配列へのインデックス</li>
 </ul>
 
-<p><code>aggregate: true</code>（デフォルト）の場合、同一スタックはマージされ、重みが合計されます。<code>samples</code> 配列にはユニークな <code>(stack, thread_seq, label_set_id)</code> の組み合わせごとに 1 エントリが含まれます。<code>aggregate: false</code> の場合は、すべての生サンプルが個別に返されます。</p>
+<p><code>aggregate: true</code>（デフォルト）の場合、同一スタックはマージされ、重みが合計されます。<code>aggregated_samples</code> 配列にはユニークな <code>(stack, thread_seq, label_set_id)</code> の組み合わせごとに 1 エントリが含まれます。<code>aggregate: false</code> の場合、C 拡張は個々のタイマーサンプルすべてを <code>raw_samples</code> として返します。Ruby の <code>Rperf.stop</code> はエンコーダーが常に動作するように <code>aggregated_samples</code> も構築します。</p>
 
 <h2 id="ja--04-library-usage--rperfsave">4.4 Rperf.save</h2>
 

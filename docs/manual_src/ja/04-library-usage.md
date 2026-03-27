@@ -86,32 +86,42 @@ data = Rperf.stop
 
 ```ruby
 {
-  mode: :cpu,               # または :wall
+  mode: :cpu,                # または :wall
   frequency: 1000,
-  sampling_count: 1234,     # タイマーコールバックの回数
-  sampling_time_ns: 56789,  # サンプリングに費やした合計時間（オーバーヘッド）
-  trigger_count: 1234,      # タイマートリガーの回数
-  detected_thread_count: 4, # プロファイリング中に検出されたスレッド数
-  start_time_ns: 17740...,  # CLOCK_REALTIME エポック（ナノ秒）
-  duration_ns: 10000000,    # プロファイリング時間（ナノ秒）
-  unique_frames: 42,        # ユニークフレーム数（aggregate: true の場合のみ）
-  unique_stacks: 120,       # ユニークスタック数（aggregate: true の場合のみ）
-  samples: [                          # [frames, weight, thread_seq, label_set_id] の配列
-    [frames, weight, seq, lsi],       #   frames: [[path, label], ...] 最深部が先頭
-    ...                               #   weight: Integer（ナノ秒）
-  ],                                  #   seq: Integer（スレッド連番、1 始まり）
-                                      #   lsi: Integer（ラベルセット ID、0 = ラベルなし）
-  label_sets: [{}, {request: "abc"}], # ラベルセットテーブル（index = label_set_id、ラベル使用時に存在）
+  trigger_count: 1234,       # タイマートリガーの回数
+  sampling_count: 1234,      # タイマーコールバックの回数
+  sampling_time_ns: 56789,   # サンプリングに費やした合計時間（オーバーヘッド）
+  detected_thread_count: 4,  # プロファイリング中に検出されたスレッド数
+  start_time_ns: 17740...,   # CLOCK_REALTIME エポック（ナノ秒）
+  duration_ns: 10000000,     # プロファイリング時間（ナノ秒）
+
+  # aggregate: true（デフォルト）— このモードでのみ存在
+  unique_frames: 42,         # ユニークフレーム数
+  unique_stacks: 120,        # ユニークスタック数
+  aggregated_samples: [                   # [frames, weight, thread_seq, label_set_id] の配列
+    [frames, weight, seq, lsi],           #   frames: [[path, label], ...] 最深部が先頭
+    ...                                   #   weight: Integer（ナノ秒）
+  ],                                      #   seq: Integer（スレッド連番、1 始まり）
+                                          #   lsi: Integer（ラベルセット ID、0 = ラベルなし）
+
+  # aggregate: false — このモードでのみ存在（C は raw_samples を返す。
+  # Ruby の stop はエンコーダー用に aggregated_samples も構築する）
+  raw_samples: [                          # aggregated_samples と同じ要素形式
+    [frames, weight, seq, lsi],
+    ...
+  ],
+
+  label_sets: [{}, {request: "abc"}],     # ラベルセットテーブル（ラベル使用時に存在）
 }
 ```
 
-各サンプルには以下が含まれます:
+各サンプル（`aggregated_samples` と `raw_samples` の両方）には以下が含まれます:
 - **frames**: `[path, label]` ペアの配列、最深部が先頭（リーフフレームがインデックス 0）
 - **weight**: このサンプルに帰属する時間（ナノ秒）
 - **thread_seq**: スレッド連番（1 始まり、プロファイリングセッションごとに割り当て）
 - **label_set_id**: ラベルセット ID（0 = ラベルなし）。`label_sets` 配列へのインデックス
 
-`aggregate: true`（デフォルト）の場合、同一スタックはマージされ、重みが合計されます。`samples` 配列にはユニークな `(stack, thread_seq, label_set_id)` の組み合わせごとに 1 エントリが含まれます。`aggregate: false` の場合は、すべての生サンプルが個別に返されます。
+`aggregate: true`（デフォルト）の場合、同一スタックはマージされ、重みが合計されます。`aggregated_samples` 配列にはユニークな `(stack, thread_seq, label_set_id)` の組み合わせごとに 1 エントリが含まれます。`aggregate: false` の場合、C 拡張は個々のタイマーサンプルすべてを `raw_samples` として返します。Ruby の `Rperf.stop` はエンコーダーが常に動作するように `aggregated_samples` も構築します。
 
 ## Rperf.save
 

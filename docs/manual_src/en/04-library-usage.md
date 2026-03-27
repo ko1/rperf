@@ -86,32 +86,42 @@ data = Rperf.stop
 
 ```ruby
 {
-  mode: :cpu,               # or :wall
+  mode: :cpu,                # or :wall
   frequency: 1000,
-  sampling_count: 1234,     # number of timer callbacks
-  sampling_time_ns: 56789,  # total time spent sampling (overhead)
-  trigger_count: 1234,      # number of timer triggers
-  detected_thread_count: 4, # threads seen during profiling
-  start_time_ns: 17740...,  # CLOCK_REALTIME epoch nanos
-  duration_ns: 10000000,    # profiling duration in nanos
-  unique_frames: 42,        # unique frame count (aggregate: true only)
-  unique_stacks: 120,       # unique stack count (aggregate: true only)
-  samples: [                          # Array of [frames, weight, thread_seq, label_set_id]
-    [frames, weight, seq, lsi],       #   frames: [[path, label], ...] deepest-first
-    ...                               #   weight: Integer (nanoseconds)
-  ],                                  #   seq: Integer (thread sequence, 1-based)
-                                      #   lsi: Integer (label set ID, 0 = no labels)
-  label_sets: [{}, {request: "abc"}], # label set table (index = label_set_id, present when labels used)
+  trigger_count: 1234,       # number of timer triggers
+  sampling_count: 1234,      # number of timer callbacks
+  sampling_time_ns: 56789,   # total time spent sampling (overhead)
+  detected_thread_count: 4,  # threads seen during profiling
+  start_time_ns: 17740...,   # CLOCK_REALTIME epoch nanos
+  duration_ns: 10000000,     # profiling duration in nanos
+
+  # aggregate: true (default) — present only in this mode
+  unique_frames: 42,         # unique frame count
+  unique_stacks: 120,        # unique stack count
+  aggregated_samples: [                   # Array of [frames, weight, thread_seq, label_set_id]
+    [frames, weight, seq, lsi],           #   frames: [[path, label], ...] deepest-first
+    ...                                   #   weight: Integer (nanoseconds)
+  ],                                      #   seq: Integer (thread sequence, 1-based)
+                                          #   lsi: Integer (label set ID, 0 = no labels)
+
+  # aggregate: false — present only in this mode (C returns raw_samples;
+  # Ruby's stop also builds aggregated_samples from them for encoder use)
+  raw_samples: [                          # same element format as aggregated_samples
+    [frames, weight, seq, lsi],
+    ...
+  ],
+
+  label_sets: [{}, {request: "abc"}],     # label set table (present when labels used)
 }
 ```
 
-Each sample has:
+Each sample (in both `aggregated_samples` and `raw_samples`) has:
 - **frames**: An array of `[path, label]` pairs, ordered deepest-first (leaf frame at index 0)
 - **weight**: Time in nanoseconds attributed to this sample
 - **thread_seq**: Thread sequence number (1-based, assigned per profiling session)
 - **label_set_id**: Label set ID (0 = no labels). Index into the `label_sets` array
 
-When `aggregate: true` (default), identical stacks are merged and their weights summed. The `samples` array contains one entry per unique `(stack, thread_seq, label_set_id)` combination. When `aggregate: false`, every raw sample is returned individually.
+When `aggregate: true` (default), identical stacks are merged and their weights summed. The `aggregated_samples` array contains one entry per unique `(stack, thread_seq, label_set_id)` combination. When `aggregate: false`, the C extension returns `raw_samples` with every individual timer sample; Ruby's `Rperf.stop` also builds `aggregated_samples` from them so encoders always work.
 
 ## Rperf.save
 
