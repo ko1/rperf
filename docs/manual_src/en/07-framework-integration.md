@@ -9,10 +9,6 @@ rperf provides optional integrations that automatically profile and label sample
 
 `Rperf::RackMiddleware` profiles each request and labels it with its endpoint (`METHOD /path`). By default, dynamic segments are normalized (numeric IDs → `:id`, UUIDs → `:uuid`) to keep label cardinality low. Use `label: :raw` for the original PATH_INFO, or pass a custom `label:` proc for framework-specific route normalization.
 
-```ruby
-require "rperf/rack"
-```
-
 ### Rails
 
 ```ruby
@@ -66,10 +62,6 @@ use Rperf::RackMiddleware, label_key: :route
 
 `Rperf::ActiveJobMiddleware` profiles each job and labels it with its class name (e.g., `SendEmailJob`). Works with any Active Job backend — Sidekiq, GoodJob, Solid Queue, etc.
 
-```ruby
-require "rperf/active_job"
-```
-
 Start profiling in an initializer, then include it in your base job class:
 
 ```ruby
@@ -100,10 +92,6 @@ In the viewer, use tagfocus to filter by job name, or tagroot to group the flame
 
 `Rperf::SidekiqMiddleware` profiles each job and labels it with its worker class name. This covers both Active Job-backed workers and plain Sidekiq workers.
 
-```ruby
-require "rperf/sidekiq"
-```
-
 Register it as a Sidekiq server middleware:
 
 ```ruby
@@ -126,10 +114,6 @@ end
 
 > [!WARNING]
 > `Rperf::Viewer` has no built-in authentication. Profiling data — including stack traces and label values — is exposed to anyone who can access the endpoint. In production, always restrict access using your framework's authentication (see "Access control" below).
-
-```ruby
-require "rperf/viewer"
-```
 
 ### Setup
 

@@ -3425,9 +3425,6 @@ Samples: 509, Frequency: 1000Hz
 
 <p><code>Rperf::RackMiddleware</code> profiles each request and labels it with its endpoint (<code>METHOD /path</code>). By default, dynamic segments are normalized (numeric IDs → <code>:id</code>, UUIDs → <code>:uuid</code>) to keep label cardinality low. Use <code>label: :raw</code> for the original PATH_INFO, or pass a custom <code>label:</code> proc for framework-specific route normalization.</p>
 
-<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">require</span> <span class="s2">"rperf/rack"</span>
-</code></pre></div></div>
-
 <h3 id="en--07-framework-integration--rails">7.1.1 Rails</h3>
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># config/initializers/rperf.rb</span>
@@ -3478,9 +3475,6 @@ Samples: 509, Frequency: 1000Hz
 
 <p><code>Rperf::ActiveJobMiddleware</code> profiles each job and labels it with its class name (e.g., <code>SendEmailJob</code>). Works with any Active Job backend — Sidekiq, GoodJob, Solid Queue, etc.</p>
 
-<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">require</span> <span class="s2">"rperf/active_job"</span>
-</code></pre></div></div>
-
 <p>Start profiling in an initializer, then include it in your base job class:</p>
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># config/initializers/rperf.rb</span>
@@ -3508,9 +3502,6 @@ Samples: 509, Frequency: 1000Hz
 
 <p><code>Rperf::SidekiqMiddleware</code> profiles each job and labels it with its worker class name. This covers both Active Job-backed workers and plain Sidekiq workers.</p>
 
-<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">require</span> <span class="s2">"rperf/sidekiq"</span>
-</code></pre></div></div>
-
 <p>Register it as a Sidekiq server middleware:</p>
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># config/initializers/sidekiq.rb</span>
@@ -3536,9 +3527,6 @@ Samples: 509, Frequency: 1000Hz
 <p class="admonition-title">Warning</p>
 <p><code>Rperf::Viewer</code> has no built-in authentication. Profiling data — including stack traces and label values — is exposed to anyone who can access the endpoint. In production, always restrict access using your framework’s authentication (see “Access control” below).</p>
 </div>
-
-<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">require</span> <span class="s2">"rperf/viewer"</span>
-</code></pre></div></div>
 
 <h3 id="en--07-framework-integration--setup">7.4.1 Setup</h3>
 
@@ -6563,9 +6551,6 @@ Samples: 509, Frequency: 1000Hz
 
 <p><code>Rperf::RackMiddleware</code> は各リクエストをプロファイルし、エンドポイント（<code>METHOD /path</code>）でラベル付けします。デフォルトで動的セグメントが正規化されます（数値 ID → <code>:id</code>、UUID → <code>:uuid</code>）。<code>label: :raw</code> で元の PATH_INFO をそのまま使うか、<code>label:</code> にカスタム proc を渡してフレームワーク固有のルート正規化も可能です。</p>
 
-<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">require</span> <span class="s2">"rperf/rack"</span>
-</code></pre></div></div>
-
 <h3 id="ja--07-framework-integration--rails">7.1.1 Rails</h3>
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># config/initializers/rperf.rb</span>
@@ -6616,9 +6601,6 @@ Samples: 509, Frequency: 1000Hz
 
 <p><code>Rperf::ActiveJobMiddleware</code> は各ジョブをプロファイルし、クラス名（例: <code>SendEmailJob</code>）でラベル付けします。任意の Active Job バックエンド（Sidekiq、GoodJob、Solid Queue など）で動作します。</p>
 
-<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">require</span> <span class="s2">"rperf/active_job"</span>
-</code></pre></div></div>
-
 <p>イニシャライザでプロファイリングを開始し、ベースジョブクラスにインクルードします:</p>
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># config/initializers/rperf.rb</span>
@@ -6646,9 +6628,6 @@ Samples: 509, Frequency: 1000Hz
 
 <p><code>Rperf::SidekiqMiddleware</code> は各ジョブをプロファイルし、ワーカークラス名でラベル付けします。Active Job ベースのワーカーとプレーンな Sidekiq ワーカーの両方をカバーします。</p>
 
-<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">require</span> <span class="s2">"rperf/sidekiq"</span>
-</code></pre></div></div>
-
 <p>Sidekiq のサーバーミドルウェアとして登録します:</p>
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># config/initializers/sidekiq.rb</span>
@@ -6674,9 +6653,6 @@ Samples: 509, Frequency: 1000Hz
 <p class="admonition-title">Warning</p>
 <p><code>Rperf::Viewer</code> には組み込みの認証機能がなく、スタックトレースやラベル値を含むプロファイリングデータがエンドポイントにアクセスできる全員に公開されます。本番環境では必ずフレームワークの認証でアクセスを制限してください（下記「アクセス制御」参照）。</p>
 </div>
-
-<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">require</span> <span class="s2">"rperf/viewer"</span>
-</code></pre></div></div>
 
 <h3 id="ja--07-framework-integration--セットアップ">7.4.1 セットアップ</h3>
 
