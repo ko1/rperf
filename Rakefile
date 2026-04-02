@@ -1,21 +1,4 @@
 require 'bundler/gem_tasks'
-
-# Override bundler's release task to only tag + push (gem push is handled by GitHub Actions trusted publishing)
-Rake::Task["release"].clear
-task :release do
-  require_relative "lib/rperf/version"
-  tag = "v#{Rperf::VERSION}"
-
-  if system("git", "rev-parse", tag, err: File::NULL, out: File::NULL)
-    # Tag already exists — we're likely running inside CI (triggered by tag push).
-    # Skip tagging/pushing; let rubygems/release-gem handle gem build+publish.
-    puts "Tag #{tag} already exists — skipping tag/push (CI mode)"
-  else
-    sh "git", "tag", tag
-    sh "git", "push", "origin", "master", "--tags"
-    puts "Pushed #{tag} — GitHub Actions will publish the gem"
-  end
-end
 require "rake/extensiontask"
 require "rake/testtask"
 
