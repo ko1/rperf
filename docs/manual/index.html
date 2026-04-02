@@ -2384,7 +2384,12 @@ rperf report <span class="nt">--top</span>
 
 <span class="c"># Print pprof text summary</span>
 rperf report <span class="nt">--text</span>
+
+<span class="c"># Output static HTML viewer (no server needed)</span>
+rperf report <span class="nt">--html</span> profile.json.gz <span class="o">&gt;</span> report.html
 </code></pre></div></div>
+
+<p>The <code>--html</code> flag generates a self-contained HTML file with the profile data embedded inline. It loads d3 and d3-flamegraph from CDN, so no server is needed to view the flamegraph — just open the file in a browser. This is useful for sharing profiles or hosting them on static sites like GitHub Pages.</p>
 
 <h3 id="en--03-cli-usage--example-top-and-text-output">3.4.1 Example: Top and text output</h3>
 
@@ -5514,7 +5519,12 @@ rperf report <span class="nt">--top</span>
 
 <span class="c"># pprof テキストサマリーを出力</span>
 rperf report <span class="nt">--text</span>
+
+<span class="c"># 静的 HTML ビューアを出力（サーバー不要）</span>
+rperf report <span class="nt">--html</span> profile.json.gz <span class="o">&gt;</span> report.html
 </code></pre></div></div>
+
+<p><code>--html</code> フラグはプロファイルデータをインラインで埋め込んだ自己完結型の HTML ファイルを生成します。d3 と d3-flamegraph は CDN から読み込むため、サーバーなしでブラウザでフレームグラフを表示できます。プロファイルの共有や GitHub Pages などの静的サイトでのホスティングに便利です。</p>
 
 <h3 id="ja--03-cli-usage--例-top-とテキスト出力">3.4.1 例: top とテキスト出力</h3>
 

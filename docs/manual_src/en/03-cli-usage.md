@@ -286,7 +286,12 @@ rperf report --top
 
 # Print pprof text summary
 rperf report --text
+
+# Output static HTML viewer (no server needed)
+rperf report --html profile.json.gz > report.html
 ```
+
+The `--html` flag generates a self-contained HTML file with the profile data embedded inline. It loads d3 and d3-flamegraph from CDN, so no server is needed to view the flamegraph — just open the file in a browser. This is useful for sharing profiles or hosting them on static sites like GitHub Pages.
 
 ### Example: Top and text output
 

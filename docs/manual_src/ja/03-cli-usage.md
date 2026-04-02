@@ -283,7 +283,12 @@ rperf report --top
 
 # pprof テキストサマリーを出力
 rperf report --text
+
+# 静的 HTML ビューアを出力（サーバー不要）
+rperf report --html profile.json.gz > report.html
 ```
+
+`--html` フラグはプロファイルデータをインラインで埋め込んだ自己完結型の HTML ファイルを生成します。d3 と d3-flamegraph は CDN から読み込むため、サーバーなしでブラウザでフレームグラフを表示できます。プロファイルの共有や GitHub Pages などの静的サイトでのホスティングに便利です。
 
 ### 例: top とテキスト出力
 

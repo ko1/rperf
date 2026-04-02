@@ -62,9 +62,17 @@ and flat/cumulative top-50 function tables.
 
     --top                   Print top functions by flat time
     --text                  Print text report
+    --html                  Output static HTML viewer to stdout
 
 Default (no flag): opens interactive web UI in browser.
 Default file: rperf.json.gz
+
+`--html` generates a self-contained HTML file that can be opened directly
+in a browser without a server. Profile data is embedded inline; d3 and
+d3-flamegraph are loaded from CDN. Useful for sharing or hosting on static
+sites (e.g., GitHub Pages).
+
+    rperf report --html profile.json.gz > report.html
 
 ### diff: Compare two pprof profiles (target - base). Requires Go.
 
