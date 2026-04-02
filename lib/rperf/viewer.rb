@@ -573,7 +573,7 @@ function renderTop() {
     var s = filteredSamples[si];
     var stack = s.stack;
     var w = s.weight;
-    var leaf = stack[0];
+    var leaf = stack[stack.length - 1];
     flatMap[leaf] = (flatMap[leaf] || 0) + w;
     var seen = {};
     for (var i = 0; i < stack.length; i++) {
