@@ -142,6 +142,7 @@ typedef struct rperf_stats {
     size_t trigger_count;
     size_t sampling_count;
     int64_t sampling_total_ns;
+    size_t dropped_samples;     /* samples lost due to allocation failure */
 } rperf_stats_t;
 
 typedef struct rperf_profiler {
@@ -400,11 +401,13 @@ rperf_frame_table_insert(rperf_frame_table_t *ft, VALUE fval)
     uint32_t h = (uint32_t)(fval >> 3);
     size_t idx = h % ft->bucket_capacity;
 
+    size_t probes = 0;
     while (1) {
         uint32_t slot = ft->buckets[idx];
         if (slot == RPERF_FRAME_TABLE_EMPTY) break;
         if (keys[slot] == fval) return slot;
         idx = (idx + 1) % ft->bucket_capacity;
+        if (++probes >= ft->bucket_capacity) return RPERF_FRAME_TABLE_EMPTY; /* table full */
     }
 
     /* Insert new entry.  Grow keys array if capacity is exhausted.
@@ -535,6 +538,7 @@ rperf_agg_table_insert(rperf_agg_table_t *at, const uint32_t *frame_ids,
 {
     size_t idx = hash % at->bucket_capacity;
 
+    size_t probes = 0;
     while (1) {
         rperf_agg_entry_t *e = &at->buckets[idx];
         if (!e->used) break;
@@ -547,6 +551,7 @@ rperf_agg_table_insert(rperf_agg_table_t *at, const uint32_t *frame_ids,
             return;
         }
         idx = (idx + 1) % at->bucket_capacity;
+        if (++probes >= at->bucket_capacity) return; /* table full, drop sample */
     }
 
     /* New entry — append frame_ids to stack_pool */
@@ -675,7 +680,8 @@ rperf_record_sample(rperf_profiler_t *prof, size_t frame_start, int depth,
                     int64_t weight, enum rperf_vm_state vm_state, int thread_seq, int label_set_id)
 {
     rperf_sample_buffer_t *buf = &prof->buffers[atomic_load_explicit(&prof->active_idx, memory_order_relaxed)];
-    rperf_write_sample(buf, frame_start, depth, weight, vm_state, thread_seq, label_set_id);
+    if (rperf_write_sample(buf, frame_start, depth, weight, vm_state, thread_seq, label_set_id) < 0)
+        prof->stats.dropped_samples++;
     rperf_try_swap(prof);
 }
 
@@ -774,13 +780,15 @@ rperf_handle_resumed(rperf_profiler_t *prof, VALUE thread, rperf_thread_data_t *
         /* Write both samples into the same buf, then swap-check once */
         if (td->ready_at_ns > 0 && td->ready_at_ns > td->suspended_at_ns) {
             int64_t blocked_ns = td->ready_at_ns - td->suspended_at_ns;
-            rperf_write_sample(buf, frame_start, depth, blocked_ns,
-                               RPERF_VM_STATE_GVL_BLOCKED, td->thread_seq, td->label_set_id);
+            if (rperf_write_sample(buf, frame_start, depth, blocked_ns,
+                               RPERF_VM_STATE_GVL_BLOCKED, td->thread_seq, td->label_set_id) < 0)
+                prof->stats.dropped_samples++;
         }
         if (td->ready_at_ns > 0 && wall_now > td->ready_at_ns) {
             int64_t wait_ns = wall_now - td->ready_at_ns;
-            rperf_write_sample(buf, frame_start, depth, wait_ns,
-                               RPERF_VM_STATE_GVL_WAIT, td->thread_seq, td->label_set_id);
+            if (rperf_write_sample(buf, frame_start, depth, wait_ns,
+                               RPERF_VM_STATE_GVL_WAIT, td->thread_seq, td->label_set_id) < 0)
+                prof->stats.dropped_samples++;
         }
 
         rperf_try_swap(prof);
@@ -1073,6 +1081,8 @@ rperf_build_aggregated_result(rperf_profiler_t *prof)
     rb_hash_aset(result, ID2SYM(rb_intern("trigger_count")), SIZET2NUM(prof->stats.trigger_count));
     rb_hash_aset(result, ID2SYM(rb_intern("sampling_count")), SIZET2NUM(prof->stats.sampling_count));
     rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LONG2NUM(prof->stats.sampling_total_ns));
+    if (prof->stats.dropped_samples > 0)
+        rb_hash_aset(result, ID2SYM(rb_intern("dropped_samples")), SIZET2NUM(prof->stats.dropped_samples));
     rb_hash_aset(result, ID2SYM(rb_intern("detected_thread_count")), INT2NUM(prof->next_thread_seq));
     rb_hash_aset(result, ID2SYM(rb_intern("unique_frames")),
                  SIZET2NUM(prof->frame_table.count));
@@ -1162,6 +1172,7 @@ rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig, VAL
     g_profiler.stats.sampling_count = 0;
     g_profiler.stats.sampling_total_ns = 0;
     g_profiler.stats.trigger_count = 0;
+    g_profiler.stats.dropped_samples = 0;
     atomic_store_explicit(&g_profiler.active_idx, 0, memory_order_relaxed);
     atomic_store_explicit(&g_profiler.swap_ready, 0, memory_order_relaxed);
     g_profiler.label_sets = Qnil;
@@ -1430,6 +1441,8 @@ rb_rperf_stop(VALUE self)
         rb_hash_aset(result, ID2SYM(rb_intern("trigger_count")), SIZET2NUM(g_profiler.stats.trigger_count));
         rb_hash_aset(result, ID2SYM(rb_intern("sampling_count")), SIZET2NUM(g_profiler.stats.sampling_count));
         rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LONG2NUM(g_profiler.stats.sampling_total_ns));
+        if (g_profiler.stats.dropped_samples > 0)
+            rb_hash_aset(result, ID2SYM(rb_intern("dropped_samples")), SIZET2NUM(g_profiler.stats.dropped_samples));
         rb_hash_aset(result, ID2SYM(rb_intern("detected_thread_count")), INT2NUM(g_profiler.next_thread_seq));
         {
             struct timespec stop_monotonic;
@@ -1494,6 +1507,7 @@ rperf_clear_aggregated_data(rperf_profiler_t *prof)
     prof->stats.trigger_count = 0;
     prof->stats.sampling_count = 0;
     prof->stats.sampling_total_ns = 0;
+    prof->stats.dropped_samples = 0;
 
     /* Reset start timestamps so next snapshot's duration_ns covers
      * only the period since this clear. */
@@ -1728,6 +1742,7 @@ rperf_after_fork_child(void)
     /* Reset stats */
     g_profiler.stats.sampling_count = 0;
     g_profiler.stats.sampling_total_ns = 0;
+    g_profiler.stats.dropped_samples = 0;
     g_profiler.profile_refcount = 0;
     atomic_store_explicit(&g_profiler.swap_ready, 0, memory_order_relaxed);
 }

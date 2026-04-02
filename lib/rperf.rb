@@ -530,6 +530,10 @@ module Rperf
     samples = data[:sampling_count] || samples_raw.size
     $stderr.puts format("  %d samples / %d triggers, %.1f%% profiler overhead",
                         samples, triggers, overhead_pct)
+    dropped = data[:dropped_samples] || 0
+    if dropped > 0
+      $stderr.puts format("  WARNING: %d samples dropped due to memory allocation failure", dropped)
+    end
   end
   private_class_method :print_stat_footer
 
