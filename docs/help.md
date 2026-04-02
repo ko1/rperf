@@ -340,7 +340,7 @@ your framework's existing mechanisms:
 # config/routes.rb
 require "rperf/viewer"
 constraints ->(req) { req.session[:admin] } do
-  mount Rperf::Viewer.new(nil), at: "/rperf"
+  mount Rperf::Viewer.new(nil, path: ""), at: "/rperf"
 end
 ```
 

@@ -125,7 +125,7 @@ end
 
 ## ブラウザ内ビューア
 
-`Rperf::Viewer` は、設定可能なマウントパスでインタラクティブなプロファイリング UI を提供する Rack ミドルウェアです。スナップショットをメモリに保持し、[d3-flame-graph](https://github.com/nicedoc/d3-flame-graph) を使ってブラウザ内で描画します。外部依存やビルドツールは不要です — HTML、CSS、JavaScript はすべて自己完結しています。
+`Rperf::Viewer` は、設定可能なマウントパスでインタラクティブなプロファイリング UI を提供する Rack ミドルウェアです。スナップショットをメモリに保持し、[d3-flame-graph](https://github.com/nicedoc/d3-flame-graph) を使ってブラウザ内で描画します。gem の依存やビルドツールは不要です。ビューアは実行時に CDN から [d3-flame-graph](https://github.com/nicedoc/d3-flame-graph) を読み込むため、初回アクセス時にインターネット接続が必要です。
 
 ```ruby
 require "rperf/viewer"
@@ -201,7 +201,7 @@ Rperf::Viewer.instance.add_snapshot(data)
 # config/routes.rb
 require "rperf/viewer"
 constraints ->(req) { req.session[:admin] } do
-  mount Rperf::Viewer.new(nil), at: "/rperf"
+  mount Rperf::Viewer.new(nil, path: ""), at: "/rperf"
 end
 ```
 

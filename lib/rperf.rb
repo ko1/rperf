@@ -144,6 +144,9 @@ module Rperf
   #
   # Values of nil remove that key. Existing labels are merged.
   def self.label(**kw, &block)
+    return yield if block && !_c_running?
+    return unless _c_running?
+
     _init_label_sets unless @label_set_table
 
     cur_id = _c_get_label

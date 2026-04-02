@@ -32,7 +32,7 @@ class TestRperfCli < Test::Unit::TestCase
     assert_include stdout, "RUBY API"
     assert_include stdout, "PROFILING MODES"
     assert_include stdout, "OUTPUT FORMATS"
-    assert_include stdout, "SYNTHETIC FRAMES"
+    assert_include stdout, "VM STATE LABELS"
     assert_include stdout, "INTERPRETING RESULTS"
     assert_include stdout, "DIAGNOSING COMMON PERFORMANCE PROBLEMS"
   end
@@ -160,7 +160,7 @@ class TestRperfCli < Test::Unit::TestCase
     _, stderr, status = run_rperf("record", "-f", "100", "-v", "-o", File::NULL,
                                   RbConfig.ruby, "-e", "5_000_000.times { 1 + 1 }")
     assert_equal 0, status.exitstatus
-    assert_include stderr, "[rperf]"
+    assert_include stderr, "[Rperf]"
   end
 
   def test_cli_record_no_aggregate

@@ -108,7 +108,10 @@ when "report"
       data = Rperf.load(report_file)
 
       case mode
-      when :top, :text
+      when :top
+        $stdout.puts Rperf::Text.encode(data, top_n: 20, header: false)
+        exit
+      when :text
         $stdout.puts Rperf::Text.encode(data)
         exit
       end

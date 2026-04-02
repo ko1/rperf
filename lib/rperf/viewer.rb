@@ -58,18 +58,16 @@ class Rperf::Viewer
     req_path = env["PATH_INFO"] || "/"
 
     # Not our path — pass through to app
-    unless req_path.start_with?(@path)
-      return @app.call(env)
+    if req_path == @path
+      # Exact match: redirect to trailing slash
+      return [301, { "location" => "#{@path}/" }, [""]]
+    end
+    unless req_path.start_with?("#{@path}/")
+      return @app ? @app.call(env) : [404, { "content-type" => "text/plain" }, ["Not Found"]]
     end
 
     # Strip prefix to get sub-path
     sub_path = req_path[@path.size..]
-    sub_path = "/" if sub_path.nil? || sub_path.empty?
-
-    # Redirect /rperf to /rperf/ for consistent relative URLs in HTML
-    if sub_path == "/" && !req_path.end_with?("/") && req_path == @path
-      return [301, { "location" => "#{@path}/" }, [""]]
-    end
 
     case sub_path
     when "/"

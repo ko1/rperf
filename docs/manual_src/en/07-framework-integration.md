@@ -125,7 +125,7 @@ end
 
 ## In-browser viewer
 
-`Rperf::Viewer` is a Rack middleware that serves an interactive profiling UI at a configurable mount path. It stores snapshots in memory and renders them in the browser using [d3-flame-graph](https://github.com/nicedoc/d3-flame-graph). No external dependencies or build tools are required — the HTML, CSS, and JavaScript are all self-contained.
+`Rperf::Viewer` is a Rack middleware that serves an interactive profiling UI at a configurable mount path. It stores snapshots in memory and renders them in the browser using [d3-flame-graph](https://github.com/nicedoc/d3-flame-graph). No gem dependencies or build tools are required. The viewer loads [d3-flame-graph](https://github.com/nicedoc/d3-flame-graph) from a CDN at runtime, so an internet connection is needed on first access.
 
 ```ruby
 require "rperf/viewer"
@@ -201,7 +201,7 @@ Label keys are sorted alphabetically. The `%`-prefixed VM state keys (`%GC`, `%G
 # config/routes.rb
 require "rperf/viewer"
 constraints ->(req) { req.session[:admin] } do
-  mount Rperf::Viewer.new(nil), at: "/rperf"
+  mount Rperf::Viewer.new(nil, path: ""), at: "/rperf"
 end
 ```
 
