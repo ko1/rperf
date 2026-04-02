@@ -1,6 +1,9 @@
 # Framework Integration
 
-rperf provides optional integrations that automatically profile and label samples with context from web frameworks and job processors. They use [`Rperf.profile`](#index:Rperf.profile), which both activates the timer and sets labels. This works seamlessly with `start(defer: true)` — the timer only fires while at least one `profile` block is active. Note that the timer is process-wide: while any thread's `profile` block is active, all threads are sampled (each thread's samples carry its own labels, so they remain distinguishable). Start profiling separately (e.g., in an initializer).
+rperf provides optional integrations that automatically profile and label samples with context from web frameworks and job processors. They use [`Rperf.profile`](#index:Rperf.profile), which both activates the timer and sets labels. This works seamlessly with `start(defer: true)` — the timer only fires while at least one `profile` block is active. Start profiling separately (e.g., in an initializer).
+
+> [!NOTE]
+> The timer activated by `Rperf.profile` is process-wide. While any thread's `profile` block is active, all threads are sampled. Each thread's samples carry its own labels, so they remain distinguishable. This design also makes GVL contention and background processing visible within the profiled interval.
 
 ## Rack middleware
 
@@ -125,7 +128,10 @@ end
 
 ## In-browser viewer
 
-`Rperf::Viewer` is a Rack middleware that serves an interactive profiling UI at a configurable mount path. It stores snapshots in memory and renders them in the browser using [d3-flame-graph](https://github.com/nicedoc/d3-flame-graph). No gem dependencies or build tools are required. The viewer loads [d3-flame-graph](https://github.com/nicedoc/d3-flame-graph) from a CDN at runtime, so an internet connection is needed on first access.
+`Rperf::Viewer` is a Rack middleware that serves an interactive profiling UI at a configurable mount path. It stores snapshots in memory and renders them in the browser using [d3-flame-graph](https://github.com/nicedoc/d3-flame-graph). No gem dependencies or build tools are required. The viewer loads d3.js and d3-flame-graph from CDNs (cdnjs.cloudflare.com, cdn.jsdelivr.net) at runtime, so an internet connection is needed on first access.
+
+> [!WARNING]
+> `Rperf::Viewer` has no built-in authentication. Profiling data — including stack traces and label values — is exposed to anyone who can access the endpoint. In production, always restrict access using your framework's authentication (see "Access control" below).
 
 ```ruby
 require "rperf/viewer"
@@ -237,7 +243,7 @@ class UsersController < ApplicationController
 end
 ```
 
-While any `profile` block is active, the process-wide timer fires and all threads are sampled. When no `profile` block is running, the timer is paused and overhead is zero. Each thread's samples carry its own labels, so `profile`-wrapped code is distinguishable from background work.
+Outside `profile` blocks, the timer is paused and overhead is zero. Inside `profile` blocks, all threads in the process are sampled (each thread's samples carry its own labels).
 
 ## Full Rails example
 

@@ -3414,7 +3414,12 @@ Samples: 509, Frequency: 1000Hz
   <section class="chapter" id="chapter-en--07-framework-integration" data-lang="en" style="display: none;">
     <h1 id="en--07-framework-integration--framework-integration">7. Framework Integration</h1>
 
-<p>rperf provides optional integrations that automatically profile and label samples with context from web frameworks and job processors. They use <span id="en--07-framework-integration--idx-0"><code>Rperf.profile</code></span>, which both activates the timer and sets labels. This works seamlessly with <code>start(defer: true)</code> — the timer only fires while at least one <code>profile</code> block is active. Note that the timer is process-wide: while any thread’s <code>profile</code> block is active, all threads are sampled (each thread’s samples carry its own labels, so they remain distinguishable). Start profiling separately (e.g., in an initializer).</p>
+<p>rperf provides optional integrations that automatically profile and label samples with context from web frameworks and job processors. They use <span id="en--07-framework-integration--idx-0"><code>Rperf.profile</code></span>, which both activates the timer and sets labels. This works seamlessly with <code>start(defer: true)</code> — the timer only fires while at least one <code>profile</code> block is active. Start profiling separately (e.g., in an initializer).</p>
+
+<div class="admonition admonition-note">
+<p class="admonition-title">Note</p>
+<p>The timer activated by <code>Rperf.profile</code> is process-wide. While any thread’s <code>profile</code> block is active, all threads are sampled. Each thread’s samples carry its own labels, so they remain distinguishable. This design also makes GVL contention and background processing visible within the profiled interval.</p>
+</div>
 
 <h2 id="en--07-framework-integration--rack-middleware">7.1 Rack middleware</h2>
 
@@ -3529,7 +3534,12 @@ go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>job profil
 
 <h2 id="en--07-framework-integration--in-browser-viewer">7.4 In-browser viewer</h2>
 
-<p><code>Rperf::Viewer</code> is a Rack middleware that serves an interactive profiling UI at a configurable mount path. It stores snapshots in memory and renders them in the browser using <a href="https://github.com/nicedoc/d3-flame-graph">d3-flame-graph</a>. No gem dependencies or build tools are required. The viewer loads <a href="https://github.com/nicedoc/d3-flame-graph">d3-flame-graph</a> from a CDN at runtime, so an internet connection is needed on first access.</p>
+<p><code>Rperf::Viewer</code> is a Rack middleware that serves an interactive profiling UI at a configurable mount path. It stores snapshots in memory and renders them in the browser using <a href="https://github.com/nicedoc/d3-flame-graph">d3-flame-graph</a>. No gem dependencies or build tools are required. The viewer loads d3.js and d3-flame-graph from CDNs (cdnjs.cloudflare.com, cdn.jsdelivr.net) at runtime, so an internet connection is needed on first access.</p>
+
+<div class="admonition admonition-warning">
+<p class="admonition-title">Warning</p>
+<p><code>Rperf::Viewer</code> has no built-in authentication. Profiling data — including stack traces and label values — is exposed to anyone who can access the endpoint. In production, always restrict access using your framework’s authentication (see “Access control” below).</p>
+</div>
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">require</span> <span class="s2">"rperf/viewer"</span>
 </code></pre></div></div>
@@ -3656,7 +3666,7 @@ go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>job profil
 <span class="k">end</span>
 </code></pre></div></div>
 
-<p>While any <code>profile</code> block is active, the process-wide timer fires and all threads are sampled. When no <code>profile</code> block is running, the timer is paused and overhead is zero. Each thread’s samples carry its own labels, so <code>profile</code>-wrapped code is distinguishable from background work.</p>
+<p>Outside <code>profile</code> blocks, the timer is paused and overhead is zero. Inside <code>profile</code> blocks, all threads in the process are sampled (each thread’s samples carry its own labels).</p>
 
 <h2 id="en--07-framework-integration--full-rails-example">7.6 Full Rails example</h2>
 
@@ -6565,7 +6575,7 @@ Samples: 509, Frequency: 1000Hz
 
 <h2 id="ja--07-framework-integration--rack-ミドルウェア">7.1 Rack ミドルウェア</h2>
 
-<p><code>Rperf::RackMiddleware</code> は各リクエストをプロファイルし、エンドポイント（<code>METHOD /path</code>）でラベル付けします。</p>
+<p><code>Rperf::RackMiddleware</code> は各リクエストをプロファイルし、エンドポイント（<code>METHOD /path</code>）でラベル付けします。デフォルトで動的セグメントが正規化されます（数値 ID → <code>:id</code>、UUID → <code>:uuid</code>）。<code>label: :raw</code> で元の PATH_INFO をそのまま使うか、<code>label:</code> にカスタム proc を渡してフレームワーク固有のルート正規化も可能です。</p>
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">require</span> <span class="s2">"rperf/rack"</span>
 </code></pre></div></div>

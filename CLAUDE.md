@@ -91,6 +91,11 @@ See `benchmark/README.md` for full documentation.
 - `docs/manual_src/` — Manual managed by ligarb. After editing, run `cd docs/manual_src && ligarb build` to regenerate `docs/manual/`.
 - See `docs/manual_src/CLAUDE.md` for ligarb spec.
 
+## Important URLs
+
+- **PProf metadata URL**: `https://ko1.github.io/rperf/docs/help.html` — embedded in exported pprof files (`lib/rperf.rb`). This is correct and must not be changed.
+- **Online manual**: `https://ko1.github.io/rperf/docs/manual/` — GitHub Pages deployment of `docs/manual/`.
+
 ## Known Issues
 
 - **`running_ec` race in Ruby VM**: `rb_postponed_job_trigger` from the timer thread may set the interrupt flag on the wrong thread's ec when a new thread's native thread starts before acquiring the GVL (`thread_pthread.c:2256` calls `ruby_thread_set_native` before `thread_sched_wait_running_turn`). This causes timer samples to miss threads doing C busy-wait, with their CPU time leaking into the next SUSPENDED event's stack. Tracked as a Ruby VM bug.
