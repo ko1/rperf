@@ -168,19 +168,45 @@ when "report"
   end
 when "diff"
   run_pprof_subcommand("diff",
-    "Usage: rperf diff [options] base.pb.gz target.pb.gz\n" \
-    "       Compare two pprof profiles (shows target - base).",
+    "Usage: rperf diff [options] base target\n" \
+    "       Compare two profiles (shows target - base).\n" \
+    "       Accepts .json.gz (auto-converted) or .pb.gz files.\n" \
+    "       Requires Go (https://go.dev/dl/).",
     min_files: 2) do |mode, files|
-    base_file, target_file = files
     unless system("go", "version", out: File::NULL, err: File::NULL)
       $stderr.puts "'go' command not found. Install Go to use 'rperf diff'."
       $stderr.puts "  https://go.dev/dl/"
       exit 1
     end
-    case mode
-    when :top  then exec("go", "tool", "pprof", "-top", "-diff_base=#{base_file}", target_file)
-    when :text then exec("go", "tool", "pprof", "-text", "-diff_base=#{base_file}", target_file)
-    else            exec("go", "tool", "pprof", "-http=localhost:#{find_available_port}", "-diff_base=#{base_file}", target_file)
+
+    tmpfiles = []
+    files.each_with_index do |f, i|
+      if f =~ /\.json(\.gz)?\z/
+        require "tempfile"
+        require_relative "../lib/rperf"
+        data = Rperf.load(f)
+        tmp = Tempfile.new(["rperf_diff_#{i}", ".pb.gz"])
+        tmp.binmode
+        tmp.write(Rperf.__send__(:gzip, Rperf::PProf.encode(data)))
+        tmp.close
+        tmpfiles << tmp
+        files[i] = tmp.path
+      end
+    end
+
+    base_file, target_file = files
+    pprof_args = case mode
+                 when :top  then ["-top", "-diff_base=#{base_file}", target_file]
+                 when :text then ["-text", "-diff_base=#{base_file}", target_file]
+                 else            ["-http=localhost:#{find_available_port}", "-diff_base=#{base_file}", target_file]
+                 end
+    if tmpfiles.empty?
+      exec("go", "tool", "pprof", *pprof_args)
+    else
+      pid = spawn("go", "tool", "pprof", *pprof_args)
+      _, status = Process.wait2(pid)
+      tmpfiles.each(&:unlink)
+      exit(status.exitstatus || 1)
     end
   end
 when "record", "stat", "exec"
