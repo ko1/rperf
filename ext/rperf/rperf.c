@@ -299,6 +299,7 @@ static int
 rperf_ensure_sample_capacity(rperf_sample_buffer_t *buf)
 {
     if (buf->sample_count >= buf->sample_capacity) {
+        if (buf->sample_capacity > SIZE_MAX / 2) return -1;
         size_t new_cap = buf->sample_capacity * 2;
         rperf_sample_t *new_samples = (rperf_sample_t *)realloc(
             buf->samples,
@@ -317,6 +318,7 @@ static int
 rperf_ensure_frame_pool_capacity(rperf_sample_buffer_t *buf, int needed)
 {
     while (buf->frame_pool_count + (size_t)needed > buf->frame_pool_capacity) {
+        if (buf->frame_pool_capacity > SIZE_MAX / 2) return -1;
         size_t new_cap = buf->frame_pool_capacity * 2;
         VALUE *new_pool = (VALUE *)realloc(
             buf->frame_pool,
@@ -369,6 +371,7 @@ rperf_frame_table_free(rperf_frame_table_t *ft)
 static void
 rperf_frame_table_rehash(rperf_frame_table_t *ft)
 {
+    if (ft->bucket_capacity > SIZE_MAX / 2) return;
     size_t new_cap = ft->bucket_capacity * 2;
     uint32_t *new_buckets = (uint32_t *)malloc(new_cap * sizeof(uint32_t));
     if (!new_buckets) return; /* keep using current buckets at higher load factor */
@@ -409,6 +412,7 @@ rperf_frame_table_insert(rperf_frame_table_t *ft, VALUE fval)
      * the old keys pointer.  Instead, allocate new, copy, swap pointer
      * atomically, and keep old array alive until stop. */
     if (ft->count >= ft->capacity) {
+        if (ft->capacity > SIZE_MAX / 2) return RPERF_FRAME_TABLE_EMPTY;
         size_t new_cap = ft->capacity * 2;
         VALUE *new_keys = (VALUE *)calloc(new_cap, sizeof(VALUE));
         if (!new_keys) return RPERF_FRAME_TABLE_EMPTY;
@@ -487,6 +491,7 @@ rperf_agg_table_free(rperf_agg_table_t *at)
 static void
 rperf_agg_table_rehash(rperf_agg_table_t *at)
 {
+    if (at->bucket_capacity > SIZE_MAX / 2) return;
     size_t new_cap = at->bucket_capacity * 2;
     rperf_agg_entry_t *new_buckets = (rperf_agg_entry_t *)calloc(new_cap, sizeof(rperf_agg_entry_t));
     if (!new_buckets) return; /* keep using current buckets at higher load factor */
@@ -511,6 +516,7 @@ static int
 rperf_agg_ensure_stack_pool(rperf_agg_table_t *at, int needed)
 {
     while (at->stack_pool_count + (size_t)needed > at->stack_pool_capacity) {
+        if (at->stack_pool_capacity > SIZE_MAX / 2) return -1;
         size_t new_cap = at->stack_pool_capacity * 2;
         uint32_t *new_pool = (uint32_t *)realloc(at->stack_pool,
                                                   new_cap * sizeof(uint32_t));
@@ -579,6 +585,10 @@ rperf_aggregate_buffer(rperf_profiler_t *prof, rperf_sample_buffer_t *buf)
         rperf_sample_t *s = &buf->samples[i];
         uint32_t hash;
         int j;
+
+        /* Clamp depth to temp_ids[] capacity */
+        if (s->depth > RPERF_MAX_STACK_DEPTH)
+            s->depth = RPERF_MAX_STACK_DEPTH;
 
         /* Convert VALUE frames to frame_ids */
         int overflow = 0;
@@ -1096,7 +1106,9 @@ rperf_build_aggregated_result(rperf_profiler_t *prof)
 
             VALUE frames = rb_ary_new_capa(e->depth);
             for (j = 0; j < e->depth; j++) {
+                if (e->frame_start + j >= at->stack_pool_count) break;
                 uint32_t fid = at->stack_pool[e->frame_start + j];
+                if (fid >= ft->count) break;
                 rb_ary_push(frames, RARRAY_AREF(resolved_ary, fid));
             }
 
@@ -1437,6 +1449,7 @@ rb_rperf_stop(VALUE self)
             VALUE frames = rb_ary_new_capa(s->depth);
 
             for (j = 0; j < s->depth; j++) {
+                if (s->frame_start + j >= buf->frame_pool_count) break;
                 VALUE fval = buf->frame_pool[s->frame_start + j];
                 rb_ary_push(frames, rperf_resolve_frame(fval));
             }

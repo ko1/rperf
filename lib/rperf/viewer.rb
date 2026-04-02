@@ -91,7 +91,12 @@ class Rperf::Viewer
   def serve_html
     logo = LOGO_SVG
       .sub("<svg ", '<svg style="height:36px;width:auto" ')
-    [200, { "content-type" => "text/html; charset=utf-8" }, [VIEWER_HTML.sub("<!-- LOGO -->") { logo }]]
+    [200, {
+      "content-type" => "text/html; charset=utf-8",
+      "x-frame-options" => "DENY",
+      "x-content-type-options" => "nosniff",
+      "content-security-policy" => "default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self'; img-src data:; frame-ancestors 'none'",
+    }, [VIEWER_HTML.sub("<!-- LOGO -->") { logo }]]
   end
 
   def serve_snapshot_list
@@ -146,7 +151,10 @@ class Rperf::Viewer
   end
 
   def json_response(obj)
-    [200, { "content-type" => "application/json; charset=utf-8" }, [JSON.generate(obj)]]
+    [200, {
+      "content-type" => "application/json; charset=utf-8",
+      "x-content-type-options" => "nosniff",
+    }, [JSON.generate(obj)]]
   end
 
   VIEWER_HTML = <<~'HTML'
@@ -155,7 +163,7 @@ class Rperf::Viewer
 <head>
 <meta charset="utf-8">
 <title>rperf Viewer</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/d3-flame-graph@4/dist/d3-flamegraph.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/d3-flame-graph@4/dist/d3-flamegraph.css" integrity="sha384-DgAQSBzzhv8bu6Qc6Lq08THluOr+kO5qLMHt1yv8A3my7Jz2OQv6aq/WSZRYIQkG" crossorigin="anonymous">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; background: #fafafa; color: #333; }
@@ -270,8 +278,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monos
 <div id="panel-top" class="tab-content"></div>
 <div id="panel-tags" class="tab-content"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/d3-flame-graph@4/dist/d3-flamegraph.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js" integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-flame-graph@4/dist/d3-flamegraph.min.js" integrity="sha384-p4NaVVE+k6MT/enE0MtQ8B15rM9BGzHCnx8DizawPGks1ssZUeNdw6bAPpH2gp2w" crossorigin="anonymous"></script>
 <script>
 "use strict";
 

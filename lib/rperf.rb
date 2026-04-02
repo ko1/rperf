@@ -600,7 +600,12 @@ module Rperf
       raise ArgumentError, "RPERF_MODE must be 'cpu' or 'wall', got: #{_rperf_mode_str.inspect}"
     end
     _rperf_mode = _rperf_mode_str == "wall" ? :wall : :cpu
-    _rperf_format = ENV["RPERF_FORMAT"] ? ENV["RPERF_FORMAT"].to_sym : nil
+    _rperf_format = if ENV["RPERF_FORMAT"]
+                      unless %w[pprof collapsed text json].include?(ENV["RPERF_FORMAT"])
+                        raise ArgumentError, "RPERF_FORMAT must be one of pprof, collapsed, text, json, got: #{ENV["RPERF_FORMAT"].inspect}"
+                      end
+                      ENV["RPERF_FORMAT"].to_sym
+                    end
     _rperf_stat = ENV["RPERF_STAT"] == "1"
     _rperf_signal = case ENV["RPERF_SIGNAL"]
                     when nil then nil
