@@ -18,37 +18,36 @@ require "rperf/rack"
 ```ruby
 # config/initializers/rperf.rb
 require "rperf/rack"
+require "rperf/viewer"
 
 Rperf.start(defer: true, mode: :wall, frequency: 99)
 
+Rails.application.config.middleware.use Rperf::Viewer
 Rails.application.config.middleware.use Rperf::RackMiddleware
 
-at_exit do
-  data = Rperf.stop
-  Rperf.save("tmp/profile.pb.gz", data) if data
+# 60分ごとにスナップショットを取得
+Thread.new do
+  loop do
+    sleep 60 * 60
+    Rperf::Viewer.instance&.take_snapshot!
+  end
 end
 ```
 
-その後、エンドポイントでプロファイルをフィルタリング:
-
-```bash
-go tool pprof -tagfocus=endpoint="GET /api/users" tmp/profile.pb.gz
-go tool pprof -tagroot=endpoint tmp/profile.pb.gz   # エンドポイントごとにグループ化
-```
+`/rperf/` にアクセスしてビューアを開きます。tagfocus でエンドポイントをフィルタリング（例: `GET /api/users`）したり、tagroot でエンドポイントごとにフレームグラフをグループ化できます。
 
 ### Sinatra
 
 ```ruby
 require "sinatra"
 require "rperf/rack"
+require "rperf/viewer"
 
 Rperf.start(defer: true, mode: :wall, frequency: 99)
+use Rperf::Viewer
 use Rperf::RackMiddleware
 
-at_exit do
-  data = Rperf.stop
-  Rperf.save("profile.pb.gz", data) if data
-end
+Thread.new { loop { sleep 3600; Rperf::Viewer.instance&.take_snapshot! } }
 
 get "/hello" do
   "Hello, world!"
@@ -95,12 +94,7 @@ class SendEmailJob < ApplicationJob
 end
 ```
 
-ジョブでフィルタリング:
-
-```bash
-go tool pprof -tagfocus=job=SendEmailJob profile.pb.gz
-go tool pprof -tagroot=job profile.pb.gz   # ジョブクラスごとにグループ化
-```
+ビューアで tagfocus を使ってジョブ名でフィルタリングしたり、tagroot でジョブクラスごとにフレームグラフをグループ化できます。
 
 ## Sidekiq
 
@@ -220,15 +214,6 @@ end
 require "rperf"
 
 Rperf.start(defer: true, mode: :wall, frequency: 99)
-
-# プロファイルを定期的にエクスポート
-Thread.new do
-  loop do
-    sleep 60
-    snap = Rperf.snapshot(clear: true)
-    Rperf.save("tmp/profile-#{Time.now.to_i}.pb.gz", snap) if snap
-  end
-end
 ```
 
 その後、特定のコードパスを `profile` でラップします:
@@ -245,6 +230,8 @@ end
 
 `profile` ブロックの外ではタイマーが停止し、オーバーヘッドはゼロです。`profile` ブロック内では、プロセス全体のスレッドがサンプリング対象になります（各スレッドのサンプルにはそのスレッド自身のラベルが付きます）。
 
+`Rperf::Viewer` と組み合わせて結果をブラウザで確認するか、`Rperf.snapshot` + `Rperf.save` でファイルに保存して `rperf report` でオフライン分析もできます。
+
 ## Rails の完全な設定例
 
 Web とジョブの両方をプロファイリングする典型的な Rails 設定:
@@ -252,11 +239,13 @@ Web とジョブの両方をプロファイリングする典型的な Rails 設
 ```ruby
 # config/initializers/rperf.rb
 require "rperf/rack"
+require "rperf/viewer"
 require "rperf/sidekiq"
 
 Rperf.start(defer: true, mode: :wall, frequency: 99)
 
-# Web リクエストにラベル付け
+# ビューアとリクエストラベリング
+Rails.application.config.middleware.use Rperf::Viewer
 Rails.application.config.middleware.use Rperf::RackMiddleware
 
 # Sidekiq ジョブにラベル付け
@@ -266,19 +255,13 @@ Sidekiq.configure_server do |config|
   end
 end
 
-# プロファイルを定期的にエクスポート
+# 60分ごとにスナップショットを取得
 Thread.new do
   loop do
-    sleep 60
-    snap = Rperf.snapshot(clear: true)
-    Rperf.save("tmp/profile-#{Time.now.to_i}.pb.gz", snap) if snap
+    sleep 60 * 60
+    Rperf::Viewer.instance&.take_snapshot!
   end
 end
 ```
 
-エンドポイントとジョブ間の時間の使われ方を比較:
-
-```bash
-go tool pprof -tagroot=endpoint tmp/profile-*.pb.gz   # Web の内訳
-go tool pprof -tagroot=job tmp/profile-*.pb.gz         # ジョブの内訳
-```
+`/rperf/` にアクセスし、tagroot でエンドポイントやジョブクラスごとにフレームグラフをグループ化して確認できます。

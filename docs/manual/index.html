@@ -3432,35 +3432,35 @@ Samples: 509, Frequency: 1000Hz
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># config/initializers/rperf.rb</span>
 <span class="nb">require</span> <span class="s2">"rperf/rack"</span>
+<span class="nb">require</span> <span class="s2">"rperf/viewer"</span>
 
 <span class="no">Rperf</span><span class="p">.</span><span class="nf">start</span><span class="p">(</span><span class="ss">defer: </span><span class="kp">true</span><span class="p">,</span> <span class="ss">mode: :wall</span><span class="p">,</span> <span class="ss">frequency: </span><span class="mi">99</span><span class="p">)</span>
 
+<span class="no">Rails</span><span class="p">.</span><span class="nf">application</span><span class="p">.</span><span class="nf">config</span><span class="p">.</span><span class="nf">middleware</span><span class="p">.</span><span class="nf">use</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">Viewer</span>
 <span class="no">Rails</span><span class="p">.</span><span class="nf">application</span><span class="p">.</span><span class="nf">config</span><span class="p">.</span><span class="nf">middleware</span><span class="p">.</span><span class="nf">use</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">RackMiddleware</span>
 
-<span class="nb">at_exit</span> <span class="k">do</span>
-  <span class="n">data</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">stop</span>
-  <span class="no">Rperf</span><span class="p">.</span><span class="nf">save</span><span class="p">(</span><span class="s2">"tmp/profile.pb.gz"</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span> <span class="k">if</span> <span class="n">data</span>
+<span class="c1"># Take a snapshot every 60 minutes</span>
+<span class="no">Thread</span><span class="p">.</span><span class="nf">new</span> <span class="k">do</span>
+  <span class="kp">loop</span> <span class="k">do</span>
+    <span class="nb">sleep</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">60</span>
+    <span class="no">Rperf</span><span class="o">::</span><span class="no">Viewer</span><span class="p">.</span><span class="nf">instance</span><span class="o">&amp;</span><span class="p">.</span><span class="nf">take_snapshot!</span>
+  <span class="k">end</span>
 <span class="k">end</span>
 </code></pre></div></div>
 
-<p>Then filter the profile by endpoint:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>go tool pprof <span class="nt">-tagfocus</span><span class="o">=</span><span class="nv">endpoint</span><span class="o">=</span><span class="s2">"GET /api/users"</span> tmp/profile.pb.gz
-go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>endpoint tmp/profile.pb.gz   <span class="c"># group by endpoint</span>
-</code></pre></div></div>
+<p>Visit <code>/rperf/</code> to open the viewer. Use tagfocus to filter by endpoint (e.g., <code>GET /api/users</code>), or tagroot to group the flamegraph by endpoint.</p>
 
 <h3 id="en--07-framework-integration--sinatra">7.1.2 Sinatra</h3>
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">require</span> <span class="s2">"sinatra"</span>
 <span class="nb">require</span> <span class="s2">"rperf/rack"</span>
+<span class="nb">require</span> <span class="s2">"rperf/viewer"</span>
 
 <span class="no">Rperf</span><span class="p">.</span><span class="nf">start</span><span class="p">(</span><span class="ss">defer: </span><span class="kp">true</span><span class="p">,</span> <span class="ss">mode: :wall</span><span class="p">,</span> <span class="ss">frequency: </span><span class="mi">99</span><span class="p">)</span>
+<span class="n">use</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">Viewer</span>
 <span class="n">use</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">RackMiddleware</span>
 
-<span class="nb">at_exit</span> <span class="k">do</span>
-  <span class="n">data</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">stop</span>
-  <span class="no">Rperf</span><span class="p">.</span><span class="nf">save</span><span class="p">(</span><span class="s2">"profile.pb.gz"</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span> <span class="k">if</span> <span class="n">data</span>
-<span class="k">end</span>
+<span class="no">Thread</span><span class="p">.</span><span class="nf">new</span> <span class="p">{</span> <span class="kp">loop</span> <span class="p">{</span> <span class="nb">sleep</span> <span class="mi">3600</span><span class="p">;</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">Viewer</span><span class="p">.</span><span class="nf">instance</span><span class="o">&amp;</span><span class="p">.</span><span class="nf">take_snapshot!</span> <span class="p">}</span> <span class="p">}</span>
 
 <span class="n">get</span> <span class="s2">"/hello"</span> <span class="k">do</span>
   <span class="s2">"Hello, world!"</span>
@@ -3502,11 +3502,7 @@ go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>endpoint t
 <span class="k">end</span>
 </code></pre></div></div>
 
-<p>Filter by job:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>go tool pprof <span class="nt">-tagfocus</span><span class="o">=</span><span class="nv">job</span><span class="o">=</span>SendEmailJob profile.pb.gz
-go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>job profile.pb.gz   <span class="c"># group by job class</span>
-</code></pre></div></div>
+<p>In the viewer, use tagfocus to filter by job name, or tagroot to group the flamegraph by job class.</p>
 
 <h2 id="en--07-framework-integration--sidekiq">7.3 Sidekiq</h2>
 
@@ -3644,15 +3640,6 @@ go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>job profil
 <span class="nb">require</span> <span class="s2">"rperf"</span>
 
 <span class="no">Rperf</span><span class="p">.</span><span class="nf">start</span><span class="p">(</span><span class="ss">defer: </span><span class="kp">true</span><span class="p">,</span> <span class="ss">mode: :wall</span><span class="p">,</span> <span class="ss">frequency: </span><span class="mi">99</span><span class="p">)</span>
-
-<span class="c1"># Export profiles periodically</span>
-<span class="no">Thread</span><span class="p">.</span><span class="nf">new</span> <span class="k">do</span>
-  <span class="kp">loop</span> <span class="k">do</span>
-    <span class="nb">sleep</span> <span class="mi">60</span>
-    <span class="n">snap</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">snapshot</span><span class="p">(</span><span class="ss">clear: </span><span class="kp">true</span><span class="p">)</span>
-    <span class="no">Rperf</span><span class="p">.</span><span class="nf">save</span><span class="p">(</span><span class="s2">"tmp/profile-</span><span class="si">#{</span><span class="no">Time</span><span class="p">.</span><span class="nf">now</span><span class="p">.</span><span class="nf">to_i</span><span class="si">}</span><span class="s2">.pb.gz"</span><span class="p">,</span> <span class="n">snap</span><span class="p">)</span> <span class="k">if</span> <span class="n">snap</span>
-  <span class="k">end</span>
-<span class="k">end</span>
 </code></pre></div></div>
 
 <p>Then wrap specific code paths with <code>profile</code>:</p>
@@ -3668,17 +3655,21 @@ go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>job profil
 
 <p>Outside <code>profile</code> blocks, the timer is paused and overhead is zero. Inside <code>profile</code> blocks, all threads in the process are sampled (each thread’s samples carry its own labels).</p>
 
+<p>Combine with <code>Rperf::Viewer</code> to browse results, or save to a file with <code>Rperf.snapshot</code> + <code>Rperf.save</code> for offline analysis with <code>rperf report</code>.</p>
+
 <h2 id="en--07-framework-integration--full-rails-example">7.6 Full Rails example</h2>
 
 <p>A typical Rails setup with both web and job profiling:</p>
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># config/initializers/rperf.rb</span>
 <span class="nb">require</span> <span class="s2">"rperf/rack"</span>
+<span class="nb">require</span> <span class="s2">"rperf/viewer"</span>
 <span class="nb">require</span> <span class="s2">"rperf/sidekiq"</span>
 
 <span class="no">Rperf</span><span class="p">.</span><span class="nf">start</span><span class="p">(</span><span class="ss">defer: </span><span class="kp">true</span><span class="p">,</span> <span class="ss">mode: :wall</span><span class="p">,</span> <span class="ss">frequency: </span><span class="mi">99</span><span class="p">)</span>
 
-<span class="c1"># Label web requests</span>
+<span class="c1"># Viewer and request labeling</span>
+<span class="no">Rails</span><span class="p">.</span><span class="nf">application</span><span class="p">.</span><span class="nf">config</span><span class="p">.</span><span class="nf">middleware</span><span class="p">.</span><span class="nf">use</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">Viewer</span>
 <span class="no">Rails</span><span class="p">.</span><span class="nf">application</span><span class="p">.</span><span class="nf">config</span><span class="p">.</span><span class="nf">middleware</span><span class="p">.</span><span class="nf">use</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">RackMiddleware</span>
 
 <span class="c1"># Label Sidekiq jobs</span>
@@ -3688,21 +3679,16 @@ go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>job profil
   <span class="k">end</span>
 <span class="k">end</span>
 
-<span class="c1"># Export profiles periodically</span>
+<span class="c1"># Take a snapshot every 60 minutes</span>
 <span class="no">Thread</span><span class="p">.</span><span class="nf">new</span> <span class="k">do</span>
   <span class="kp">loop</span> <span class="k">do</span>
-    <span class="nb">sleep</span> <span class="mi">60</span>
-    <span class="n">snap</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">snapshot</span><span class="p">(</span><span class="ss">clear: </span><span class="kp">true</span><span class="p">)</span>
-    <span class="no">Rperf</span><span class="p">.</span><span class="nf">save</span><span class="p">(</span><span class="s2">"tmp/profile-</span><span class="si">#{</span><span class="no">Time</span><span class="p">.</span><span class="nf">now</span><span class="p">.</span><span class="nf">to_i</span><span class="si">}</span><span class="s2">.pb.gz"</span><span class="p">,</span> <span class="n">snap</span><span class="p">)</span> <span class="k">if</span> <span class="n">snap</span>
+    <span class="nb">sleep</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">60</span>
+    <span class="no">Rperf</span><span class="o">::</span><span class="no">Viewer</span><span class="p">.</span><span class="nf">instance</span><span class="o">&amp;</span><span class="p">.</span><span class="nf">take_snapshot!</span>
   <span class="k">end</span>
 <span class="k">end</span>
 </code></pre></div></div>
 
-<p>Then compare where time goes across endpoints and jobs:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>endpoint tmp/profile-<span class="k">*</span>.pb.gz   <span class="c"># web breakdown</span>
-go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>job tmp/profile-<span class="k">*</span>.pb.gz         <span class="c"># job breakdown</span>
-</code></pre></div></div>
+<p>Visit <code>/rperf/</code> and use tagroot to group the flamegraph by endpoint or job class.</p>
 
     <div class="edit-link">
       <a href="https://github.com/ko1/rperf/blob/HEAD/docs/manual_src/en/07-framework-integration.md" target="_blank" rel="noopener">View on GitHub</a>
@@ -6584,35 +6570,35 @@ Samples: 509, Frequency: 1000Hz
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># config/initializers/rperf.rb</span>
 <span class="nb">require</span> <span class="s2">"rperf/rack"</span>
+<span class="nb">require</span> <span class="s2">"rperf/viewer"</span>
 
 <span class="no">Rperf</span><span class="p">.</span><span class="nf">start</span><span class="p">(</span><span class="ss">defer: </span><span class="kp">true</span><span class="p">,</span> <span class="ss">mode: :wall</span><span class="p">,</span> <span class="ss">frequency: </span><span class="mi">99</span><span class="p">)</span>
 
+<span class="no">Rails</span><span class="p">.</span><span class="nf">application</span><span class="p">.</span><span class="nf">config</span><span class="p">.</span><span class="nf">middleware</span><span class="p">.</span><span class="nf">use</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">Viewer</span>
 <span class="no">Rails</span><span class="p">.</span><span class="nf">application</span><span class="p">.</span><span class="nf">config</span><span class="p">.</span><span class="nf">middleware</span><span class="p">.</span><span class="nf">use</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">RackMiddleware</span>
 
-<span class="nb">at_exit</span> <span class="k">do</span>
-  <span class="n">data</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">stop</span>
-  <span class="no">Rperf</span><span class="p">.</span><span class="nf">save</span><span class="p">(</span><span class="s2">"tmp/profile.pb.gz"</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span> <span class="k">if</span> <span class="n">data</span>
+<span class="c1"># 60分ごとにスナップショットを取得</span>
+<span class="no">Thread</span><span class="p">.</span><span class="nf">new</span> <span class="k">do</span>
+  <span class="kp">loop</span> <span class="k">do</span>
+    <span class="nb">sleep</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">60</span>
+    <span class="no">Rperf</span><span class="o">::</span><span class="no">Viewer</span><span class="p">.</span><span class="nf">instance</span><span class="o">&amp;</span><span class="p">.</span><span class="nf">take_snapshot!</span>
+  <span class="k">end</span>
 <span class="k">end</span>
 </code></pre></div></div>
 
-<p>その後、エンドポイントでプロファイルをフィルタリング:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>go tool pprof <span class="nt">-tagfocus</span><span class="o">=</span><span class="nv">endpoint</span><span class="o">=</span><span class="s2">"GET /api/users"</span> tmp/profile.pb.gz
-go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>endpoint tmp/profile.pb.gz   <span class="c"># エンドポイントごとにグループ化</span>
-</code></pre></div></div>
+<p><code>/rperf/</code> にアクセスしてビューアを開きます。tagfocus でエンドポイントをフィルタリング（例: <code>GET /api/users</code>）したり、tagroot でエンドポイントごとにフレームグラフをグループ化できます。</p>
 
 <h3 id="ja--07-framework-integration--sinatra">7.1.2 Sinatra</h3>
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">require</span> <span class="s2">"sinatra"</span>
 <span class="nb">require</span> <span class="s2">"rperf/rack"</span>
+<span class="nb">require</span> <span class="s2">"rperf/viewer"</span>
 
 <span class="no">Rperf</span><span class="p">.</span><span class="nf">start</span><span class="p">(</span><span class="ss">defer: </span><span class="kp">true</span><span class="p">,</span> <span class="ss">mode: :wall</span><span class="p">,</span> <span class="ss">frequency: </span><span class="mi">99</span><span class="p">)</span>
+<span class="n">use</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">Viewer</span>
 <span class="n">use</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">RackMiddleware</span>
 
-<span class="nb">at_exit</span> <span class="k">do</span>
-  <span class="n">data</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">stop</span>
-  <span class="no">Rperf</span><span class="p">.</span><span class="nf">save</span><span class="p">(</span><span class="s2">"profile.pb.gz"</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span> <span class="k">if</span> <span class="n">data</span>
-<span class="k">end</span>
+<span class="no">Thread</span><span class="p">.</span><span class="nf">new</span> <span class="p">{</span> <span class="kp">loop</span> <span class="p">{</span> <span class="nb">sleep</span> <span class="mi">3600</span><span class="p">;</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">Viewer</span><span class="p">.</span><span class="nf">instance</span><span class="o">&amp;</span><span class="p">.</span><span class="nf">take_snapshot!</span> <span class="p">}</span> <span class="p">}</span>
 
 <span class="n">get</span> <span class="s2">"/hello"</span> <span class="k">do</span>
   <span class="s2">"Hello, world!"</span>
@@ -6654,11 +6640,7 @@ go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>endpoint t
 <span class="k">end</span>
 </code></pre></div></div>
 
-<p>ジョブでフィルタリング:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>go tool pprof <span class="nt">-tagfocus</span><span class="o">=</span><span class="nv">job</span><span class="o">=</span>SendEmailJob profile.pb.gz
-go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>job profile.pb.gz   <span class="c"># ジョブクラスごとにグループ化</span>
-</code></pre></div></div>
+<p>ビューアで tagfocus を使ってジョブ名でフィルタリングしたり、tagroot でジョブクラスごとにフレームグラフをグループ化できます。</p>
 
 <h2 id="ja--07-framework-integration--sidekiq">7.3 Sidekiq</h2>
 
@@ -6796,15 +6778,6 @@ go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>job profil
 <span class="nb">require</span> <span class="s2">"rperf"</span>
 
 <span class="no">Rperf</span><span class="p">.</span><span class="nf">start</span><span class="p">(</span><span class="ss">defer: </span><span class="kp">true</span><span class="p">,</span> <span class="ss">mode: :wall</span><span class="p">,</span> <span class="ss">frequency: </span><span class="mi">99</span><span class="p">)</span>
-
-<span class="c1"># プロファイルを定期的にエクスポート</span>
-<span class="no">Thread</span><span class="p">.</span><span class="nf">new</span> <span class="k">do</span>
-  <span class="kp">loop</span> <span class="k">do</span>
-    <span class="nb">sleep</span> <span class="mi">60</span>
-    <span class="n">snap</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">snapshot</span><span class="p">(</span><span class="ss">clear: </span><span class="kp">true</span><span class="p">)</span>
-    <span class="no">Rperf</span><span class="p">.</span><span class="nf">save</span><span class="p">(</span><span class="s2">"tmp/profile-</span><span class="si">#{</span><span class="no">Time</span><span class="p">.</span><span class="nf">now</span><span class="p">.</span><span class="nf">to_i</span><span class="si">}</span><span class="s2">.pb.gz"</span><span class="p">,</span> <span class="n">snap</span><span class="p">)</span> <span class="k">if</span> <span class="n">snap</span>
-  <span class="k">end</span>
-<span class="k">end</span>
 </code></pre></div></div>
 
 <p>その後、特定のコードパスを <code>profile</code> でラップします:</p>
@@ -6820,17 +6793,21 @@ go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>job profil
 
 <p><code>profile</code> ブロックの外ではタイマーが停止し、オーバーヘッドはゼロです。<code>profile</code> ブロック内では、プロセス全体のスレッドがサンプリング対象になります（各スレッドのサンプルにはそのスレッド自身のラベルが付きます）。</p>
 
+<p><code>Rperf::Viewer</code> と組み合わせて結果をブラウザで確認するか、<code>Rperf.snapshot</code> + <code>Rperf.save</code> でファイルに保存して <code>rperf report</code> でオフライン分析もできます。</p>
+
 <h2 id="ja--07-framework-integration--rails-の完全な設定例">7.6 Rails の完全な設定例</h2>
 
 <p>Web とジョブの両方をプロファイリングする典型的な Rails 設定:</p>
 
 <div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># config/initializers/rperf.rb</span>
 <span class="nb">require</span> <span class="s2">"rperf/rack"</span>
+<span class="nb">require</span> <span class="s2">"rperf/viewer"</span>
 <span class="nb">require</span> <span class="s2">"rperf/sidekiq"</span>
 
 <span class="no">Rperf</span><span class="p">.</span><span class="nf">start</span><span class="p">(</span><span class="ss">defer: </span><span class="kp">true</span><span class="p">,</span> <span class="ss">mode: :wall</span><span class="p">,</span> <span class="ss">frequency: </span><span class="mi">99</span><span class="p">)</span>
 
-<span class="c1"># Web リクエストにラベル付け</span>
+<span class="c1"># ビューアとリクエストラベリング</span>
+<span class="no">Rails</span><span class="p">.</span><span class="nf">application</span><span class="p">.</span><span class="nf">config</span><span class="p">.</span><span class="nf">middleware</span><span class="p">.</span><span class="nf">use</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">Viewer</span>
 <span class="no">Rails</span><span class="p">.</span><span class="nf">application</span><span class="p">.</span><span class="nf">config</span><span class="p">.</span><span class="nf">middleware</span><span class="p">.</span><span class="nf">use</span> <span class="no">Rperf</span><span class="o">::</span><span class="no">RackMiddleware</span>
 
 <span class="c1"># Sidekiq ジョブにラベル付け</span>
@@ -6840,21 +6817,16 @@ go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>job profil
   <span class="k">end</span>
 <span class="k">end</span>
 
-<span class="c1"># プロファイルを定期的にエクスポート</span>
+<span class="c1"># 60分ごとにスナップショットを取得</span>
 <span class="no">Thread</span><span class="p">.</span><span class="nf">new</span> <span class="k">do</span>
   <span class="kp">loop</span> <span class="k">do</span>
-    <span class="nb">sleep</span> <span class="mi">60</span>
-    <span class="n">snap</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">snapshot</span><span class="p">(</span><span class="ss">clear: </span><span class="kp">true</span><span class="p">)</span>
-    <span class="no">Rperf</span><span class="p">.</span><span class="nf">save</span><span class="p">(</span><span class="s2">"tmp/profile-</span><span class="si">#{</span><span class="no">Time</span><span class="p">.</span><span class="nf">now</span><span class="p">.</span><span class="nf">to_i</span><span class="si">}</span><span class="s2">.pb.gz"</span><span class="p">,</span> <span class="n">snap</span><span class="p">)</span> <span class="k">if</span> <span class="n">snap</span>
+    <span class="nb">sleep</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">60</span>
+    <span class="no">Rperf</span><span class="o">::</span><span class="no">Viewer</span><span class="p">.</span><span class="nf">instance</span><span class="o">&amp;</span><span class="p">.</span><span class="nf">take_snapshot!</span>
   <span class="k">end</span>
 <span class="k">end</span>
 </code></pre></div></div>
 
-<p>エンドポイントとジョブ間の時間の使われ方を比較:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>endpoint tmp/profile-<span class="k">*</span>.pb.gz   <span class="c"># Web の内訳</span>
-go tool pprof <span class="nt">-tagroot</span><span class="o">=</span>job tmp/profile-<span class="k">*</span>.pb.gz         <span class="c"># ジョブの内訳</span>
-</code></pre></div></div>
+<p><code>/rperf/</code> にアクセスし、tagroot でエンドポイントやジョブクラスごとにフレームグラフをグループ化して確認できます。</p>
 
     <div class="edit-link">
       <a href="https://github.com/ko1/rperf/blob/HEAD/docs/manual_src/ja/07-framework-integration.md" target="_blank" rel="noopener">View on GitHub</a>

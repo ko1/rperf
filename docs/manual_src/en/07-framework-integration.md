@@ -18,37 +18,36 @@ require "rperf/rack"
 ```ruby
 # config/initializers/rperf.rb
 require "rperf/rack"
+require "rperf/viewer"
 
 Rperf.start(defer: true, mode: :wall, frequency: 99)
 
+Rails.application.config.middleware.use Rperf::Viewer
 Rails.application.config.middleware.use Rperf::RackMiddleware
 
-at_exit do
-  data = Rperf.stop
-  Rperf.save("tmp/profile.pb.gz", data) if data
+# Take a snapshot every 60 minutes
+Thread.new do
+  loop do
+    sleep 60 * 60
+    Rperf::Viewer.instance&.take_snapshot!
+  end
 end
 ```
 
-Then filter the profile by endpoint:
-
-```bash
-go tool pprof -tagfocus=endpoint="GET /api/users" tmp/profile.pb.gz
-go tool pprof -tagroot=endpoint tmp/profile.pb.gz   # group by endpoint
-```
+Visit `/rperf/` to open the viewer. Use tagfocus to filter by endpoint (e.g., `GET /api/users`), or tagroot to group the flamegraph by endpoint.
 
 ### Sinatra
 
 ```ruby
 require "sinatra"
 require "rperf/rack"
+require "rperf/viewer"
 
 Rperf.start(defer: true, mode: :wall, frequency: 99)
+use Rperf::Viewer
 use Rperf::RackMiddleware
 
-at_exit do
-  data = Rperf.stop
-  Rperf.save("profile.pb.gz", data) if data
-end
+Thread.new { loop { sleep 3600; Rperf::Viewer.instance&.take_snapshot! } }
 
 get "/hello" do
   "Hello, world!"
@@ -95,12 +94,7 @@ class SendEmailJob < ApplicationJob
 end
 ```
 
-Filter by job:
-
-```bash
-go tool pprof -tagfocus=job=SendEmailJob profile.pb.gz
-go tool pprof -tagroot=job profile.pb.gz   # group by job class
-```
+In the viewer, use tagfocus to filter by job name, or tagroot to group the flamegraph by job class.
 
 ## Sidekiq
 
@@ -220,15 +214,6 @@ If you want to profile only specific endpoints or jobs — with zero overhead el
 require "rperf"
 
 Rperf.start(defer: true, mode: :wall, frequency: 99)
-
-# Export profiles periodically
-Thread.new do
-  loop do
-    sleep 60
-    snap = Rperf.snapshot(clear: true)
-    Rperf.save("tmp/profile-#{Time.now.to_i}.pb.gz", snap) if snap
-  end
-end
 ```
 
 Then wrap specific code paths with `profile`:
@@ -245,6 +230,8 @@ end
 
 Outside `profile` blocks, the timer is paused and overhead is zero. Inside `profile` blocks, all threads in the process are sampled (each thread's samples carry its own labels).
 
+Combine with `Rperf::Viewer` to browse results, or save to a file with `Rperf.snapshot` + `Rperf.save` for offline analysis with `rperf report`.
+
 ## Full Rails example
 
 A typical Rails setup with both web and job profiling:
@@ -252,11 +239,13 @@ A typical Rails setup with both web and job profiling:
 ```ruby
 # config/initializers/rperf.rb
 require "rperf/rack"
+require "rperf/viewer"
 require "rperf/sidekiq"
 
 Rperf.start(defer: true, mode: :wall, frequency: 99)
 
-# Label web requests
+# Viewer and request labeling
+Rails.application.config.middleware.use Rperf::Viewer
 Rails.application.config.middleware.use Rperf::RackMiddleware
 
 # Label Sidekiq jobs
@@ -266,19 +255,13 @@ Sidekiq.configure_server do |config|
   end
 end
 
-# Export profiles periodically
+# Take a snapshot every 60 minutes
 Thread.new do
   loop do
-    sleep 60
-    snap = Rperf.snapshot(clear: true)
-    Rperf.save("tmp/profile-#{Time.now.to_i}.pb.gz", snap) if snap
+    sleep 60 * 60
+    Rperf::Viewer.instance&.take_snapshot!
   end
 end
 ```
 
-Then compare where time goes across endpoints and jobs:
-
-```bash
-go tool pprof -tagroot=endpoint tmp/profile-*.pb.gz   # web breakdown
-go tool pprof -tagroot=job tmp/profile-*.pb.gz         # job breakdown
-```
+Visit `/rperf/` and use tagroot to group the flamegraph by endpoint or job class.
