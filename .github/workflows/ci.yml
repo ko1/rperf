@@ -22,3 +22,20 @@ jobs:
       - run: bundle install
       - run: rake compile
       - run: rake test
+
+  manual:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      - run: gem install ligarb
+      - run: rake manual
+      - name: Check manual is up to date
+        run: |
+          if ! git diff --quiet docs/manual/; then
+            echo "::error::docs/manual/ is out of date. Run 'rake manual' and commit the result."
+            git diff --stat docs/manual/
+            exit 1
+          fi

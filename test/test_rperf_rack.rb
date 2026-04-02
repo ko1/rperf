@@ -21,6 +21,42 @@ class TestRperfRackMiddleware < Test::Unit::TestCase
     assert_equal "GET /users", labels_inside[:endpoint]
   end
 
+  def test_default_label_normalizes_numeric_ids
+    Rperf.start(frequency: 1000, mode: :cpu, defer: true)
+
+    labels_inside = nil
+    app = proc { |_e| labels_inside = Rperf.labels; [200, {}, [""]] }
+    mw = Rperf::RackMiddleware.new(app)
+    env = { "REQUEST_METHOD" => "GET", "PATH_INFO" => "/users/12345/posts/678" }
+    mw.call(env)
+
+    assert_equal "GET /users/:id/posts/:id", labels_inside[:endpoint]
+  end
+
+  def test_default_label_normalizes_uuids
+    Rperf.start(frequency: 1000, mode: :cpu, defer: true)
+
+    labels_inside = nil
+    app = proc { |_e| labels_inside = Rperf.labels; [200, {}, [""]] }
+    mw = Rperf::RackMiddleware.new(app)
+    env = { "REQUEST_METHOD" => "GET", "PATH_INFO" => "/items/550e8400-e29b-41d4-a716-446655440000" }
+    mw.call(env)
+
+    assert_equal "GET /items/:uuid", labels_inside[:endpoint]
+  end
+
+  def test_raw_label_skips_normalization
+    Rperf.start(frequency: 1000, mode: :cpu, defer: true)
+
+    labels_inside = nil
+    app = proc { |_e| labels_inside = Rperf.labels; [200, {}, [""]] }
+    mw = Rperf::RackMiddleware.new(app, label: :raw)
+    env = { "REQUEST_METHOD" => "GET", "PATH_INFO" => "/users/12345" }
+    mw.call(env)
+
+    assert_equal "GET /users/12345", labels_inside[:endpoint]
+  end
+
   def test_custom_label_key
     Rperf.start(frequency: 1000, mode: :cpu, defer: true)
 
