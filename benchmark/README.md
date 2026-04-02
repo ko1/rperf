@@ -45,7 +45,7 @@ Each invocation produces:
 - A JSON scenario file (e.g., `scenarios_rw.json`) with expected values
 - Executable Ruby scripts in `scripts/` (e.g., `scripts/rw_0.rb` through `scripts/rw_9.rb`)
 
-The scripts in `scripts/` are `.gitignore`d and regenerated from the JSON files.
+The scripts in `scripts/` are committed for convenience and can be regenerated from the JSON files.
 
 #### Time-accuracy scenarios (rw, cw, csleep, cwait, mixed)
 

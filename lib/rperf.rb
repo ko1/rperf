@@ -792,7 +792,7 @@ module Rperf
         intern.("frequency: #{frequency}Hz"),
         intern.("ruby: #{RUBY_DESCRIPTION}"),
       ]
-      doc_url_idx = intern.("https://ko1.github.io/rperf/help.html")
+      doc_url_idx = intern.("https://ko1.github.io/rperf/docs/help.html")
 
       # field 6: string_table (repeated string)
       string_table.each do |s|

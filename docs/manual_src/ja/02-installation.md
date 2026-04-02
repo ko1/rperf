@@ -51,7 +51,7 @@ rperf は POSIX システムをサポートしています:
 | Linux | `nanosleep` スレッド (`signal: false` 使用時) | フォールバック、~100us のドリフト/tick |
 | macOS | `nanosleep` スレッド | シグナルベースのタイマーは利用不可 |
 
-Linux では、rperf はデフォルトで `timer_create` と `SIGEV_SIGNAL` を使い、`sigaction` ハンドラを使用します。これにより、追加スレッドなしで正確なインターバルタイミングが実現されます。シグナル番号はデフォルトで `SIGRTMIN+8` で、Ruby API の `Rperf.start` に対する `signal:` キーワード引数で変更できます。
+Linux では、rperf はデフォルトで `timer_create` と `SIGEV_THREAD_ID` を使い、専用のワーカースレッドにタイマーシグナルを送ります。これにより、Ruby スレッドを中断することなく正確なインターバルタイミングが実現されます。シグナル番号はデフォルトで `SIGRTMIN+8` で、Ruby API の `Rperf.start` に対する `signal:` キーワード引数で変更できます。
 
 macOS では（および Linux で `signal: false` を設定した場合）、rperf は `nanosleep` ループを持つ専用の pthread にフォールバックします。
 

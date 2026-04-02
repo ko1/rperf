@@ -217,13 +217,19 @@ In pprof output, use labels for filtering and grouping:
 
 With `defer: true`, the profiler infrastructure is set up but the sampling
 timer does not start. Use `Rperf.profile` to activate the timer for specific
-sections. Outside `profile` blocks, overhead is zero.
+sections. Outside `profile` blocks, the timer is disarmed and overhead is zero.
+
+Note: the timer is process-wide, not per-thread. While a `profile` block is
+active on one thread, other threads running at the same time will also be
+sampled. Their samples carry their own labels (not the calling thread's labels),
+so they can be distinguished in the profile. This design is intentional: it
+provides complete visibility into what the process was doing during profiled
+sections, including GVL contention and background work.
 
 ### Rperf.profile(**labels, &block)
 
-Activates the sampling timer for the block duration and applies labels.
-Designed for use with `start(defer: true)` to profile only specific
-code paths.
+Activates the sampling timer for the block duration and applies labels to
+the current thread. Designed for use with `start(defer: true)`.
 
 ```ruby
 Rperf.start(defer: true, mode: :wall)
@@ -290,6 +296,12 @@ end
 
 In-browser profiling UI with flamegraph, top table, and tag breakdown.
 Requires `require "rperf/viewer"`.
+
+**Security note**: Rperf::Viewer has no built-in authentication and exposes
+profiling data (including stack traces and label values) to anyone who can
+reach the endpoint. In production, always restrict access using your
+framework's authentication — see "Access control" below. The UI loads
+d3.js and d3-flame-graph from CDNs (cdnjs.cloudflare.com, cdn.jsdelivr.net).
 
 ```ruby
 # config.ru or Rails config

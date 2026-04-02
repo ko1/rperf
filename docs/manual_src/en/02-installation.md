@@ -51,7 +51,7 @@ rperf supports POSIX systems:
 | Linux | `nanosleep` thread (with `signal: false`) | Fallback, ~100us drift/tick |
 | macOS | `nanosleep` thread | Signal-based timer not available |
 
-On Linux, rperf uses `timer_create` with `SIGEV_SIGNAL` and a `sigaction` handler by default. This provides precise interval timing with no extra thread. The signal number defaults to `SIGRTMIN+8` and can be changed via the `signal:` keyword argument to `Rperf.start` in the Ruby API.
+On Linux, rperf uses `timer_create` with `SIGEV_THREAD_ID` to deliver timer signals to a dedicated worker thread by default. This provides precise interval timing without interrupting Ruby threads. The signal number defaults to `SIGRTMIN+8` and can be changed via the `signal:` keyword argument to `Rperf.start` in the Ruby API.
 
 On macOS (and when `signal: false` is set on Linux), rperf falls back to a dedicated pthread with a `nanosleep` loop.
 
