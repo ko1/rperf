@@ -18,6 +18,14 @@ task :manual do
   end
 end
 
+desc "Build example flamegraph HTML"
+task :examples do
+  cd "examples/" do
+    sh "../exe/rperf record -m wall ruby basic/cpu_intensive.rb"
+    sh "../exe/rperf report --html > cpu_intensive_profile.html"
+  end
+end
+
 desc "Release: push master, create tag, push tag (triggers CI gem publish)"
 task :rel do
   require_relative "lib/rperf/version"
@@ -32,4 +40,4 @@ task :rel do
   puts "Pushed #{tag} — GitHub Actions will publish the gem"
 end
 
-task default: [:compile, :manual, :test]
+task default: [:compile, :manual, :examples, :test]
