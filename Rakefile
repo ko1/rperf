@@ -26,4 +26,11 @@ Rake::TestTask.new(:test) do |t|
   t.test_files = FileList["test/test_*.rb"]
 end
 
-task default: [:compile, :test]
+desc "Build docs/manual from docs/manual_src using ligarb"
+task :manual do
+  cd "docs/manual_src" do
+    sh "ligarb", "build"
+  end
+end
+
+task default: [:compile, :manual, :test]
