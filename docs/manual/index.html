@@ -3817,7 +3817,7 @@ graph TD
   <li><code>prev_wall_ns</code>: Previous wall time reading</li>
   <li><code>suspended_at_ns</code>: Wall timestamp when thread was suspended</li>
   <li><code>ready_at_ns</code>: Wall timestamp when thread became ready</li>
-  <li><code>suspended_frame_start</code>/<code>depth</code>: Saved backtrace from SUSPENDED event</li>
+  <li>(Backtrace is not saved at SUSPENDED; it is re-captured at RESUMED)</li>
   <li><code>label_set_id</code>: Current label set ID (0 = no labels)</li>
 </ul>
 
@@ -3957,13 +3957,13 @@ sequenceDiagram
 <div class="mermaid">
 stateDiagram-v2
     [*] --> Running: Thread holds GVL
-    Running --> Suspended: SUSPENDED event<br/>(capture backtrace + timestamp)
+    Running --> Suspended: SUSPENDED event<br/>(record sample + save timestamp)
     Suspended --> Ready: READY event<br/>(record wall timestamp)
     Ready --> Running: RESUMED event<br/>(record GVL blocked + wait samples)
     Running --> [*]: EXITED event<br/>(cleanup thread data)
 </div><details class="mermaid-source"><summary>mermaid source</summary><pre>stateDiagram-v2
     [*] --&gt; Running: Thread holds GVL
-    Running --&gt; Suspended: SUSPENDED event&lt;br/&gt;(capture backtrace + timestamp)
+    Running --&gt; Suspended: SUSPENDED event&lt;br/&gt;(record sample + save timestamp)
     Suspended --&gt; Ready: READY event&lt;br/&gt;(record wall timestamp)
     Ready --&gt; Running: RESUMED event&lt;br/&gt;(record GVL blocked + wait samples)
     Running --&gt; [*]: EXITED event&lt;br/&gt;(cleanup thread data)
@@ -3976,7 +3976,7 @@ stateDiagram-v2
 <ol>
   <li>Capture the current backtrace into the frame pool</li>
   <li>Record a normal sample (time since last sample)</li>
-  <li>Save the backtrace and wall timestamp for later use</li>
+  <li>Save the wall timestamp for later use (backtrace is re-captured at RESUMED)</li>
 </ol>
 
 <h3 id="en--09-sampling--ready">9.3.2 READY</h3>
@@ -3992,9 +3992,9 @@ stateDiagram-v2
 <p>When a thread reacquires the GVL:</p>
 
 <ol>
+  <li>Capture the current backtrace into the frame pool (captured here, not at SUSPENDED, to avoid buffer mismatch after a double-buffer swap; the Ruby stack is unchanged while off-GVL)</li>
   <li>Record a sample with <code>vm_state = GVL_BLOCKED</code>: weight = <code>ready_at - suspended_at</code> (off-GVL time)</li>
   <li>Record a sample with <code>vm_state = GVL_WAIT</code>: weight = <code>resumed_at - ready_at</code> (GVL contention time)</li>
-  <li>Both samples reuse the backtrace captured at SUSPENDED</li>
 </ol>
 
 <p>These <code>vm_state</code> values are later converted to labels (<code>%GVL: blocked</code> and <code>%GVL: wait</code>) by the Ruby layer at encoding time. This way, off-GVL time and GVL contention are accurately attributed to the code that triggered them, even though no timer-based sampling can occur while the thread is off the GVL.</p>
@@ -4025,11 +4025,11 @@ stateDiagram-v2
     </tr>
     <tr>
       <td><code>GC_ENTER</code></td>
-      <td>Capture backtrace + wall timestamp</td>
+      <td>Capture wall timestamp and thread info</td>
     </tr>
     <tr>
       <td><code>GC_EXIT</code></td>
-      <td>Record sample with <code>vm_state = GC_MARK</code> or <code>vm_state = GC_SWEEP</code></td>
+      <td>Capture backtrace, record sample with <code>vm_state = GC_MARK</code> or <code>vm_state = GC_SWEEP</code></td>
     </tr>
   </tbody>
 </table>
@@ -6969,7 +6969,7 @@ graph TD
   <li><code>prev_wall_ns</code>: 前回の wall time 読み取り</li>
   <li><code>suspended_at_ns</code>: スレッドがサスペンドされた wall タイムスタンプ</li>
   <li><code>ready_at_ns</code>: スレッドが準備完了になった wall タイムスタンプ</li>
-  <li><code>suspended_frame_start</code>/<code>depth</code>: SUSPENDED イベントで保存されたバックトレース</li>
+  <li>（バックトレースは SUSPENDED 時には保存せず、RESUMED 時に再取得します）</li>
   <li><code>label_set_id</code>: 現在のラベルセット ID（0 = ラベルなし）</li>
 </ul>
 
@@ -7111,13 +7111,13 @@ sequenceDiagram
 <div class="mermaid">
 stateDiagram-v2
     [*] --> Running: スレッドが GVL を保持
-    Running --> Suspended: SUSPENDED イベント<br/>(バックトレース + タイムスタンプをキャプチャ)
+    Running --> Suspended: SUSPENDED イベント<br/>(サンプル記録 + タイムスタンプを保存)
     Suspended --> Ready: READY イベント<br/>(wall タイムスタンプを記録)
     Ready --> Running: RESUMED イベント<br/>(vm_state=GVL_BLOCKED/GVL_WAIT サンプルを記録)
     Running --> [*]: EXITED イベント<br/>(スレッドデータをクリーンアップ)
 </div><details class="mermaid-source"><summary>mermaid source</summary><pre>stateDiagram-v2
     [*] --&gt; Running: スレッドが GVL を保持
-    Running --&gt; Suspended: SUSPENDED イベント&lt;br/&gt;(バックトレース + タイムスタンプをキャプチャ)
+    Running --&gt; Suspended: SUSPENDED イベント&lt;br/&gt;(サンプル記録 + タイムスタンプを保存)
     Suspended --&gt; Ready: READY イベント&lt;br/&gt;(wall タイムスタンプを記録)
     Ready --&gt; Running: RESUMED イベント&lt;br/&gt;(vm_state=GVL_BLOCKED/GVL_WAIT サンプルを記録)
     Running --&gt; [*]: EXITED イベント&lt;br/&gt;(スレッドデータをクリーンアップ)
@@ -7130,7 +7130,7 @@ stateDiagram-v2
 <ol>
   <li>現在のバックトレースをフレームプールにキャプチャ</li>
   <li>通常のサンプルを記録（前回のサンプルからの時間）</li>
-  <li>後で使用するためにバックトレースと wall タイムスタンプを保存</li>
+  <li>wall タイムスタンプを保存（バックトレースは RESUMED 時に再取得します）</li>
 </ol>
 
 <h3 id="ja--09-sampling--ready">9.3.2 READY</h3>
@@ -7146,9 +7146,9 @@ stateDiagram-v2
 <p>スレッドが GVL を再取得したとき:</p>
 
 <ol>
+  <li>現在のバックトレースをフレームプールにキャプチャ（ダブルバッファスワップ後の不整合を避けるため、SUSPENDED 時ではなくここで取得します。GVL 外にいる間 Ruby スタックは変化しません）</li>
   <li><code>vm_state=GVL_BLOCKED</code> のサンプルを記録: 重み = <code>ready_at - suspended_at</code>（GVL 外の時間）</li>
   <li><code>vm_state=GVL_WAIT</code> のサンプルを記録: 重み = <code>resumed_at - ready_at</code>（GVL 競合時間）</li>
-  <li>両方のサンプルは SUSPENDED でキャプチャされたバックトレースを再利用</li>
 </ol>
 
 <p>これにより、スレッドが GVL 外にある間はタイマーベースのサンプリングが不可能であるにもかかわらず、GVL 外の時間と GVL 競合がそれらをトリガーしたコードに正確に帰属されます。停止時に <code>vm_state</code> は <code>%GVL=blocked</code>/<code>%GVL=wait</code> ラベルに変換されます。</p>
@@ -7179,11 +7179,11 @@ stateDiagram-v2
     </tr>
     <tr>
       <td><code>GC_ENTER</code></td>
-      <td>バックトレース + wall タイムスタンプをキャプチャ</td>
+      <td>wall タイムスタンプ、スレッド情報をキャプチャ</td>
     </tr>
     <tr>
       <td><code>GC_EXIT</code></td>
-      <td><code>vm_state=GC_MARK</code> または <code>vm_state=GC_SWEEP</code> のサンプルを記録</td>
+      <td>バックトレースをキャプチャし、<code>vm_state=GC_MARK</code> または <code>vm_state=GC_SWEEP</code> のサンプルを記録</td>
     </tr>
   </tbody>
 </table>

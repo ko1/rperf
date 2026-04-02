@@ -1,5 +1,10 @@
 # Minimal single-file Rails app with rperf profiling
 #
+# WARNING: This is a development example only. It disables host checking,
+# exposes the profiler viewer without authentication, and binds to all
+# interfaces. Do NOT deploy this configuration in production or on shared
+# networks — profiling data reveals internal code structure and timing.
+#
 # Usage:
 #   cd examples/rails
 #   bundle install
@@ -170,7 +175,7 @@ require "puma/configuration"
 require "puma/launcher"
 
 conf = Puma::Configuration.new do |c|
-  c.bind "tcp://0.0.0.0:3000"
+  c.bind "tcp://127.0.0.1:3000"
   c.app RperfExampleApp
 end
 Puma::Launcher.new(conf).run

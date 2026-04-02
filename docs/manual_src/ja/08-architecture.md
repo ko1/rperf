@@ -65,7 +65,7 @@ rperf は単一のグローバルな `rperf_profiler_t` 構造体を使用しま
 - `prev_wall_ns`: 前回の wall time 読み取り
 - `suspended_at_ns`: スレッドがサスペンドされた wall タイムスタンプ
 - `ready_at_ns`: スレッドが準備完了になった wall タイムスタンプ
-- `suspended_frame_start`/`depth`: SUSPENDED イベントで保存されたバックトレース
+- （バックトレースは SUSPENDED 時には保存せず、RESUMED 時に再取得します）
 - `label_set_id`: 現在のラベルセット ID（0 = ラベルなし）
 
 スレッドデータは最初の検出時に遅延作成され、`EXITED` イベントまたはプロファイラ停止時に解放されます。

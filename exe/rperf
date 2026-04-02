@@ -259,7 +259,14 @@ parser = OptionParser.new do |opts|
   end
 
   opts.on("--signal VALUE", "Timer signal (Linux only): signal number, or 'false' for nanosleep thread") do |v|
-    signal = (v == "false") ? "false" : v
+    if v == "false"
+      signal = "false"
+    elsif v =~ /\A\d+\z/
+      signal = v
+    else
+      $stderr.puts "Error: --signal must be a signal number or 'false', got: #{v.inspect}"
+      exit 1
+    end
   end
 
   opts.on("--no-aggregate", "Disable sample aggregation (keep raw samples)") do

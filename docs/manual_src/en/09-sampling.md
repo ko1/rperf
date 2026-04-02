@@ -63,7 +63,7 @@ In wall mode, rperf hooks into Ruby's thread event API to track GVL transitions.
 ```mermaid
 stateDiagram-v2
     [*] --> Running: Thread holds GVL
-    Running --> Suspended: SUSPENDED event<br/>(capture backtrace + timestamp)
+    Running --> Suspended: SUSPENDED event<br/>(record sample + save timestamp)
     Suspended --> Ready: READY event<br/>(record wall timestamp)
     Ready --> Running: RESUMED event<br/>(record GVL blocked + wait samples)
     Running --> [*]: EXITED event<br/>(cleanup thread data)
@@ -75,7 +75,7 @@ When a thread releases the GVL (e.g., before I/O):
 
 1. Capture the current backtrace into the frame pool
 2. Record a normal sample (time since last sample)
-3. Save the backtrace and wall timestamp for later use
+3. Save the wall timestamp for later use (backtrace is re-captured at RESUMED)
 
 ### READY
 
@@ -87,9 +87,9 @@ When a thread becomes ready to run (e.g., I/O completed):
 
 When a thread reacquires the GVL:
 
-1. Record a sample with `vm_state = GVL_BLOCKED`: weight = `ready_at - suspended_at` (off-GVL time)
-2. Record a sample with `vm_state = GVL_WAIT`: weight = `resumed_at - ready_at` (GVL contention time)
-3. Both samples reuse the backtrace captured at SUSPENDED
+1. Capture the current backtrace into the frame pool (captured here, not at SUSPENDED, to avoid buffer mismatch after a double-buffer swap; the Ruby stack is unchanged while off-GVL)
+2. Record a sample with `vm_state = GVL_BLOCKED`: weight = `ready_at - suspended_at` (off-GVL time)
+3. Record a sample with `vm_state = GVL_WAIT`: weight = `resumed_at - ready_at` (GVL contention time)
 
 These `vm_state` values are later converted to labels (`%GVL: blocked` and `%GVL: wait`) by the Ruby layer at encoding time. This way, off-GVL time and GVL contention are accurately attributed to the code that triggered them, even though no timer-based sampling can occur while the thread is off the GVL.
 
@@ -102,8 +102,8 @@ rperf hooks into Ruby's internal GC events to track garbage collection time:
 | `GC_START` | Set phase to marking |
 | `GC_END_MARK` | Set phase to sweeping |
 | `GC_END_SWEEP` | Clear phase |
-| `GC_ENTER` | Capture backtrace + wall timestamp |
-| `GC_EXIT` | Record sample with `vm_state = GC_MARK` or `vm_state = GC_SWEEP` |
+| `GC_ENTER` | Capture wall timestamp and thread info |
+| `GC_EXIT` | Capture backtrace, record sample with `vm_state = GC_MARK` or `vm_state = GC_SWEEP` |
 
 GC samples always use wall time regardless of the profiling mode, because GC time is real elapsed time that affects application latency.
 

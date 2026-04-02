@@ -29,6 +29,9 @@ module Rperf
     raise ArgumentError, "frequency must be <= 10000 (10KHz), got #{frequency}" if frequency > 10_000
     raise ArgumentError, "mode must be :cpu or :wall, got #{mode.inspect}" unless %i[cpu wall].include?(mode)
     c_mode = mode == :cpu ? 0 : 1
+    unless signal.nil? || signal == false || signal.is_a?(Integer)
+      raise ArgumentError, "signal must be nil, false, or an Integer, got #{signal.inspect}"
+    end
     c_signal = signal.nil? ? -1 : (signal ? signal.to_i : 0)
     if c_signal > 0
       raise ArgumentError, "signal mode is only supported on Linux" unless RUBY_PLATFORM =~ /linux/
@@ -42,7 +45,10 @@ module Rperf
     @output = output
     @format = format
     @stat = stat
-    @stat_start_mono = Process.clock_gettime(Process::CLOCK_MONOTONIC) if @stat
+    if @stat
+      @stat_start_mono = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      @stat_start_times = Process.times
+    end
     @label_set_table = nil
     @label_set_index = nil
     _c_start(frequency, c_mode, aggregate, c_signal, defer)
@@ -395,8 +401,9 @@ module Rperf
     samples_raw = data[:aggregated_samples] || []
     real_ns = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - @stat_start_mono) * 1_000_000_000).to_i
     times = Process.times
-    user_ns = (times.utime * 1_000_000_000).to_i
-    sys_ns = (times.stime * 1_000_000_000).to_i
+    start_times = @stat_start_times || Struct.new(:utime, :stime).new(0.0, 0.0)
+    user_ns = ((times.utime - start_times.utime) * 1_000_000_000).to_i
+    sys_ns = ((times.stime - start_times.stime) * 1_000_000_000).to_i
 
     command = ENV["RPERF_STAT_COMMAND"] || "(unknown)"
 
@@ -614,7 +621,8 @@ module Rperf
     _rperf_signal = case ENV["RPERF_SIGNAL"]
                     when nil then nil
                     when "false" then false
-                    else ENV["RPERF_SIGNAL"].to_i
+                    when /\A\d+\z/ then ENV["RPERF_SIGNAL"].to_i
+                    else raise ArgumentError, "RPERF_SIGNAL must be a signal number or 'false', got: #{ENV["RPERF_SIGNAL"].inspect}"
                     end
     _rperf_aggregate = ENV["RPERF_AGGREGATE"] != "0"
     _rperf_start_opts = { frequency: (ENV["RPERF_FREQUENCY"] || 1000).to_i, mode: _rperf_mode,
@@ -801,7 +809,7 @@ module Rperf
         intern.("frequency: #{frequency}Hz"),
         intern.("ruby: #{RUBY_DESCRIPTION}"),
       ]
-      doc_url_idx = intern.("https://ko1.github.io/rperf/docs/help.html")
+      doc_url_idx = intern.("https://ko1.github.io/rperf/")
 
       # field 6: string_table (repeated string)
       string_table.each do |s|

@@ -65,7 +65,7 @@ Each thread gets a `rperf_thread_data_t` struct stored via Ruby's thread-specifi
 - `prev_wall_ns`: Previous wall time reading
 - `suspended_at_ns`: Wall timestamp when thread was suspended
 - `ready_at_ns`: Wall timestamp when thread became ready
-- `suspended_frame_start`/`depth`: Saved backtrace from SUSPENDED event
+- (Backtrace is not saved at SUSPENDED; it is re-captured at RESUMED)
 - `label_set_id`: Current label set ID (0 = no labels)
 
 Thread data is created lazily on first encounter and freed on the `EXITED` event or at profiler stop.
