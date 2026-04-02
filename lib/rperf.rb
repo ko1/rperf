@@ -216,8 +216,10 @@ module Rperf
     samples = data[samples_key]
     return unless samples
 
-    label_sets = (data[:label_sets] || [{}]).dup
+    orig_label_sets = data[:label_sets]
+    label_sets = (orig_label_sets || [{}]).dup
     mapping = {}  # [original_label_set_id, vm_state] => new_label_set_id
+    modified = false
 
     samples.each do |sample|
       vm_state = sample[4] || 0
@@ -236,12 +238,14 @@ module Rperf
         mapping[cache_key] = new_id
       end
       sample[3] = new_id
+      modified = true
     end
 
     # Strip vm_state (5th element) from all samples
     samples.each { |s| s.pop if s.size > 4 }
 
-    data[:label_sets] = label_sets
+    # Only set label_sets if they were already present or we added vm_state labels
+    data[:label_sets] = label_sets if orig_label_sets || modified
   end
   private_class_method :merge_vm_state_labels!
 
