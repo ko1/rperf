@@ -1,4 +1,4 @@
-require "rperf"
+require_relative "../rperf"
 
 class Rperf::RackMiddleware
   def initialize(app, label_key: :endpoint)
