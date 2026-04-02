@@ -77,6 +77,8 @@ rperf report --top profile.json.gz           # print top functions to terminal
 rperf diff before.json.gz after.json.gz      # open diff in browser
 ```
 
+On `rperf report`, you can see the profile result like this page: [rprof viewer](https://ko1.github.io/rperf/examples/cpu_intensive_profile.html)
+
 ### Ruby API
 
 ```ruby
