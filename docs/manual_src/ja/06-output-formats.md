@@ -158,7 +158,7 @@ Samples: 509, Frequency: 1000Hz
 | ファイルサイズ | 中 (json + gzip) | 小 (バイナリ + gzip) | 中 (テキスト) | 小 (テキスト) |
 | フレームグラフ | あり (rperf ビューア) | あり (pprof Web UI) | あり (flamegraph.pl) | なし |
 | コールグラフ | なし | あり | なし | なし |
-| 差分比較 | なし | あり (`rperf diff`) | なし | なし |
+| 差分比較 | あり (`rperf diff`、Go 必要) | あり (`rperf diff`) | なし | なし |
 | ツール不要 | はい | いいえ (Go 必要) | いいえ (flamegraph.pl 必要) | はい |
 | Ruby にロード | あり (`Rperf.load`) | なし | なし | なし |
 | プログラマティックなパース | 容易 (JSON) | 複雑 (protobuf) | シンプル | シンプル |

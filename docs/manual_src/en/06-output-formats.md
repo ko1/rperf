@@ -158,7 +158,7 @@ Samples: 509, Frequency: 1000Hz
 | File size | Medium (json + gzip) | Small (binary + gzip) | Medium (text) | Small (text) |
 | Flame graph | Yes (via rperf viewer) | Yes (via pprof web UI) | Yes (via flamegraph.pl) | No |
 | Call graph | No | Yes | No | No |
-| Diff comparison | No | Yes (`rperf diff`) | No | No |
+| Diff comparison | Yes (`rperf diff`, requires Go) | Yes (`rperf diff`) | No | No |
 | No tools needed | Yes | No (requires Go) | No (requires flamegraph.pl) | Yes |
 | Load back into Ruby | Yes (`Rperf.load`) | No | No | No |
 | Programmatic parsing | Easy (JSON) | Complex (protobuf) | Simple | Simple |
