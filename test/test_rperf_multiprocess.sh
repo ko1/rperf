@@ -845,6 +845,32 @@ echo "$info" | sed 's/^/  INFO: /'
 rm -f "$outfile_cpu" "$outfile_wall"
 echo
 
+# --- 34. rperf diff (requires Go) ---
+if command -v go >/dev/null 2>&1; then
+  echo "# 34. rperf diff (json.gz inputs)"
+  outfile_a="$TMPDIR/rperf-test34-a-$$.json.gz"
+  outfile_b="$TMPDIR/rperf-test34-b-$$.json.gz"
+  $RPERF record -f 100 -m wall -o "$outfile_a" -- "$RUBY" -e '5_000_000.times { 1 + 1 }' 2>/dev/null
+  $RPERF record -f 100 -m wall -o "$outfile_b" -- "$RUBY" -e '10_000_000.times { 1 + 1 }' 2>/dev/null
+  if [ -f "$outfile_a" ] && [ -f "$outfile_b" ]; then
+    # Just verify diff doesn't crash — it opens a browser so we use --text
+    out=$($RPERF diff --text "$outfile_a" "$outfile_b" 2>&1) || true
+    # go tool pprof -text should produce some output
+    if echo "$out" | grep -qE "(flat|cum|Total)"; then
+      pass "diff produces pprof text output"
+    else
+      fail "diff output unexpected: $(echo "$out" | head -3)"
+    fi
+  else
+    fail "diff input files not created"
+  fi
+  rm -f "$outfile_a" "$outfile_b"
+  echo
+else
+  echo "# 34. rperf diff — SKIPPED (Go not available)"
+  echo
+fi
+
 # --- Summary ---
 echo "=== Results: $PASS passed, $FAIL failed ==="
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

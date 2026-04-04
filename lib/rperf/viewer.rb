@@ -3,6 +3,11 @@ require "json"
 
 # Rack middleware that serves flamegraph visualizations of rperf snapshots.
 #
+# *Security note*: This middleware exposes profiling data without
+# authentication. It is intended for development and staging environments.
+# In production, place it behind an authenticated reverse proxy or restrict
+# access by IP / VPN.
+#
 # Usage:
 #   require "rperf/viewer"
 #   use Rperf::Viewer                             # mount at /rperf (default)
@@ -114,8 +119,13 @@ class Rperf::Viewer
     html = html.sub('<select id="sel-snapshot"', '<select id="sel-snapshot" style="display:none"')
 
     # Replace dynamic loading with inline data.
-    # Escape "</" to "<\/" to prevent XSS via "</script>" in profile data.
-    json_safe = json_snapshot.gsub("</", "<\\/")
+    # Escape for safe embedding in <script>:
+    #  - "</" prevents closing </script> tag injection
+    #  - U+2028/U+2029 are line terminators in JS but valid in JSON
+    json_safe = json_snapshot
+      .gsub("</", "<\\/")
+      .gsub("\u2028", "\\u2028")
+      .gsub("\u2029", "\\u2029")
     html = html.sub("loadSnapshotList();",
       "currentData = #{json_safe}; updateTagDropdowns(); applyAndRender();")
 

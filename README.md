@@ -158,7 +158,7 @@ Timer (signal or thread)         VM thread (postponed job)
                                       record(backtrace, weight)
 ```
 
-On Linux, the timer uses `timer_create` + signal delivery (no extra thread).
+On Linux, the timer uses `timer_create` + signal delivery to a dedicated worker thread.
 On other platforms, a dedicated pthread with `nanosleep` is used.
 
 If a safepoint is delayed, the sample carries proportionally more weight. The total weight equals the total time, accurately distributed across call stacks.

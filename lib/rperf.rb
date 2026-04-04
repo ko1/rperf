@@ -169,6 +169,9 @@ module Rperf
   end
 
   def self._intern_label_set(hash)
+    # Thread safety: called only from label() and profile(), both of which
+    # execute under GVL, so no concurrent access to @label_set_table/@label_set_index.
+    #
     # Deep-freeze: dup and freeze both keys and values to prevent
     # mutation of interned label sets via shared string references.
     frozen = if hash.frozen?

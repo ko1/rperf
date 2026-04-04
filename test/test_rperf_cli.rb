@@ -387,4 +387,31 @@ class TestRperfCli < Test::Unit::TestCase
     assert_equal "999.5", lines[4], "999_500_000ns should format as 999.5ms"
     assert_equal "1,000,000.0", lines[5], "1_000_000_000_000ns should format as 1,000,000.0ms"
   end
+
+  # --- format json ---
+
+  def test_cli_record_format_json
+    Dir.mktmpdir do |dir|
+      outfile = File.join(dir, "out.json.gz")
+      _, stderr, status = run_rperf("record", "-f", "100", "--format", "json", "-o", outfile,
+                               RbConfig.ruby, "-e", "5_000_000.times { 1 + 1 }")
+      assert_equal 0, status.exitstatus, "rperf record --format json should succeed: #{stderr}"
+      assert File.exist?(outfile), "Output file should be created"
+      content = File.binread(outfile)
+      assert_equal "\x1f\x8b".b, content[0, 2], "Should be gzip format"
+      # Verify it's loadable as rperf JSON
+      stdout, _, _ = Open3.capture3(RbConfig.ruby, "-I", LIB_DIR, "-rrperf", "-e",
+        "d = Rperf.load('#{outfile}'); puts d[:mode]")
+      assert_match(/cpu/, stdout)
+    end
+  end
+
+  # --- report error path ---
+
+  def test_cli_report_missing_file
+    _, stderr, status = run_rperf("report", "--top", "nonexistent_file.json.gz")
+    assert_not_equal 0, status.exitstatus, "rperf report should fail for missing file"
+    assert_match(/not found/i, stderr)
+  end
+
 end

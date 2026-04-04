@@ -25,8 +25,10 @@
 #ifdef __linux__
 #define RPERF_USE_TIMER_SIGNAL 1
 #define RPERF_TIMER_SIGNAL_DEFAULT (SIGRTMIN + 8)
+#define RPERF_COND_CLOCK CLOCK_MONOTONIC
 #else
 #define RPERF_USE_TIMER_SIGNAL 0
+#define RPERF_COND_CLOCK CLOCK_REALTIME  /* macOS lacks pthread_condattr_setclock */
 #endif
 
 #define RPERF_MAX_STACK_DEPTH 512
@@ -301,7 +303,7 @@ static int
 rperf_ensure_sample_capacity(rperf_sample_buffer_t *buf)
 {
     if (buf->sample_count >= buf->sample_capacity) {
-        if (buf->sample_capacity > SIZE_MAX / 2) return -1;
+        if (buf->sample_capacity > SIZE_MAX / (2 * sizeof(rperf_sample_t))) return -1;
         size_t new_cap = buf->sample_capacity * 2;
         rperf_sample_t *new_samples = (rperf_sample_t *)realloc(
             buf->samples,
@@ -320,7 +322,7 @@ static int
 rperf_ensure_frame_pool_capacity(rperf_sample_buffer_t *buf, int needed)
 {
     while (buf->frame_pool_count + (size_t)needed > buf->frame_pool_capacity) {
-        if (buf->frame_pool_capacity > SIZE_MAX / 2) return -1;
+        if (buf->frame_pool_capacity > SIZE_MAX / (2 * sizeof(VALUE))) return -1;
         size_t new_cap = buf->frame_pool_capacity * 2;
         VALUE *new_pool = (VALUE *)realloc(
             buf->frame_pool,
@@ -495,7 +497,7 @@ rperf_agg_table_free(rperf_agg_table_t *at)
 static void
 rperf_agg_table_rehash(rperf_agg_table_t *at)
 {
-    if (at->bucket_capacity > SIZE_MAX / 2) return;
+    if (at->bucket_capacity > SIZE_MAX / (2 * sizeof(rperf_agg_entry_t))) return;
     size_t new_cap = at->bucket_capacity * 2;
     rperf_agg_entry_t *new_buckets = (rperf_agg_entry_t *)calloc(new_cap, sizeof(rperf_agg_entry_t));
     if (!new_buckets) return; /* keep using current buckets at higher load factor */
@@ -520,7 +522,7 @@ static int
 rperf_agg_ensure_stack_pool(rperf_agg_table_t *at, int needed)
 {
     while (at->stack_pool_count + (size_t)needed > at->stack_pool_capacity) {
-        if (at->stack_pool_capacity > SIZE_MAX / 2) return -1;
+        if (at->stack_pool_capacity > SIZE_MAX / (2 * sizeof(uint32_t))) return -1;
         size_t new_cap = at->stack_pool_capacity * 2;
         uint32_t *new_pool = (uint32_t *)realloc(at->stack_pool,
                                                   new_cap * sizeof(uint32_t));
@@ -601,6 +603,7 @@ rperf_aggregate_buffer(rperf_profiler_t *prof, rperf_sample_buffer_t *buf)
         /* Convert VALUE frames to frame_ids */
         int overflow = 0;
         for (j = 0; j < s->depth; j++) {
+            if (s->frame_start + j >= buf->frame_pool_count) break;
             VALUE fval = buf->frame_pool[s->frame_start + j];
             uint32_t fid = rperf_frame_table_insert(&prof->frame_table, fval);
             if (fid == RPERF_FRAME_TABLE_EMPTY) { overflow = 1; break; }
@@ -999,7 +1002,7 @@ rperf_worker_nanosleep_func(void *arg)
     struct timespec deadline;
     long interval_ns = 1000000000L / prof->frequency;
 
-    clock_gettime(CLOCK_REALTIME, &deadline);
+    clock_gettime(RPERF_COND_CLOCK, &deadline);
     deadline.tv_nsec += interval_ns;
     if (deadline.tv_nsec >= 1000000000L) {
         deadline.tv_sec++;
@@ -1014,7 +1017,7 @@ rperf_worker_nanosleep_func(void *arg)
             CHECKED(pthread_cond_wait(&prof->worker_cond, &prof->worker_mutex));
             prof->worker_paused = 0;
             /* Reset deadline on wake to avoid burst of catch-up triggers */
-            clock_gettime(CLOCK_REALTIME, &deadline);
+            clock_gettime(RPERF_COND_CLOCK, &deadline);
             deadline.tv_nsec += interval_ns;
             if (deadline.tv_nsec >= 1000000000L) {
                 deadline.tv_sec++;
@@ -1191,7 +1194,19 @@ rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig, VAL
 
     /* Initialize worker mutex/cond */
     CHECKED(pthread_mutex_init(&g_profiler.worker_mutex, NULL));
+#ifdef __linux__
+    {
+        /* Use CLOCK_MONOTONIC for pthread_cond_timedwait so that
+         * system clock adjustments (NTP etc.) don't affect timer intervals. */
+        pthread_condattr_t cond_attr;
+        CHECKED(pthread_condattr_init(&cond_attr));
+        CHECKED(pthread_condattr_setclock(&cond_attr, CLOCK_MONOTONIC));
+        CHECKED(pthread_cond_init(&g_profiler.worker_cond, &cond_attr));
+        CHECKED(pthread_condattr_destroy(&cond_attr));
+    }
+#else
     CHECKED(pthread_cond_init(&g_profiler.worker_cond, NULL));
+#endif
 
     /* Initialize sample buffer(s) */
     if (rperf_sample_buffer_init(&g_profiler.buffers[0]) < 0) {

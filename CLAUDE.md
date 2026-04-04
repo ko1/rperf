@@ -32,7 +32,7 @@ rake test             # Run unit tests
 rperf record [options] command [args...]   # Profile and save to file
 rperf stat [options] command [args...]     # Profile and print summary to stderr
 rperf exec [options] command [args...]     # Profile and print full report to stderr (stat --report)
-rperf report [options] [file]              # Open pprof profile (requires Go)
+rperf report [options] [file]              # Open profile in viewer or pprof (Go required for .pb.gz)
 rperf diff [options] base.pb.gz target.pb.gz  # Compare two profiles (requires Go)
 rperf help                                 # Full reference documentation (AI-friendly)
 ```

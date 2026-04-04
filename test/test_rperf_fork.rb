@@ -140,7 +140,7 @@ class TestRperfMultiProcess < Test::Unit::TestCase
     merged_samples = []
     merged_label_sets = [{}]
 
-    same_label = { "endpoint" => "/users" }
+    same_label = { endpoint: "/users" }
     data1 = {
       aggregated_samples: [[[["/a.rb", "A#a"]], 1000, 0, 1]],
       label_sets: [{}, same_label],
@@ -153,7 +153,7 @@ class TestRperfMultiProcess < Test::Unit::TestCase
     Rperf.send(:_merge_into, merged_samples, merged_label_sets, data1)
     Rperf.send(:_merge_into, merged_samples, merged_label_sets, data2)
 
-    assert_equal 2, merged_label_sets.size  # {}, {"endpoint"=>"/users"} (deduped)
+    assert_equal 2, merged_label_sets.size  # {}, {endpoint: "/users"} (deduped)
     assert_equal 1, merged_samples[0][3]
     assert_equal 1, merged_samples[1][3]  # same label_set_id
   end

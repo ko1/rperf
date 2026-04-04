@@ -25,6 +25,7 @@ POSIX systems (Linux, macOS). Requires Ruby >= 3.4.0.
     --signal VALUE          Timer signal (Linux only): signal number, or 'false'
                             for nanosleep thread (default: auto)
     --no-inherit            Do not profile forked/spawned child processes
+    --no-aggregate          Disable C-level sample aggregation (raw per-sample data)
     -v, --verbose           Print sampling statistics to stderr
 
 ### stat: Run command and print performance summary to stderr.
@@ -38,6 +39,7 @@ Uses wall mode by default. No file output by default.
     --signal VALUE          Timer signal (Linux only): signal number, or 'false'
                             for nanosleep thread (default: auto)
     --no-inherit            Do not profile forked/spawned child processes
+    --no-aggregate          Disable C-level sample aggregation (raw per-sample data)
     -v, --verbose           Print additional sampling statistics
 
 Shows: user/sys/real time, time breakdown (CPU execution, GVL blocked,
@@ -60,6 +62,7 @@ Like `stat --report`. Uses wall mode by default. No file output by default.
     --signal VALUE          Timer signal (Linux only): signal number, or 'false'
                             for nanosleep thread (default: auto)
     --no-inherit            Do not profile forked/spawned child processes
+    --no-aggregate          Disable C-level sample aggregation (raw per-sample data)
     -v, --verbose           Print additional sampling statistics
 
 Shows: user/sys/real time, time breakdown, GC/memory/OS stats, profiler overhead,
@@ -181,6 +184,10 @@ Rperf.save("profile.txt", data)
     format:     :json, :pprof, :collapsed, :text, or nil for auto-detect (Symbol or nil)
     defer:      Start with timer paused; use Rperf.profile to activate (default: false)
     inherit:    Child process tracking: :fork (default), true (fork+spawn), false (none)
+                Note: CLI defaults to true (--no-inherit to disable)
+    signal:     Timer signal (Linux only): nil (default, auto), false (use nanosleep),
+                or a signal number (Integer)
+    aggregate:  Aggregate samples in C (default: true). false returns raw per-sample data
 
 ### Rperf.stop return value
 
@@ -546,8 +553,8 @@ In both modes, GC state labels are recorded:
 - **%GC=mark** — Time spent in GC marking phase (wall time).
 - **%GC=sweep** — Time spent in GC sweeping phase (wall time).
 
-These labels appear in `label_sets` (e.g., `{"%GVL" => "blocked"}`,
-`{"%GC" => "mark"}`) and are written into pprof sample labels.
+These labels appear in `label_sets` (e.g., `{:"%GVL" => "blocked"}`,
+`{:"%GC" => "mark"}`) and are written into pprof sample labels.
 
 To add VM state as frames in flamegraphs, use pprof tag options:
 

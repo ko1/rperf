@@ -210,4 +210,25 @@ class TestRperfSnapshot < Test::Unit::TestCase
     assert_operator snap2[:sampling_count], :>=, snap1[:sampling_count],
       "Without clear, sampling_count should accumulate"
   end
+
+  def test_snapshot_concurrent_threads
+    Rperf.start(frequency: 1000, mode: :wall)
+    threads = 4.times.map do
+      Thread.new do
+        10.times do
+          1_000_000.times { 1 + 1 }
+          snap = Rperf.snapshot
+          # Should not crash; may be nil if timing is unlucky
+          if snap
+            assert_kind_of Hash, snap
+            assert snap.key?(:aggregated_samples)
+          end
+        end
+      end
+    end
+    threads.each(&:join)
+    data = Rperf.stop
+    assert data
+    assert_operator data[:aggregated_samples].size, :>, 0
+  end
 end
