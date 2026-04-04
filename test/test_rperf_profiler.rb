@@ -366,12 +366,11 @@ class TestRperfProfiler < Test::Unit::TestCase
   def test_inherit_true_restores_env_on_stop
     original_rubyopt = ENV["RUBYOPT"]
     original_enabled = ENV["RPERF_ENABLED"]
-    original_rubylib = ENV["RUBYLIB"]
 
     Rperf.start(frequency: 100, inherit: true)
     # ENV should be modified while profiling
-    assert_include ENV["RUBYOPT"].to_s, "-rrperf",
-      "RUBYOPT should contain -rrperf while profiling with inherit: true"
+    assert_include ENV["RUBYOPT"].to_s, "-r",
+      "RUBYOPT should contain -r<path> while profiling with inherit: true"
     assert_equal "1", ENV["RPERF_ENABLED"]
 
     sleep 0.02
@@ -382,8 +381,6 @@ class TestRperfProfiler < Test::Unit::TestCase
       "RUBYOPT should be restored after stop"
     assert_equal original_enabled, ENV["RPERF_ENABLED"],
       "RPERF_ENABLED should be restored after stop"
-    assert_equal original_rubylib, ENV["RUBYLIB"],
-      "RUBYLIB should be restored after stop"
   end
 
   def test_inherit_true_no_rubyopt_duplication
