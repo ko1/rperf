@@ -345,10 +345,12 @@ if signal && signal != "false"
   end
 end
 
-# Require rperf by full path so child processes load the correct version
+# Add lib dir to RUBYLIB so -rrperf can find the correct version.
+# RUBYLIB handles spaces in paths safely (PATH_SEPARATOR delimited).
+# RUBYOPT -r<path> does not support spaces, so we use RUBYLIB + -rrperf.
 lib_dir = File.expand_path("../lib", __dir__)
-rperf_path = File.join(lib_dir, "rperf")
-ENV["RUBYOPT"] = "-r#{rperf_path} #{ENV['RUBYOPT']}".strip
+ENV["RUBYLIB"] = [lib_dir, ENV["RUBYLIB"]].compact.join(File::PATH_SEPARATOR)
+ENV["RUBYOPT"] = "-rrperf #{ENV['RUBYOPT']}".strip
 ENV["RPERF_ENABLED"] = "1"
 ENV["RPERF_OUTPUT"] = output if output
 ENV["RPERF_FREQUENCY"] = frequency.to_s

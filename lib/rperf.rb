@@ -763,7 +763,7 @@ module Rperf
     if inherit == true
       # inherit: true — also track spawned Ruby children via RUBYOPT.
       # Save original values so _cleanup_session_state can restore them.
-      env_keys = %w[RPERF_ENABLED RPERF_FREQUENCY RPERF_MODE RPERF_SIGNAL RPERF_AGGREGATE RUBYOPT]
+      env_keys = %w[RPERF_ENABLED RPERF_FREQUENCY RPERF_MODE RPERF_SIGNAL RPERF_AGGREGATE RUBYLIB RUBYOPT]
       @_saved_env = env_keys.to_h { |k| [k, ENV[k]] }
 
       ENV["RPERF_ENABLED"] = "1"
@@ -771,8 +771,9 @@ module Rperf
       ENV["RPERF_MODE"] = mode.to_s
       ENV["RPERF_SIGNAL"] = signal.nil? ? nil : signal.to_s
       ENV["RPERF_AGGREGATE"] = aggregate ? nil : "0"
-      rperf_path = File.expand_path("../rperf", __FILE__)
-      ENV["RUBYOPT"] = "-r#{rperf_path} #{ENV['RUBYOPT']}".strip
+      lib_dir = File.expand_path("..", __FILE__)
+      ENV["RUBYLIB"] = [lib_dir, ENV["RUBYLIB"]].compact.join(File::PATH_SEPARATOR)
+      ENV["RUBYOPT"] = "-rrperf #{ENV['RUBYOPT']}".strip
     end
   end
   private_class_method :_setup_inherit
