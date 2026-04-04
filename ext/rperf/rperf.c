@@ -708,7 +708,7 @@ rperf_thread_data_create(rperf_profiler_t *prof, VALUE thread)
     int64_t t = rperf_current_time_ns(prof);
     if (t < 0) { free(td); return NULL; }
     td->prev_time_ns = t;
-    td->prev_wall_ns = rperf_wall_time_ns();
+    td->prev_wall_ns = (prof->mode == 1) ? t : rperf_wall_time_ns();
     td->thread_seq = ++prof->next_thread_seq;
     rb_internal_thread_specific_set(thread, prof->ts_key, td);
     return td;
@@ -936,7 +936,8 @@ rperf_sample_job(void *arg)
 
     int64_t weight = time_now - td->prev_time_ns;
     td->prev_time_ns = time_now;
-    td->prev_wall_ns = rperf_wall_time_ns();
+    /* In wall mode, time_now is already CLOCK_MONOTONIC — reuse it */
+    td->prev_wall_ns = (prof->mode == 1) ? time_now : rperf_wall_time_ns();
 
     if (weight <= 0) return;
 
