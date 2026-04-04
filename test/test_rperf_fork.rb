@@ -306,9 +306,9 @@ class TestRperfMultiProcess < Test::Unit::TestCase
     ENV["RPERF_FREQUENCY"] = "1000"
 
     output_file = File.join(Dir.tmpdir, "rperf-test-merged-#{$$}.json.gz")
-    Rperf.instance_variable_set(:@_aggregate_output, output_file)
-    Rperf.instance_variable_set(:@_aggregate_stat, false)
-    Rperf.instance_variable_set(:@_aggregate_format, :json)
+    Rperf.instance_variable_set(:@output, output_file)
+    Rperf.instance_variable_set(:@stat, false)
+    Rperf.instance_variable_set(:@format, :json)
 
     Rperf._aggregate_and_report
 

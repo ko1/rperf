@@ -13,9 +13,6 @@ module RperfTestHelper
     ENV.delete("RPERF_STAT_COMMAND")
     ENV.delete("RPERF_STAT_REPORT")
     Rperf.instance_variable_set(:@_session_dir_created, false)
-    Rperf.instance_variable_set(:@_aggregate_output, nil)
-    Rperf.instance_variable_set(:@_aggregate_stat, false)
-    Rperf.instance_variable_set(:@_aggregate_format, nil)
     # Clean up session dirs that may have been created
     require "tmpdir"
     user_dir = File.join(Dir.tmpdir, "rperf-#{Process.uid}")

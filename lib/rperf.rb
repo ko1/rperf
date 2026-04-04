@@ -24,12 +24,9 @@ module Rperf
   @label_set_table = nil         # Array: label_set_id → frozen Hash
   @label_set_index = nil         # Hash: frozen label Hash → label_set_id
   # Multi-process (fork/spawn) support
-  @_session_dir_output = false   # true when @output points to session dir (child/fork)
+  @_session_dir_output = false   # true when @output points to session dir (child process)
   @_session_dir_created = false  # true after first fork activates session dir
   @_fork_hook_installed = false  # true after Process._fork hook is prepended
-  @_aggregate_output = nil       # saved output path for root aggregation
-  @_aggregate_format = nil       # saved format for root aggregation
-  @_aggregate_stat = false       # saved stat flag for root aggregation
   @_saved_env = nil              # saved ENV values for restore on stop (inherit: true)
 
   # Starts profiling.
@@ -100,20 +97,14 @@ module Rperf
 
   def self.stop
     # Check if we need to aggregate child process data.
-    # @_session_dir_created: fork happened and root's output was switched.
+    # @_session_dir_created: fork happened and session dir is active.
     # Otherwise: check for actual child profile files (spawn-only case).
     session_dir = ENV["RPERF_SESSION_DIR"]
     is_root = session_dir && Process.pid.to_s == ENV["RPERF_ROOT_PROCESS"]
     has_child_profiles = is_root && !@_session_dir_created &&
                          File.directory?(session_dir.to_s) &&
                          !Dir.glob(File.join(session_dir.to_s, "profile-*.json.gz")).empty?
-
-
-    if has_child_profiles
-      # spawn-only case: suppress individual output, aggregation will handle it
-      @stat = false
-      @output = nil
-    end
+    needs_aggregation = is_root && (@_session_dir_created || has_child_profiles)
 
     data = _c_stop
     return unless data
@@ -141,11 +132,33 @@ module Rperf
 
     merge_vm_state_labels!(data)
 
+    if needs_aggregation
+      # Root process with children: write root's own profile to session dir
+      # (fixed json.gz format), then aggregate all profiles.
+      # Root's @output/@format/@stat are preserved for the merged result.
+      print_stats(data) if @verbose
+      begin
+        save(File.join(session_dir, "profile-#{Process.pid}.json.gz"), data, format: :json)
+      rescue SystemCallError
+        # Session dir may have been removed (e.g., test scenario) — continue to aggregation
+      end
+      merged = _aggregate_and_report
+      if merged.nil? && data
+        # Aggregation failed — fall back to root's own data
+        $stderr.puts "rperf: warning: multi-process aggregation failed; writing root process data only"
+        write_data(@output, data, @format) if @output
+        print_stat(data) if @stat
+      end
+      _cleanup_session_state
+      return merged || data
+    end
+
     print_stats(data) if @verbose
     print_stat(data) if @stat
 
     if @output
       if @_session_dir_output
+        # Child process writing to session dir — tolerate missing dir
         begin
           write_data(@output, data, @format)
         rescue SystemCallError
@@ -160,26 +173,6 @@ module Rperf
       @format = nil
     end
 
-    # Aggregate child process data if needed
-    if is_root && (@_session_dir_created || has_child_profiles)
-      if data && has_child_profiles
-        # spawn-only case: root's data wasn't written to session dir, write it now
-        save(File.join(session_dir, "profile-#{Process.pid}.json.gz"), data, format: :json)
-      end
-      merged = _aggregate_and_report
-      if merged.nil? && data
-        # Aggregation failed or returned nothing — fall back to writing
-        # root's own data so the user doesn't silently lose everything.
-        $stderr.puts "rperf: warning: multi-process aggregation failed; writing root process data only"
-        if @_aggregate_output
-          write_data(@_aggregate_output, data, @_aggregate_format)
-        end
-        print_stat(data) if @_aggregate_stat
-      end
-      _cleanup_session_state
-      return merged || data
-    end
-
     _cleanup_session_state
     data
   end
@@ -190,9 +183,6 @@ module Rperf
     ENV.delete("RPERF_DEFER")
     @_session_dir_created = false
     @_session_dir_output = false
-    @_aggregate_output = nil
-    @_aggregate_stat = false
-    @_aggregate_format = nil
     # Restore ENV variables saved by _setup_inherit (inherit: true)
     if @_saved_env
       @_saved_env.each do |key, original|
@@ -243,21 +233,10 @@ module Rperf
   end
 
   def self._intern_label_set(hash)
-    # Thread safety: called only from label() and profile(), both of which
-    # execute under GVL, so no concurrent access to @label_set_table/@label_set_index.
-    #
-    # Deep-freeze: dup and freeze both keys and values to prevent
-    # mutation of interned label sets via shared string references.
-    frozen = if hash.frozen?
-      hash
-    else
-      hash.each_with_object({}) { |(k, v), h|
-        h[k.frozen? ? k : k.dup.freeze] = v.frozen? ? v : v.dup.freeze
-      }.freeze
-    end
-    @label_set_index[frozen] ||= begin
+    hash.freeze
+    @label_set_index[hash] ||= begin
       id = @label_set_table.size
-      @label_set_table << frozen
+      @label_set_table << hash
       _c_set_label_sets(@label_set_table)
       id
     end
@@ -271,6 +250,7 @@ module Rperf
 
     cur_id = _c_get_label
     cur_labels = @label_set_table[cur_id] || {}
+    kw.each_value { |v| v.freeze }
     new_labels = cur_labels.merge(kw).reject { |_, v| v.nil? }
     new_id = _intern_label_set(new_labels)
     _c_set_label(new_id)
@@ -778,11 +758,6 @@ module Rperf
     ENV["RPERF_SESSION_DIR"] = session_dir
     ENV["RPERF_DEFER"] = "1" if defer
 
-    # Save original output settings for aggregation
-    @_aggregate_output = output
-    @_aggregate_stat = stat
-    @_aggregate_format = format
-
     _install_fork_hook
 
     if inherit == true
@@ -895,12 +870,9 @@ module Rperf
     return unless session_dir && File.directory?(session_dir)
 
     @_session_dir_created = true
-
-    # Switch root's output to session dir (stat timing is already saved by start())
-    @output = File.join(session_dir, "profile-#{Process.pid}.json.gz")
-    @format = :json
-    @stat = false
-    @_session_dir_output = true
+    # Root's @output/@format/@stat are kept as-is (user's original settings).
+    # stop() writes root's profile to session dir with fixed json.gz format,
+    # then uses the original settings for the merged output.
   end
 
   def self._restart_in_child
@@ -988,9 +960,9 @@ module Rperf
       process_count: process_count,
     }
 
-    print_stat(merged_data) if @_aggregate_stat
-    if @_aggregate_output
-      write_data(@_aggregate_output, merged_data, @_aggregate_format)
+    print_stat(merged_data) if @stat
+    if @output
+      write_data(@output, merged_data, @format)
     end
 
     _cleanup_session_dir(session_dir)
@@ -1014,14 +986,14 @@ module Rperf
   private_class_method :_cleanup_session_dir
 
   # Best-effort fallback: if aggregation failed, try to copy the first
-  # available child profile to @_aggregate_output so the user gets something.
+  # available child profile to @output so the user gets something.
   def self._fallback_aggregate_output(session_dir)
-    return unless @_aggregate_output
+    return unless @output
     return unless session_dir && File.directory?(session_dir)
     files = Dir.glob(File.join(session_dir, "profile-*.json.gz"))
     return if files.empty?
     require "fileutils"
-    FileUtils.cp(files.first, @_aggregate_output)
+    FileUtils.cp(files.first, @output)
   rescue StandardError
     # nothing more we can do
   end
@@ -1100,13 +1072,8 @@ module Rperf
         at_exit { stop }
       end
     elsif ENV["RPERF_SESSION_DIR"]
-      # Root process: save original output settings for aggregation.
-      # Session dir was created eagerly by CLI. Start with normal output —
-      # if no fork/spawn happens, behaves exactly like single-process mode.
-      @_aggregate_output = _rperf_original_output
-      @_aggregate_stat = _rperf_stat
-      @_aggregate_format = _rperf_format
-
+      # Root process: start with normal output settings.
+      # If no fork/spawn happens, behaves exactly like single-process mode.
       _rperf_start_opts[:output] = _rperf_original_output
       _rperf_start_opts[:format] = _rperf_format
       _rperf_start_opts[:stat] = _rperf_stat
