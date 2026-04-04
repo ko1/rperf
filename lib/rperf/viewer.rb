@@ -25,6 +25,7 @@ class Rperf::Viewer
   attr_reader :max_snapshots, :path
 
   def initialize(app, path: "/rperf", max_snapshots: 24)
+    raise ArgumentError, "max_snapshots must be a positive integer, got #{max_snapshots.inspect}" unless max_snapshots.is_a?(Integer) && max_snapshots > 0
     @app = app
     @path = path.chomp("/")
     @max_snapshots = max_snapshots
@@ -112,9 +113,11 @@ class Rperf::Viewer
     # Hide snapshot selector (single snapshot, no server)
     html = html.sub('<select id="sel-snapshot"', '<select id="sel-snapshot" style="display:none"')
 
-    # Replace dynamic loading with inline data
+    # Replace dynamic loading with inline data.
+    # Escape "</" to "<\/" to prevent XSS via "</script>" in profile data.
+    json_safe = json_snapshot.gsub("</", "<\\/")
     html = html.sub("loadSnapshotList();",
-      "currentData = #{json_snapshot}; updateTagDropdowns(); applyAndRender();")
+      "currentData = #{json_safe}; updateTagDropdowns(); applyAndRender();")
 
     html
   end

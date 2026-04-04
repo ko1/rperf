@@ -556,10 +556,10 @@ module Rperf
   # Example: 5_609_200_000 → "5,609.2"
   def self.format_ms(ns)
     ms = ns / 1_000_000.0
-    int_part = ms.truncate
-    frac = format(".%d", ((ms - int_part).abs * 10).round % 10)
-    int_str = int_part.to_s.reverse.gsub(/(\d{3})(?=\d)/, '\\1,').reverse
-    "#{int_str}#{frac}"
+    formatted = format("%.1f", ms)
+    int_str, frac = formatted.split(".")
+    int_str = int_str.reverse.gsub(/(\d{3})(?=\d)/, '\\1,').reverse
+    "#{int_str}.#{frac}"
   end
   private_class_method :format_ms
 
@@ -654,12 +654,26 @@ module Rperf
     # Create session dir on first fork
     require "fileutils"
     user_dir = File.dirname(session_dir)
-    begin
-      Dir.mkdir(user_dir, 0700) unless File.directory?(user_dir)
-    rescue Errno::EEXIST
-      # race — fine
-    rescue SystemCallError
-      return  # can't create dir — fall back to single-process mode
+    if File.directory?(user_dir)
+      st = File.stat(user_dir)
+      unless st.owned? && (st.mode & 0777) == 0700
+        warn "rperf: error: #{user_dir} exists but is not owned by you or has insecure permissions " \
+             "(owner=#{st.uid} mode=#{'%04o' % (st.mode & 0777)}, expected owner=#{Process.uid} mode=0700)"
+        return
+      end
+    else
+      begin
+        Dir.mkdir(user_dir, 0700)
+      rescue Errno::EEXIST
+        # race — fine, re-check ownership
+        st = File.stat(user_dir)
+        unless st.owned? && (st.mode & 0777) == 0700
+          warn "rperf: error: #{user_dir} has insecure permissions"
+          return
+        end
+      rescue SystemCallError
+        return
+      end
     end
     begin
       Dir.mkdir(session_dir, 0700)
@@ -795,18 +809,50 @@ module Rperf
       _rperf_session_dir = ENV["RPERF_SESSION_DIR"]
       unless File.directory?(_rperf_session_dir)
         require "fileutils"
-        FileUtils.mkdir_p(_rperf_session_dir, mode: 0700)
+        # Create session dir and its parent with proper permissions
+        _rperf_user_dir = File.dirname(_rperf_session_dir)
+        unless File.directory?(_rperf_user_dir)
+          begin
+            Dir.mkdir(_rperf_user_dir, 0700)
+          rescue Errno::EEXIST
+            # race — fine
+          end
+        end
+        if File.directory?(_rperf_user_dir)
+          st = File.stat(_rperf_user_dir)
+          unless st.owned? && (st.mode & 0777) == 0700
+            warn "rperf: error: #{_rperf_user_dir} has insecure permissions"
+            # Fall through to else branch (no session dir)
+            _rperf_session_dir = nil
+          end
+        end
+        if _rperf_session_dir
+          begin
+            Dir.mkdir(_rperf_session_dir, 0700)
+          rescue Errno::EEXIST
+            # another child already created it — fine
+          end
+        end
       end
 
-      _rperf_start_opts[:output] = File.join(_rperf_session_dir, "profile-#{Process.pid}.json.gz")
-      _rperf_start_opts[:format] = :json
-      _rperf_start_opts[:stat] = false
-      _rperf_start_opts[:verbose] = false
+      if _rperf_session_dir && File.directory?(_rperf_session_dir)
+        _rperf_start_opts[:output] = File.join(_rperf_session_dir, "profile-#{Process.pid}.json.gz")
+        _rperf_start_opts[:format] = :json
+        _rperf_start_opts[:stat] = false
+        _rperf_start_opts[:verbose] = false
 
-      _install_fork_hook
-      start(**_rperf_start_opts)
-      label("%pid": Process.pid.to_s)
-      at_exit { stop }
+        _install_fork_hook
+        start(**_rperf_start_opts)
+        label("%pid": Process.pid.to_s)
+        at_exit { stop }
+      else
+        # Security check failed or dir creation failed — fall through to normal mode
+        _rperf_start_opts[:output] = _rperf_original_output
+        _rperf_start_opts[:format] = _rperf_format
+        _rperf_start_opts[:stat] = _rperf_stat
+        start(**_rperf_start_opts)
+        at_exit { stop }
+      end
     elsif ENV["RPERF_SESSION_DIR"]
       # Root process: save original output settings for aggregation on fork.
       # Start with normal output — session dir is created lazily on first fork.

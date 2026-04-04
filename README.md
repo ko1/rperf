@@ -191,13 +191,13 @@ rperf hooks GVL and GC events to attribute non-CPU time. These are recorded as l
 - **Low overhead** — Signal-based timer on Linux (no extra thread). ~1–5 us per sample.
 - **Zero code changes** — Profile any Ruby program via CLI or environment variables. Drop-in for Rails, too.
 - **`perf`-like CLI** — `record`, `stat`, `report`, `diff` — if you know Linux perf, you already know rperf.
+- **Multi-process** — automatically profiles forked/spawned Ruby child processes (e.g., Unicorn/Puma workers). Use `--no-inherit` to disable.
 
 ### Limitations
 
 - **Method-level only** — no line-level granularity.
 - **Ruby >= 3.4.0** — uses recent VM internals (postponed jobs, thread event hooks).
 - **POSIX only** — Linux, macOS. No Windows.
-- **No fork following** — profiling stops in fork(2) child processes (the child can start a new session).
 
 
 ## Output Formats

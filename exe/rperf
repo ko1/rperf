@@ -373,7 +373,17 @@ if inherit
 
   bases.each do |base|
     candidate = File.join(base, "rperf-#{Process.uid}")
-    if File.directory?(candidate) || File.writable?(base)
+    if File.directory?(candidate)
+      # Verify ownership and permissions of existing directory
+      st = File.stat(candidate)
+      unless st.owned? && (st.mode & 0777) == 0700
+        $stderr.puts "rperf: error: #{candidate} exists but is not owned by you or has insecure permissions " \
+                     "(owner=#{st.uid} mode=#{'%04o' % (st.mode & 0777)}, expected owner=#{Process.uid} mode=0700)"
+        exit 1
+      end
+      user_dir = candidate
+      break
+    elsif File.writable?(base)
       user_dir = candidate
       break
     end

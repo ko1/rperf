@@ -308,4 +308,83 @@ class TestRperfCli < Test::Unit::TestCase
     refute_equal 0, status.exitstatus
     assert_include stderr, "RPERF_MODE must be 'cpu' or 'wall'"
   end
+
+  # --- report subcommand ---
+
+  def test_cli_report_top_json
+    Dir.mktmpdir do |dir|
+      profile = File.join(dir, "test.json.gz")
+      run_rperf("record", "-f", "100", "-o", profile,
+                RbConfig.ruby, "-e", "5_000_000.times { 1 + 1 }")
+      stdout, _, status = run_rperf("report", "--top", profile)
+      assert_equal 0, status.exitstatus
+      assert_include stdout, "Flat"
+    end
+  end
+
+  def test_cli_report_text_json
+    Dir.mktmpdir do |dir|
+      profile = File.join(dir, "test.json.gz")
+      run_rperf("record", "-f", "100", "-o", profile,
+                RbConfig.ruby, "-e", "5_000_000.times { 1 + 1 }")
+      stdout, _, status = run_rperf("report", "--text", profile)
+      assert_equal 0, status.exitstatus
+      assert_include stdout, "Total:"
+    end
+  end
+
+  def test_cli_report_html_json
+    Dir.mktmpdir do |dir|
+      profile = File.join(dir, "test.json.gz")
+      run_rperf("record", "-f", "100", "-o", profile,
+                RbConfig.ruby, "-e", "5_000_000.times { 1 + 1 }")
+      stdout, _, status = run_rperf("report", "--html", profile)
+      assert_equal 0, status.exitstatus
+      assert_include stdout, "<html"
+      assert_include stdout, "d3-flamegraph"
+      assert_include stdout, "currentData"
+    end
+  end
+
+  def test_cli_report_html_xss_safe
+    Dir.mktmpdir do |dir|
+      profile = File.join(dir, "test.json.gz")
+      # Create a profile with a label containing </script>
+      run_rperf("record", "-f", "100", "-m", "wall", "-o", profile,
+                RbConfig.ruby, "-e", <<~RUBY)
+                  require "rperf"
+                  Rperf.label("xss": '</script><script>alert(1)</script>') do
+                    5_000_000.times { 1 + 1 }
+                  end
+                RUBY
+      stdout, _, status = run_rperf("report", "--html", profile)
+      assert_equal 0, status.exitstatus
+      # The raw "</script>" should NOT appear unescaped in the output
+      assert_not_include stdout, '</script><script>alert(1)</script>',
+                         "XSS payload should be escaped in HTML output"
+      # But the escaped version should be there
+      assert_include stdout, '<\\/script>'
+    end
+  end
+
+  # --- format_ms ---
+
+  def test_format_ms_rounding
+    # Test via Ruby API since format_ms is private
+    result = Open3.capture2(RbConfig.ruby, "-I", LIB_DIR, "-rrperf", "-e", <<~RUBY)
+      puts Rperf.send(:format_ms, 1_990_000)    # should be "2.0" not "1.0"
+      puts Rperf.send(:format_ms, 5_609_200_000) # should be "5,609.2"
+      puts Rperf.send(:format_ms, 0)             # should be "0.0"
+      puts Rperf.send(:format_ms, 500_000)       # should be "0.5"
+      puts Rperf.send(:format_ms, 999_500_000)   # should be "999.5"
+      puts Rperf.send(:format_ms, 1_000_000_000_000) # should be "1,000,000.0"
+    RUBY
+    lines = result[0].strip.split("\n")
+    assert_equal "2.0", lines[0], "1_990_000ns should format as 2.0ms"
+    assert_equal "5,609.2", lines[1], "5_609_200_000ns should format as 5,609.2ms"
+    assert_equal "0.0", lines[2], "0ns should format as 0.0ms"
+    assert_equal "0.5", lines[3], "500_000ns should format as 0.5ms"
+    assert_equal "999.5", lines[4], "999_500_000ns should format as 999.5ms"
+    assert_equal "1,000,000.0", lines[5], "1_000_000_000_000ns should format as 1,000,000.0ms"
+  end
 end

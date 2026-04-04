@@ -75,12 +75,17 @@ class TestRperfMultiProcess < Test::Unit::TestCase
     require "tmpdir"
     require "fileutils"
     require "json"
-    @session_dir = Dir.mktmpdir("rperf-test-")
+    # Create a proper hierarchy: user_dir (0700) / session_dir (0700)
+    @test_base = Dir.mktmpdir("rperf-test-base-")
+    @user_dir = File.join(@test_base, "rperf-#{Process.uid}")
+    Dir.mkdir(@user_dir, 0700)
+    @session_dir = File.join(@user_dir, "rperf-test-session")
+    Dir.mkdir(@session_dir, 0700)
   end
 
   def teardown
     super
-    FileUtils.rm_rf(@session_dir) if @session_dir && File.directory?(@session_dir)
+    FileUtils.rm_rf(@test_base) if @test_base && File.directory?(@test_base)
     # Clean up env vars
     ENV.delete("RPERF_SESSION_DIR")
     ENV.delete("RPERF_ROOT_PROCESS")
