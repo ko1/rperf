@@ -16,6 +16,8 @@ Gem::Specification.new do |spec|
   spec.extensions    = ["ext/rperf/extconf.rb"]
   spec.require_paths = ["lib"]
 
+  spec.add_dependency "rackup"
+
   spec.add_development_dependency "rake-compiler", "~> 1.2"
   spec.add_development_dependency "test-unit", "~> 3.6"
 end

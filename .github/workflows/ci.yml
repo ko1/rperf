@@ -22,3 +22,4 @@ jobs:
       - run: bundle install
       - run: rake compile
       - run: rake test
+      - run: rake test_multiprocess

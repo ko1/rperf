@@ -11,9 +11,9 @@ rperf は Linux の [perf](#cite:demelo2010) に着想を得ており、`record`
 ### 利点
 
 - **正確なプロファイリング**: 時間差分重み付けが[セーフポイントバイアス](#index:safepoint bias)を補正し、従来のカウントベースのプロファイラよりも実際の時間分布に近い結果を生成します。
-- **GVL / GC の可視化**: wall モードでは、GVL 外のブロッキング、GVL 競合、GC marking/sweeping をサンプルラベル（`%GVL`、`%GC`）として追跡します。別途ツールは不要です。
+- **GVL / GC の可視化**: GVL ブロッキングと競合（wall モード）および GC marking/sweeping（両モード）をサンプルラベル（`%GVL`、`%GC`）として追跡します。別途ツールは不要です。
 - **標準出力形式**: [JSON](#index:JSON)（rperf ネイティブ、デフォルト）、[pprof](#index:pprof) protobuf（`go tool pprof` と互換）、[collapsed stacks](#index:collapsed stacks)（フレームグラフ / speedscope 向け）、人間が読めるテキスト形式で出力します。
-- **ビューア内蔵**: ブラウザ内フレームグラフビューア（[`Rperf::Viewer`](#index:Rperf::Viewer)）をタグフィルタリング付きで内蔵。外部ツール不要。
+- **ビューア内蔵**: ブラウザ内フレームグラフビューア（[`Rperf::Viewer`](#index:Rperf::Viewer)）をタグフィルタリング付きで内蔵。`--html` 出力は CDN から d3 を読み込みます。
 - **低オーバーヘッド**: デフォルト 1000 Hz でのサンプリングコールバックコストは < 0.2% で、本番環境での使用に適しています。
 - **シンプルな CLI**: `rperf stat` で概要を素早く確認し、`rperf record` + `rperf report` で詳細な分析が可能です。
 

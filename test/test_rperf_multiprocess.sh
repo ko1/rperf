@@ -8,6 +8,7 @@ RUBY=$(ruby -e 'print RbConfig.ruby' -rrbconfig)
 TMPDIR="${TMPDIR:-/tmp}"
 PASS=0
 FAIL=0
+_STDERR_LOG="$TMPDIR/rperf-test-stderr-$$"
 
 pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "  FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -17,6 +18,17 @@ check() {
     pass "$1"
   else
     fail "$1 (got: $2)"
+  fi
+}
+# Check that output does not contain Ruby errors (Errno::*, RuntimeError, etc.)
+check_no_errors() {
+  local desc="$1"
+  local output="$2"
+  if echo "$output" | grep -qE "(Errno::|RuntimeError|NoMethodError|NameError|SyntaxError|LoadError|rb_sysopen)"; then
+    fail "$desc: unexpected error in output"
+    echo "$output" | grep -E "(Errno::|RuntimeError|NoMethodError|NameError|SyntaxError|LoadError|rb_sysopen)" | head -3 | sed 's/^/    /'
+  else
+    pass "$desc: no errors"
   fi
 }
 
@@ -38,6 +50,7 @@ echo
 # --- 2. Fork with children (stat) ---
 echo "# 2. Fork 3 children (stat)"
 out=$($RPERF stat -f 100 -- "$RUBY" -e '3.times { fork { 500_000.times { 1 + 1 } } }; Process.waitall' 2>&1)
+check_no_errors "stat+fork" "$out"
 check "has Performance stats" "$out" "Performance stats"
 check "4 processes" "$out" "4.*Ruby processes profiled"
 check "has samples" "$out" "samples.*triggers"
@@ -46,6 +59,7 @@ echo
 # --- 3. Spawn Ruby child (stat) ---
 echo "# 3. Spawn Ruby child (stat)"
 out=$($RPERF stat -f 100 -- "$RUBY" -e "pid = spawn('$RUBY', '-e', '500_000.times { 1 + 1 }'); Process.wait(pid)" 2>&1)
+check_no_errors "stat+spawn" "$out"
 check "has Performance stats" "$out" "Performance stats"
 check "2 processes" "$out" "2.*Ruby processes profiled"
 check "only one Performance stats block" "$out" "Performance stats"
@@ -72,7 +86,9 @@ echo
 # --- 5. Record + fork ---
 echo "# 5. Record + fork"
 outfile="$TMPDIR/rperf-test5-$$.json.gz"
-$RPERF record -f 100 -o "$outfile" -- "$RUBY" -e 'fork { 500_000.times { 1 + 1 } }; Process.waitall; 500_000.times { 1 + 1 }' 2>&1
+out=$(out=$($RPERF record -f 100 -o "$outfile" -- "$RUBY" -e 'fork { 500_000.times { 1 + 1 } }; Process.waitall; 500_000.times { 1 + 1 }' 2>&1)
+check_no_errors "record write path" "$out")
+check_no_errors "record+fork" "$out"
 info=$(ruby -Ilib -rrperf -e "d = Rperf.load('$outfile'); puts \"#{d[:process_count]}\"")
 check "process_count=2" "$info" "^2$"
 rm -f "$outfile"
@@ -81,7 +97,8 @@ echo
 # --- 6. Record + spawn ---
 echo "# 6. Record + spawn"
 outfile="$TMPDIR/rperf-test6-$$.json.gz"
-$RPERF record -f 100 -o "$outfile" -- "$RUBY" -e "pid = spawn('$RUBY', '-e', '500_000.times { 1 + 1 }'); Process.wait(pid); 500_000.times { 1 + 1 }" 2>&1
+out=$($RPERF record -f 100 -o "$outfile" -- "$RUBY" -e "pid = spawn('$RUBY', '-e', '500_000.times { 1 + 1 }'); Process.wait(pid); 500_000.times { 1 + 1 }" 2>&1)
+check_no_errors "record+spawn" "$out"
 info=$(ruby -Ilib -rrperf -e "d = Rperf.load('$outfile'); puts \"#{d[:process_count]}\"")
 check "process_count=2" "$info" "^2$"
 rm -f "$outfile"
@@ -158,7 +175,8 @@ echo
 # --- 13. pid label on children ---
 echo "# 13. pid label on fork children"
 outfile="$TMPDIR/rperf-test13-$$.json.gz"
-$RPERF record -f 100 -o "$outfile" -- "$RUBY" -e 'fork { 500_000.times { 1 + 1 } }; Process.waitall; 500_000.times { 1 + 1 }' 2>&1
+out=$($RPERF record -f 100 -o "$outfile" -- "$RUBY" -e 'fork { 500_000.times { 1 + 1 } }; Process.waitall; 500_000.times { 1 + 1 }' 2>&1)
+check_no_errors "record write path" "$out"
 info=$(ruby -Ilib -rrperf -rjson -e "
 d = Rperf.load('$outfile')
 ls = d[:label_sets] || []

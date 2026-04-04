@@ -11,7 +11,7 @@ The [JSON](#index:json) format is a gzip-compressed JSON representation of the p
 **How to view**:
 
 ```bash
-# Open rperf viewer (no external tools required)
+# Open rperf viewer
 rperf report profile.json.gz
 ```
 

@@ -69,7 +69,7 @@ rperf stat ruby app.rb
 rperf record ruby app.rb                     # → rperf.json.gz (cpu mode, default)
 rperf record -m wall ruby server.rb          # wall mode
 
-# View results in browser (requires rackup gem)
+# View results in browser
 rperf report                                 # open rperf.json.gz in viewer
 rperf report --top profile.json.gz           # print top functions to terminal
 
