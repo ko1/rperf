@@ -421,6 +421,43 @@ class TestRperfProfiler < Test::Unit::TestCase
     Rperf.stop
   end
 
+  # End-to-end regression: inherit: true with spaces in the load path.
+  # A spawned child must be able to require rperf via RUBYLIB + RUBYOPT=-rrperf.
+  def test_inherit_true_spawn_child_with_space_in_path
+    require "tmpdir"
+    require "fileutils"
+
+    space_dir = File.join(Dir.tmpdir, "rperf test space")
+    FileUtils.rm_rf(space_dir)
+    begin
+      FileUtils.mkdir_p(space_dir)
+      # Symlink rperf's lib into a path with spaces.
+      # require_relative in rperf.rb resolves symlinks, so the C extension
+      # is found via the real path regardless of the symlink.
+      lib_link = File.join(space_dir, "lib")
+      FileUtils.ln_s(File.expand_path("../lib", __dir__), lib_link)
+
+      # Child Ruby loads rperf from the space path, starts with inherit: true,
+      # and spawns a grandchild that must successfully require rperf.
+      # Use RUBYLIB env at process start so it's in $LOAD_PATH.
+      env = { "RUBYLIB" => lib_link }
+      script = <<~RUBY
+        require "rperf"
+        Rperf.start(frequency: 100, inherit: true, output: nil)
+        ok = system(RbConfig.ruby, "-e", "require 'rperf'; puts :child_ok")
+        Rperf.stop
+        exit(ok ? 0 : 1)
+      RUBY
+
+      output = IO.popen([env, RbConfig.ruby, "-e", script], err: [:child, :out], &:read)
+      assert $?.success?, "inherit: true should work with spaces in path.\nOutput: #{output}"
+      assert_include output, "child_ok",
+        "Spawned child should load rperf via RUBYLIB with spaces"
+    ensure
+      FileUtils.rm_rf(space_dir)
+    end
+  end
+
   # --- ActiveJob middleware require ---
 
   def test_active_job_middleware_loadable

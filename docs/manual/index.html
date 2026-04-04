@@ -2317,13 +2317,9 @@ Samples: 80, Frequency: 1000Hz
            253.8 ms  81.4%  Kernel#sleep (&lt;C method&gt;)
            253.8 ms  81.4%  Object#io_work (mixed.rb)
             58.0 ms  18.6%  Object#cpu_work (mixed.rb)
-
- Labels:
-           250.6 ms  80.4%  %GVL: blocked
-             0.0 ms   0.0%  %GVL: wait
 </code></pre>
 
-<p>In wall mode, the <code>%GVL: blocked</code> label accounts for the dominant cost — this is the sleep time in <code>io_work</code>. The CPU time for <code>cpu_work</code> is clearly separated. GVL and GC activity appear as labels on samples rather than as stack frames, and can be filtered with pprof’s <code>-tagfocus</code> flag (e.g., <code>-tagfocus=%GVL=blocked</code>).</p>
+<p>In wall mode, the <code>%GVL: blocked</code> label accounts for the dominant cost — this is the sleep time in <code>io_work</code>. The CPU time for <code>cpu_work</code> is clearly separated. GVL and GC activity appear as labels on samples rather than as stack frames, and can be filtered with pprof’s <code>-tagfocus</code> flag (e.g., <code>-tagfocus=%GVL=blocked</code>). Use <code>rperf stat</code> to see the time breakdown by category (CPU execution, GVL blocked, GVL wait, GC marking, GC sweeping).</p>
 
 <h3 id="en--03-cli-usage--verbose-output">3.3.6 Verbose output</h3>
 
@@ -2454,7 +2450,11 @@ rperf report <span class="nt">--html</span> profile.json.gz <span class="o">&gt;
     </tr>
     <tr>
       <td><code>--text</code></td>
-      <td>Print pprof text summary</td>
+      <td>Print text report</td>
+    </tr>
+    <tr>
+      <td><code>--html</code></td>
+      <td>Output static HTML viewer to stdout (<code>.json.gz</code> only)</td>
     </tr>
     <tr>
       <td>(default)</td>
@@ -2511,7 +2511,7 @@ rperf record <span class="nt">-m</span> wall <span class="nt">-o</span> profile.
 <ol>
   <li>Sets up a session directory for collecting per-process profiles</li>
   <li>Installs a <code>Process._fork</code> hook that restarts profiling in forked children</li>
-  <li>Spawned Ruby children (via <code>spawn</code>, <code>system</code>, backticks) inherit <code>RUBYOPT=-rrperf</code> and auto-start profiling</li>
+  <li>Spawned Ruby children (via <code>spawn</code>, <code>system</code>, backticks) inherit <code>RUBYLIB</code> (pointing to rperf’s lib directory) and <code>RUBYOPT=-rrperf</code>, and auto-start profiling</li>
   <li>Each child writes its profile to the session directory on exit</li>
   <li>The root process aggregates all profiles and produces the final output</li>
 </ol>
@@ -2698,7 +2698,7 @@ Cumulative:
       <td><code>inherit:</code></td>
       <td><code>:fork</code>, <code>true</code>, or <code>false</code></td>
       <td><code>:fork</code></td>
-      <td>Controls child process tracking. <code>:fork</code> tracks forked children via <code>Process._fork</code> hook. <code>true</code> also tracks spawned Ruby children (sets <code>RUBYOPT=-rrperf</code>). <code>false</code> disables child tracking</td>
+      <td>Controls child process tracking. <code>:fork</code> tracks forked children via <code>Process._fork</code> hook. <code>true</code> also tracks spawned Ruby children (sets <code>RUBYLIB</code> and <code>RUBYOPT=-rrperf</code>). <code>false</code> disables child tracking</td>
     </tr>
   </tbody>
 </table>
@@ -3228,22 +3228,29 @@ graph TD
 
 <h2 id="en--06-output-formats--json-default">6.1 JSON (default)</h2>
 
-<p>The <span id="en--06-output-formats--idx-0">JSON</span> format is a gzip-compressed JSON representation of the profile data. This is rperf’s native format and the default output.</p>
+<p>The <span id="en--06-output-formats--idx-0">JSON</span> format is rperf’s native format and the default output. It comes in two variants:</p>
 
-<p><strong>Extension convention</strong>: <code>.json.gz</code></p>
+<ul>
+  <li><strong><code>.json.gz</code></strong> (default) — gzip-compressed JSON. Compact, recommended for storage and sharing.</li>
+  <li><strong><code>.json</code></strong> — plain text JSON. Readable by <code>jq</code>, text editors, and any JSON tool without decompression.</li>
+</ul>
+
+<p>Both variants are auto-detected by <code>Rperf.load</code> and <code>rperf report</code>.</p>
 
 <p><strong>How to view</strong>:</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Open rperf viewer</span>
 rperf report profile.json.gz
+rperf report profile.json      <span class="c"># also works</span>
 </code></pre></div></div>
 
 <p><strong>How to load in Ruby</strong>:</p>
 
-<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">data</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">load</span><span class="p">(</span><span class="s2">"profile.json.gz"</span><span class="p">)</span>
+<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">data</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">load</span><span class="p">(</span><span class="s2">"profile.json.gz"</span><span class="p">)</span>  <span class="c1"># gzip</span>
+<span class="n">data</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">load</span><span class="p">(</span><span class="s2">"profile.json"</span><span class="p">)</span>     <span class="c1"># plain text</span>
 </code></pre></div></div>
 
-<p><strong>Advantages</strong>: Native rperf format, no external tools required to view. Portable, human-inspectable format. Can be loaded back into Ruby or processed by any JSON-capable tool.</p>
+<p><strong>Advantages</strong>: Native rperf format, no external tools required to view. Portable format. Can be loaded back into Ruby or processed by any JSON-capable tool. Use <code>.json</code> when you want to inspect or pipe through <code>jq</code>.</p>
 
 <h2 id="en--06-output-formats--pprof">6.2 pprof</h2>
 
@@ -3936,7 +3943,7 @@ graph TD
   <li><strong>On root exit</strong>: The root writes its own profile, then aggregates all <code>.json.gz</code> files in the session directory into a single merged output (stat report or file). The session directory is then deleted.</li>
 </ol>
 
-<p>For spawned children (<code>spawn</code>, <code>system</code>), the child inherits <code>RUBYOPT=-rrperf</code> and environment variables (<code>RPERF_SESSION_DIR</code>, <code>RPERF_ROOT_PROCESS</code>). When the child Ruby process loads rperf, the auto-start block detects it is not the root process and writes its profile directly to the session directory.</p>
+<p>For spawned children (<code>spawn</code>, <code>system</code>), the child inherits <code>RUBYLIB</code> (pointing to rperf’s lib directory) and <code>RUBYOPT=-rrperf</code>, plus environment variables (<code>RPERF_SESSION_DIR</code>, <code>RPERF_ROOT_PROCESS</code>). When the child Ruby process loads rperf, the auto-start block detects it is not the root process and writes its profile directly to the session directory.</p>
 
 <h3 id="en--08-architecture--session-directory">8.5.3 Session directory</h3>
 
@@ -4318,9 +4325,9 @@ graph LR
 
 <h2 id="en--11-output-encoding--json-format-default">11.2 JSON format (default)</h2>
 
-<p>rperf’s native output format is gzip-compressed JSON (<code>.json.gz</code>). This is the default when saving with <code>Rperf.save</code> or <code>rperf record</code>. The JSON file preserves all internal data: aggregated samples with frame stacks, weights, thread sequence numbers, label set IDs, and the full label sets array. It also includes profiling metadata (mode, frequency, duration, sample counts).</p>
+<p>rperf’s native output format is JSON. The default extension is <code>.json.gz</code> (gzip-compressed); <code>.json</code> writes plain text JSON. Both are auto-detected by <code>Rperf.load</code>. The JSON file preserves all internal data: aggregated samples with frame stacks, weights, thread sequence numbers, label set IDs, and the full label sets array. It also includes profiling metadata (mode, frequency, duration, sample counts).</p>
 
-<p>JSON is the recommended format for use with the rperf viewer (<code>rperf report</code> opens it directly in the browser) and for programmatic analysis in Ruby. Unlike pprof, no external tools are needed.</p>
+<p>JSON is the recommended format for use with the rperf viewer (<code>rperf report</code> opens it directly in the browser) and for programmatic analysis in Ruby. Unlike pprof, no external tools are needed. Use <code>.json</code> when you want to inspect the output with <code>jq</code> or a text editor.</p>
 
 <h2 id="en--11-output-encoding--pprof-encoder">11.3 pprof encoder</h2>
 
@@ -4559,6 +4566,11 @@ rperf <span class="nb">help</span>
       <td><code>RPERF_SIGNAL</code></td>
       <td>integer or <code>false</code></td>
       <td>Timer signal (Linux only): signal number, or <code>false</code> for nanosleep thread</td>
+    </tr>
+    <tr>
+      <td><code>RPERF_DEFER</code></td>
+      <td><code>1</code></td>
+      <td>Start with timer paused; use <code>Rperf.profile</code> to activate</td>
     </tr>
     <tr>
       <td><code>RPERF_ROOT_PROCESS</code></td>
@@ -5622,13 +5634,9 @@ Samples: 80, Frequency: 1000Hz
            253.8 ms  81.4%  Kernel#sleep (&lt;C method&gt;)
            253.8 ms  81.4%  Object#io_work (mixed.rb)
             58.0 ms  18.6%  Object#cpu_work (mixed.rb)
-
- Labels:
-           250.6 ms  80.4%  %GVL: blocked
-             0.0 ms   0.0%  %GVL: wait
 </code></pre>
 
-<p>wall モードでは、<code>%GVL: blocked</code> ラベルが支配的なコストを示しています – これは <code>io_work</code> の sleep 時間です。<code>cpu_work</code> の CPU 時間は明確に分離されています。GVL や GC のアクティビティはスタックフレームではなくサンプルのラベルとして記録され、pprof の <code>-tagfocus</code> フラグ（例: <code>-tagfocus=%GVL=blocked</code>）でフィルタリングできます。</p>
+<p>wall モードでは、<code>%GVL: blocked</code> ラベルが支配的なコストを示しています – これは <code>io_work</code> の sleep 時間です。<code>cpu_work</code> の CPU 時間は明確に分離されています。GVL や GC のアクティビティはスタックフレームではなくサンプルのラベルとして記録され、pprof の <code>-tagfocus</code> フラグ（例: <code>-tagfocus=%GVL=blocked</code>）でフィルタリングできます。カテゴリごとの時間内訳（CPU 実行、GVL ブロック、GVL 待機、GC マーキング、GC スイーピング）は <code>rperf stat</code> で確認できます。</p>
 
 <h3 id="ja--03-cli-usage--verbose-出力">3.3.6 Verbose 出力</h3>
 
@@ -5752,7 +5760,11 @@ rperf report <span class="nt">--html</span> profile.json.gz <span class="o">&gt;
     </tr>
     <tr>
       <td><code>--text</code></td>
-      <td>pprof テキストサマリーを出力</td>
+      <td>テキストレポートを出力</td>
+    </tr>
+    <tr>
+      <td><code>--html</code></td>
+      <td>静的 HTML ビューアを標準出力に出力（<code>.json.gz</code> のみ）</td>
     </tr>
     <tr>
       <td>(デフォルト)</td>
@@ -5809,7 +5821,7 @@ rperf record <span class="nt">-m</span> wall <span class="nt">-o</span> profile.
 <ol>
   <li>プロセスごとのプロファイルを収集するためのセッションディレクトリを設定</li>
   <li>fork された子プロセスでプロファイリングを再開する <code>Process._fork</code> フックをインストール</li>
-  <li>spawn された Ruby 子プロセス（<code>spawn</code>、<code>system</code>、バッククォート経由）は <code>RUBYOPT=-rrperf</code> を継承して自動的にプロファイリングを開始</li>
+  <li>spawn された Ruby 子プロセス（<code>spawn</code>、<code>system</code>、バッククォート経由）は <code>RUBYLIB</code>（rperf の lib ディレクトリを指す）と <code>RUBYOPT=-rrperf</code> を継承して自動的にプロファイリングを開始</li>
   <li>各子プロセスが終了時にプロファイルをセッションディレクトリに書き込み</li>
   <li>ルートプロセスが全プロファイルを集約して最終出力を生成</li>
 </ol>
@@ -5996,7 +6008,7 @@ Cumulative:
       <td><code>inherit:</code></td>
       <td><code>:fork</code>, <code>true</code>, or <code>false</code></td>
       <td><code>:fork</code></td>
-      <td>子プロセスの追跡を制御。<code>:fork</code> は <code>Process._fork</code> フックで fork された子を追跡。<code>true</code> は spawn された Ruby 子も追跡（<code>RUBYOPT=-rrperf</code> を設定）。<code>false</code> は子プロセス追跡を無効化</td>
+      <td>子プロセスの追跡を制御。<code>:fork</code> は <code>Process._fork</code> フックで fork された子を追跡。<code>true</code> は spawn された Ruby 子も追跡（<code>RUBYLIB</code> と <code>RUBYOPT=-rrperf</code> を設定）。<code>false</code> は子プロセス追跡を無効化</td>
     </tr>
   </tbody>
 </table>
@@ -6519,22 +6531,29 @@ graph TD
 
 <h2 id="ja--06-output-formats--json-デフォルト">6.1 JSON (デフォルト)</h2>
 
-<p><span id="ja--06-output-formats--idx-0">JSON</span> 形式は gzip 圧縮された JSON によるプロファイルデータの表現で、rperf 独自の形式です。</p>
+<p><span id="ja--06-output-formats--idx-0">JSON</span> 形式は rperf のネイティブ形式で、デフォルトの出力形式です。2 つのバリエーションがあります:</p>
 
-<p><strong>拡張子の規約</strong>: <code>.json.gz</code></p>
+<ul>
+  <li><strong><code>.json.gz</code></strong>（デフォルト）— gzip 圧縮 JSON。コンパクトで、保存・共有に推奨。</li>
+  <li><strong><code>.json</code></strong> — プレーンテキスト JSON。<code>jq</code>、テキストエディタ、その他の JSON ツールで展開なしに読める。</li>
+</ul>
+
+<p>両方のバリエーションは <code>Rperf.load</code> と <code>rperf report</code> で自動検出されます。</p>
 
 <p><strong>表示方法</strong>:</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># rperf ビューアで開く</span>
 rperf report profile.json.gz
+rperf report profile.json      <span class="c"># こちらも動作</span>
 </code></pre></div></div>
 
 <p><strong>Ruby でロード</strong>:</p>
 
-<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">data</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">load</span><span class="p">(</span><span class="s2">"profile.json.gz"</span><span class="p">)</span>
+<div class="language-ruby highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">data</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">load</span><span class="p">(</span><span class="s2">"profile.json.gz"</span><span class="p">)</span>  <span class="c1"># gzip</span>
+<span class="n">data</span> <span class="o">=</span> <span class="no">Rperf</span><span class="p">.</span><span class="nf">load</span><span class="p">(</span><span class="s2">"profile.json"</span><span class="p">)</span>     <span class="c1"># プレーンテキスト</span>
 </code></pre></div></div>
 
-<p><strong>利点</strong>: rperf のネイティブ形式。表示に外部ツール不要。ポータブルで人間が読みやすい形式。Ruby にロードし直したり、JSON 対応の任意のツールで処理可能。</p>
+<p><strong>利点</strong>: rperf のネイティブ形式。表示に外部ツール不要。ポータブルな形式。Ruby にロードし直したり、JSON 対応の任意のツールで処理可能。<code>jq</code> でパイプ処理したい場合は <code>.json</code> を使用。</p>
 
 <h2 id="ja--06-output-formats--pprof">6.2 pprof</h2>
 
@@ -7227,7 +7246,7 @@ graph TD
   <li><strong>ルートプロセス終了時</strong>: ルートが自身のプロファイルを書き込んだ後、セッションディレクトリ内のすべての <code>.json.gz</code> ファイルを集約して単一の出力（stat レポートまたはファイル）を生成。その後セッションディレクトリを削除します。</li>
 </ol>
 
-<p>spawn された子プロセス（<code>spawn</code>、<code>system</code>）の場合、子は <code>RUBYOPT=-rrperf</code> と環境変数（<code>RPERF_SESSION_DIR</code>、<code>RPERF_ROOT_PROCESS</code>）を継承します。子の Ruby プロセスが rperf を読み込むと、オートスタートブロックがルートプロセスでないことを検出し、プロファイルをセッションディレクトリに直接書き込みます。</p>
+<p>spawn された子プロセス（<code>spawn</code>、<code>system</code>）の場合、子は <code>RUBYLIB</code>（rperf の lib ディレクトリを指す）と <code>RUBYOPT=-rrperf</code>、および環境変数（<code>RPERF_SESSION_DIR</code>、<code>RPERF_ROOT_PROCESS</code>）を継承します。子の Ruby プロセスが rperf を読み込むと、オートスタートブロックがルートプロセスでないことを検出し、プロファイルをセッションディレクトリに直接書き込みます。</p>
 
 <h3 id="ja--08-architecture--セッションディレクトリ">8.5.3 セッションディレクトリ</h3>
 
@@ -7611,9 +7630,9 @@ graph LR
 
 <h2 id="ja--11-output-encoding--json-形式デフォルト">11.2 JSON 形式（デフォルト）</h2>
 
-<p>rperf のネイティブ出力形式は gzip 圧縮 JSON（<code>.json.gz</code>）です。<code>Rperf.save</code> や <code>rperf record</code> で保存する際のデフォルトです。JSON ファイルには内部データがすべて保持されます: フレームスタック付きの集約サンプル、重み、スレッド連番、ラベルセット ID、完全なラベルセット配列。プロファイリングメタデータ（モード、周波数、期間、サンプル数）も含まれます。</p>
+<p>rperf のネイティブ出力形式は JSON です。デフォルトの拡張子は <code>.json.gz</code>（gzip 圧縮）で、<code>.json</code> はプレーンテキスト JSON を出力します。どちらも <code>Rperf.load</code> で自動検出されます。JSON ファイルには内部データがすべて保持されます: フレームスタック付きの集約サンプル、重み、スレッド連番、ラベルセット ID、完全なラベルセット配列。プロファイリングメタデータ（モード、周波数、期間、サンプル数）も含まれます。</p>
 
-<p>JSON は rperf ビューア（<code>rperf report</code> でブラウザで直接開ける）や Ruby でのプログラム的な分析に推奨される形式です。pprof と異なり、外部ツールは不要です。</p>
+<p>JSON は rperf ビューア（<code>rperf report</code> でブラウザで直接開ける）や Ruby でのプログラム的な分析に推奨される形式です。pprof と異なり、外部ツールは不要です。<code>jq</code> やテキストエディタで直接確認したい場合は <code>.json</code> を使用してください。</p>
 
 <h2 id="ja--11-output-encoding--pprof-エンコーダー">11.3 pprof エンコーダー</h2>
 
@@ -7852,6 +7871,11 @@ rperf <span class="nb">help</span>
       <td><code>RPERF_SIGNAL</code></td>
       <td>integer または <code>false</code></td>
       <td>タイマーシグナル (Linux のみ): シグナル番号、または <code>false</code> で nanosleep スレッド</td>
+    </tr>
+    <tr>
+      <td><code>RPERF_DEFER</code></td>
+      <td><code>1</code></td>
+      <td>タイマーを停止状態で開始; <code>Rperf.profile</code> で有効化</td>
     </tr>
     <tr>
       <td><code>RPERF_ROOT_PROCESS</code></td>
