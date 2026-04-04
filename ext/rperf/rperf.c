@@ -53,6 +53,11 @@ enum rperf_vm_state {
 /* ---- Data structures ---- */
 
 
+enum rperf_mode {
+    RPERF_MODE_CPU  = 0,
+    RPERF_MODE_WALL = 1,
+};
+
 enum rperf_gc_phase {
     RPERF_GC_NONE     = 0,
     RPERF_GC_MARKING  = 1,
@@ -121,7 +126,6 @@ typedef struct rperf_agg_table {
 
 typedef struct rperf_thread_data {
     int64_t prev_time_ns;
-    int64_t prev_wall_ns;
     /* GVL event tracking */
     int64_t suspended_at_ns;        /* wall time at SUSPENDED */
     int64_t ready_at_ns;            /* wall time at READY */
@@ -150,7 +154,7 @@ typedef struct rperf_stats {
 
 typedef struct rperf_profiler {
     int frequency;
-    int mode; /* 0 = cpu, 1 = wall */
+    enum rperf_mode mode;
     _Atomic int running;
     pthread_t worker_thread;     /* combined timer + aggregation */
 #if RPERF_USE_TIMER_SIGNAL
@@ -262,7 +266,7 @@ rperf_wall_time_ns(void)
 static int64_t
 rperf_current_time_ns(rperf_profiler_t *prof)
 {
-    if (prof->mode == 0) {
+    if (prof->mode == RPERF_MODE_CPU) {
         return rperf_cpu_time_ns();
     } else {
         return rperf_wall_time_ns();
@@ -708,7 +712,6 @@ rperf_thread_data_create(rperf_profiler_t *prof, VALUE thread)
     int64_t t = rperf_current_time_ns(prof);
     if (t < 0) { free(td); return NULL; }
     td->prev_time_ns = t;
-    td->prev_wall_ns = (prof->mode == 1) ? t : rperf_wall_time_ns();
     td->thread_seq = ++prof->next_thread_seq;
     rb_internal_thread_specific_set(thread, prof->ts_key, td);
     return td;
@@ -751,7 +754,6 @@ rperf_handle_suspended(rperf_profiler_t *prof, VALUE thread, rperf_thread_data_t
     /* Save timestamp for READY/RESUMED */
     td->suspended_at_ns = wall_now;
     td->prev_time_ns = time_now;
-    td->prev_wall_ns = wall_now;
 }
 
 static void
@@ -782,7 +784,7 @@ rperf_handle_resumed(rperf_profiler_t *prof, VALUE thread, rperf_thread_data_t *
      * Both samples are written directly into the same buffer before calling
      * rperf_try_swap, so that a swap triggered by the first sample cannot
      * move the second into a different buffer with a stale frame_start. */
-    if (prof->mode == 1 && td->suspended_at_ns > 0 && !RPERF_PAUSED(prof)) {
+    if (prof->mode == RPERF_MODE_WALL && td->suspended_at_ns > 0 && !RPERF_PAUSED(prof)) {
         rperf_sample_buffer_t *buf = &prof->buffers[atomic_load_explicit(&prof->active_idx, memory_order_relaxed)];
         if (rperf_ensure_frame_pool_capacity(buf, RPERF_MAX_STACK_DEPTH) < 0) goto skip_gvl;
         size_t frame_start = buf->frame_pool_count;
@@ -812,7 +814,6 @@ skip_gvl:
     /* Reset prev times to current — next timer sample measures from resume */
     int64_t time_now = rperf_current_time_ns(prof);
     if (time_now >= 0) td->prev_time_ns = time_now;
-    td->prev_wall_ns = wall_now;
 
     /* Clear suspended state */
     td->suspended_at_ns = 0;
@@ -909,17 +910,15 @@ rperf_gc_event_hook(rb_event_flag_t event, VALUE data, VALUE self, ID id, VALUE 
 
 /* ---- Sampling callback (postponed job) — current thread only ---- */
 
-static void
-rperf_sample_job(void *arg)
+/* Core sampling logic, parameterized by mode constant.
+ * Called from rperf_sample_cpu/rperf_sample_wall so the compiler
+ * can inline and eliminate mode branches at compile time. */
+static inline void
+rperf_sample_core(rperf_profiler_t *prof, enum rperf_mode mode)
 {
-    rperf_profiler_t *prof = (rperf_profiler_t *)arg;
-
-    if (!prof->running) return;
-    if (RPERF_PAUSED(prof)) return;
-
-    /* Measure sampling overhead */
+    /* Measure sampling overhead (wall time — runs under GVL, no I/O) */
     struct timespec ts_start, ts_end;
-    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts_start);
+    clock_gettime(CLOCK_MONOTONIC, &ts_start);
 
     VALUE thread = rb_thread_current();
 
@@ -931,13 +930,11 @@ rperf_sample_job(void *arg)
         return; /* Skip first sample for this thread */
     }
 
-    int64_t time_now = rperf_current_time_ns(prof);
+    int64_t time_now = (mode == RPERF_MODE_CPU) ? rperf_cpu_time_ns() : rperf_wall_time_ns();
     if (time_now < 0) return;
 
     int64_t weight = time_now - td->prev_time_ns;
     td->prev_time_ns = time_now;
-    /* In wall mode, time_now is already CLOCK_MONOTONIC — reuse it */
-    td->prev_wall_ns = (prof->mode == 1) ? time_now : rperf_wall_time_ns();
 
     if (weight <= 0) return;
 
@@ -953,11 +950,31 @@ rperf_sample_job(void *arg)
 
     rperf_record_sample(prof, frame_start, depth, weight, RPERF_VM_STATE_NORMAL, td->thread_seq, td->label_set_id);
 
-    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts_end);
+    clock_gettime(CLOCK_MONOTONIC, &ts_end);
     prof->stats.sampling_count++;
     prof->stats.sampling_total_ns +=
         ((int64_t)ts_end.tv_sec - ts_start.tv_sec) * 1000000000LL +
         (ts_end.tv_nsec - ts_start.tv_nsec);
+}
+
+static void
+rperf_sample_cpu(rperf_profiler_t *prof) { rperf_sample_core(prof, RPERF_MODE_CPU); }
+
+static void
+rperf_sample_wall(rperf_profiler_t *prof) { rperf_sample_core(prof, RPERF_MODE_WALL); }
+
+static void
+rperf_sample_job(void *arg)
+{
+    rperf_profiler_t *prof = (rperf_profiler_t *)arg;
+
+    if (!prof->running) return;
+    if (RPERF_PAUSED(prof)) return;
+
+    if (prof->mode == RPERF_MODE_CPU)
+        rperf_sample_cpu(prof);
+    else
+        rperf_sample_wall(prof);
 }
 
 /* ---- Worker thread: timer + aggregation ---- */
@@ -1091,7 +1108,7 @@ rperf_build_aggregated_result(rperf_profiler_t *prof)
     result = rb_hash_new();
 
     rb_hash_aset(result, ID2SYM(rb_intern("mode")),
-                 ID2SYM(rb_intern(prof->mode == 1 ? "wall" : "cpu")));
+                 ID2SYM(rb_intern(prof->mode == RPERF_MODE_WALL ? "wall" : "cpu")));
     rb_hash_aset(result, ID2SYM(rb_intern("frequency")), INT2NUM(prof->frequency));
     rb_hash_aset(result, ID2SYM(rb_intern("trigger_count")), SIZET2NUM(prof->stats.trigger_count));
     rb_hash_aset(result, ID2SYM(rb_intern("sampling_count")), SIZET2NUM(prof->stats.sampling_count));
@@ -1171,7 +1188,7 @@ static VALUE
 rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig, VALUE vdefer)
 {
     int frequency = NUM2INT(vfreq);
-    int mode = NUM2INT(vmode);
+    enum rperf_mode mode = (enum rperf_mode)NUM2INT(vmode);
     int aggregate = RTEST(vagg) ? 1 : 0;
 #if RPERF_USE_TIMER_SIGNAL
     int sig = NUM2INT(vsig);
@@ -1466,7 +1483,7 @@ rb_rperf_stop(VALUE self)
 
         result = rb_hash_new();
         rb_hash_aset(result, ID2SYM(rb_intern("mode")),
-                     ID2SYM(rb_intern(g_profiler.mode == 1 ? "wall" : "cpu")));
+                     ID2SYM(rb_intern(g_profiler.mode == RPERF_MODE_WALL ? "wall" : "cpu")));
         rb_hash_aset(result, ID2SYM(rb_intern("frequency")), INT2NUM(g_profiler.frequency));
         rb_hash_aset(result, ID2SYM(rb_intern("trigger_count")), SIZET2NUM(g_profiler.stats.trigger_count));
         rb_hash_aset(result, ID2SYM(rb_intern("sampling_count")), SIZET2NUM(g_profiler.stats.sampling_count));
@@ -1685,7 +1702,6 @@ rperf_reset_thread_times(rperf_profiler_t *prof)
         rperf_thread_data_t *td = (rperf_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
         if (td) {
             td->prev_time_ns = rperf_current_time_ns(prof);
-            td->prev_wall_ns = rperf_wall_time_ns();
         }
     }
 }
