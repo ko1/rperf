@@ -143,6 +143,7 @@ typedef struct rperf_stats {
     size_t sampling_count;
     int64_t sampling_total_ns;
     size_t dropped_samples;     /* samples lost due to allocation failure */
+    size_t dropped_aggregation; /* samples lost during aggregation (frame_table/agg_table full) */
 } rperf_stats_t;
 
 typedef struct rperf_profiler {
@@ -530,8 +531,9 @@ rperf_agg_ensure_stack_pool(rperf_agg_table_t *at, int needed)
     return 0;
 }
 
-/* Insert or merge a stack into the aggregation table */
-static void
+/* Insert or merge a stack into the aggregation table.
+ * Returns 0 on success, -1 on failure (table full or allocation failure). */
+static int
 rperf_agg_table_insert(rperf_agg_table_t *at, const uint32_t *frame_ids,
                        int depth, int thread_seq, int label_set_id,
                        enum rperf_vm_state vm_state, int64_t weight, uint32_t hash)
@@ -548,14 +550,14 @@ rperf_agg_table_insert(rperf_agg_table_t *at, const uint32_t *frame_ids,
                    depth * sizeof(uint32_t)) == 0) {
             /* Match — merge weight */
             e->weight += weight;
-            return;
+            return 0;
         }
         idx = (idx + 1) % at->bucket_capacity;
-        if (++probes >= at->bucket_capacity) return; /* table full, drop sample */
+        if (++probes >= at->bucket_capacity) return -1; /* table full */
     }
 
     /* New entry — append frame_ids to stack_pool */
-    if (rperf_agg_ensure_stack_pool(at, depth) < 0) return;
+    if (rperf_agg_ensure_stack_pool(at, depth) < 0) return -1;
 
     rperf_agg_entry_t *e = &at->buckets[idx];
     e->frame_start = (uint32_t)at->stack_pool_count;
@@ -576,6 +578,7 @@ rperf_agg_table_insert(rperf_agg_table_t *at, const uint32_t *frame_ids,
     if (at->count * 10 > at->bucket_capacity * 7) {
         rperf_agg_table_rehash(at);
     }
+    return 0;
 }
 
 /* ---- Aggregation: process a sample buffer into frame_table + agg_table ---- */
@@ -603,13 +606,19 @@ rperf_aggregate_buffer(rperf_profiler_t *prof, rperf_sample_buffer_t *buf)
             if (fid == RPERF_FRAME_TABLE_EMPTY) { overflow = 1; break; }
             temp_ids[j] = fid;
         }
-        if (overflow) break; /* frame_table full, stop aggregating this buffer */
+        if (overflow) {
+            /* frame_table full — count remaining samples as dropped */
+            prof->stats.dropped_aggregation += buf->sample_count - i;
+            break;
+        }
 
         hash = rperf_fnv1a_u32(temp_ids, s->depth, s->thread_seq, s->label_set_id, s->vm_state);
 
-        rperf_agg_table_insert(&prof->agg_table, temp_ids, s->depth,
+        if (rperf_agg_table_insert(&prof->agg_table, temp_ids, s->depth,
                                s->thread_seq, s->label_set_id, s->vm_state,
-                               s->weight, hash);
+                               s->weight, hash) < 0) {
+            prof->stats.dropped_aggregation++;
+        }
     }
 
     /* Reset buffer for reuse.
@@ -1083,6 +1092,8 @@ rperf_build_aggregated_result(rperf_profiler_t *prof)
     rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LONG2NUM(prof->stats.sampling_total_ns));
     if (prof->stats.dropped_samples > 0)
         rb_hash_aset(result, ID2SYM(rb_intern("dropped_samples")), SIZET2NUM(prof->stats.dropped_samples));
+    if (prof->stats.dropped_aggregation > 0)
+        rb_hash_aset(result, ID2SYM(rb_intern("dropped_aggregation")), SIZET2NUM(prof->stats.dropped_aggregation));
     rb_hash_aset(result, ID2SYM(rb_intern("detected_thread_count")), INT2NUM(prof->next_thread_seq));
     rb_hash_aset(result, ID2SYM(rb_intern("unique_frames")),
                  SIZET2NUM(prof->frame_table.count));
@@ -1173,6 +1184,7 @@ rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig, VAL
     g_profiler.stats.sampling_total_ns = 0;
     g_profiler.stats.trigger_count = 0;
     g_profiler.stats.dropped_samples = 0;
+    g_profiler.stats.dropped_aggregation = 0;
     atomic_store_explicit(&g_profiler.active_idx, 0, memory_order_relaxed);
     atomic_store_explicit(&g_profiler.swap_ready, 0, memory_order_relaxed);
     g_profiler.label_sets = Qnil;
@@ -1443,6 +1455,8 @@ rb_rperf_stop(VALUE self)
         rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LONG2NUM(g_profiler.stats.sampling_total_ns));
         if (g_profiler.stats.dropped_samples > 0)
             rb_hash_aset(result, ID2SYM(rb_intern("dropped_samples")), SIZET2NUM(g_profiler.stats.dropped_samples));
+        if (g_profiler.stats.dropped_aggregation > 0)
+            rb_hash_aset(result, ID2SYM(rb_intern("dropped_aggregation")), SIZET2NUM(g_profiler.stats.dropped_aggregation));
         rb_hash_aset(result, ID2SYM(rb_intern("detected_thread_count")), INT2NUM(g_profiler.next_thread_seq));
         {
             struct timespec stop_monotonic;

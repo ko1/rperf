@@ -74,9 +74,10 @@ and flat/cumulative top-50 function tables.
 Default (no flag): opens interactive web UI in browser.
 Default file: rperf.json.gz
 
-`--html` generates a self-contained HTML file that can be opened directly
-in a browser without a server. Profile data is embedded inline; d3 and
-d3-flamegraph are loaded from CDN. Useful for sharing or hosting on static
+`--html` generates an HTML file with profile data embedded inline.
+No server is needed — open it directly in a browser. d3 and
+d3-flamegraph are loaded from CDN, so an internet connection is
+required on first viewing. Useful for sharing or hosting on static
 sites (e.g., GitHub Pages).
 
     rperf report --html profile.json.gz > report.html

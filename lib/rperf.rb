@@ -169,7 +169,15 @@ module Rperf
   end
 
   def self._intern_label_set(hash)
-    frozen = hash.frozen? ? hash : hash.freeze
+    # Deep-freeze: dup and freeze both keys and values to prevent
+    # mutation of interned label sets via shared string references.
+    frozen = if hash.frozen?
+      hash
+    else
+      hash.each_with_object({}) { |(k, v), h|
+        h[k.frozen? ? k : k.dup.freeze] = v.frozen? ? v : v.dup.freeze
+      }.freeze
+    end
     @label_set_index[frozen] ||= begin
       id = @label_set_table.size
       @label_set_table << frozen
@@ -274,7 +282,7 @@ module Rperf
       unless new_id
         base = label_sets[label_set_id] || {}
         key, value = VM_STATE_LABELS[vm_state]
-        new_ls = base.merge(key => value).freeze
+        new_ls = base.merge(key.to_sym => value).freeze
         new_id = label_sets.size
         label_sets << new_ls
         mapping[cache_key] = new_id
@@ -455,7 +463,7 @@ module Rperf
       breakdown, total_weight = compute_stat_breakdown(samples_raw, data[:label_sets])
       print_stat_breakdown(breakdown, total_weight)
       print_stat_runtime_info(data)
-      print_stat_system_info
+      print_stat_system_info(data)
       print_stat_report(data) if ENV["RPERF_STAT_REPORT"] == "1"
       print_stat_footer(samples_raw, real_ns, data)
     end
@@ -473,8 +481,8 @@ module Rperf
       if label_sets && label_set_id && label_set_id > 0
         ls = label_sets[label_set_id]
         if ls
-          gvl = ls["%GVL"]
-          gc  = ls["%GC"]
+          gvl = ls[:"%GVL"] || ls["%GVL"]
+          gc  = ls[:"%GC"]  || ls["%GC"]
           if gvl == "blocked"    then category = :gvl_blocked
           elsif gvl == "wait"    then category = :gvl_wait
           elsif gc  == "mark"    then category = :gc_marking
@@ -529,7 +537,7 @@ module Rperf
   end
   private_class_method :print_stat_runtime_info
 
-  def self.print_stat_system_info
+  def self.print_stat_system_info(data = nil)
     sys_stats = get_system_stats
     maxrss_kb = sys_stats[:maxrss_kb]
     if maxrss_kb
@@ -559,6 +567,10 @@ module Rperf
           format_integer((r / 1024.0 / 1024.0).round),
           format_integer((w / 1024.0 / 1024.0).round)])
     end
+    process_count = data[:process_count] if data
+    if process_count && process_count > 1
+      $stderr.puts STAT_LINE.call("", "  ", "(user/sys/GC/OS stats are from root process only; [Rperf] lines are aggregated)")
+    end
   end
   private_class_method :print_stat_system_info
 
@@ -579,6 +591,10 @@ module Rperf
     dropped = data[:dropped_samples] || 0
     if dropped > 0
       $stderr.puts format("  WARNING: %d samples dropped due to memory allocation failure", dropped)
+    end
+    dropped_agg = data[:dropped_aggregation] || 0
+    if dropped_agg > 0
+      $stderr.puts format("  WARNING: %d samples dropped during aggregation (frame/stack table full)", dropped_agg)
     end
   end
   private_class_method :print_stat_footer
@@ -854,12 +870,14 @@ module Rperf
     child_label_sets = data[:label_sets] || [{}]
     id_map = {}
     child_label_sets.each_with_index do |ls, child_id|
-      existing = merged_label_sets.index(ls)
+      # Normalize keys to symbols for consistent comparison
+      normalized = ls.is_a?(Hash) ? ls.transform_keys(&:to_sym) : ls
+      existing = merged_label_sets.index(normalized)
       if existing
         id_map[child_id] = existing
       else
         id_map[child_id] = merged_label_sets.size
-        merged_label_sets << ls
+        merged_label_sets << normalized
       end
     end
 

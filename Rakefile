@@ -40,4 +40,9 @@ task :rel do
   puts "Pushed #{tag} — GitHub Actions will publish the gem"
 end
 
+desc "Run multi-process integration tests (shell-based)"
+task :test_multiprocess => :compile do
+  sh "bash", "test/test_rperf_multiprocess.sh"
+end
+
 task default: [:compile, :manual, :examples, :test]

@@ -141,8 +141,10 @@ class TestRperfGvl < Test::Unit::TestCase
     data[:aggregated_samples].each do |_, _, _, lsi|
       ls = label_sets[lsi]
       next unless ls
-      result << "GVL:#{ls["%GVL"]}" if ls["%GVL"]
-      result << "GC:#{ls["%GC"]}" if ls["%GC"]
+      gvl = ls[:"%GVL"] || ls["%GVL"]
+      gc  = ls[:"%GC"]  || ls["%GC"]
+      result << "GVL:#{gvl}" if gvl
+      result << "GC:#{gc}" if gc
     end
     result.uniq
   end
