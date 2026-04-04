@@ -232,12 +232,42 @@ rperf_profiler_mark(void *ptr)
     }
 }
 
+static size_t
+rperf_profiler_memsize(const void *ptr)
+{
+    const rperf_profiler_t *prof = (const rperf_profiler_t *)ptr;
+    size_t size = sizeof(rperf_profiler_t);
+    int i;
+
+    /* Double-buffered sample storage */
+    for (i = 0; i < 2; i++) {
+        const rperf_sample_buffer_t *buf = &prof->buffers[i];
+        size += buf->sample_capacity * sizeof(rperf_sample_t);
+        size += buf->frame_pool_capacity * sizeof(VALUE);
+    }
+
+    /* Frame table */
+    size += prof->frame_table.capacity * sizeof(VALUE);           /* keys */
+    size += prof->frame_table.bucket_capacity * sizeof(uint32_t); /* buckets */
+    for (i = 0; i < prof->frame_table.old_keys_count; i++) {
+        /* old_keys entries are previous keys arrays; exact sizes unknown,
+         * but the pointer array itself is accounted for below. */
+    }
+    size += prof->frame_table.old_keys_capacity * sizeof(VALUE *); /* old_keys */
+
+    /* Aggregation table */
+    size += prof->agg_table.bucket_capacity * sizeof(rperf_agg_entry_t);
+    size += prof->agg_table.stack_pool_capacity * sizeof(uint32_t);
+
+    return size;
+}
+
 static const rb_data_type_t rperf_profiler_type = {
     .wrap_struct_name = "rperf_profiler",
     .function = {
         .dmark = rperf_profiler_mark,
         .dfree = NULL,
-        .dsize = NULL,
+        .dsize = rperf_profiler_memsize,
     },
 };
 
@@ -1741,6 +1771,12 @@ rb_rperf_running_p(VALUE self)
     return g_profiler.running ? Qtrue : Qfalse;
 }
 
+static VALUE
+rb_rperf_profiler_wrapper(VALUE self)
+{
+    return g_profiler_wrapper;
+}
+
 /* ---- Fork safety ---- */
 
 static void
@@ -1820,6 +1856,7 @@ Init_rperf(void)
     rb_define_module_function(mRperf, "_c_profile_inc", rb_rperf_profile_inc, 0);
     rb_define_module_function(mRperf, "_c_profile_dec", rb_rperf_profile_dec, 0);
     rb_define_module_function(mRperf, "_c_running?", rb_rperf_running_p, 0);
+    rb_define_module_function(mRperf, "_c_profiler_wrapper", rb_rperf_profiler_wrapper, 0);
 
     memset(&g_profiler, 0, sizeof(g_profiler));
     g_profiler.label_sets = Qnil;

@@ -458,6 +458,23 @@ class TestRperfProfiler < Test::Unit::TestCase
     end
   end
 
+  # --- memsize_of ---
+
+  def test_memsize_of_before_start
+    require "objspace"
+    size = ObjectSpace.memsize_of(Rperf._c_profiler_wrapper)
+    assert_operator size, :>, 0, "memsize_of should return positive value even before start"
+  end
+
+  def test_memsize_of_during_profiling
+    require "objspace"
+    Rperf.start(frequency: 1000)
+    5_000_000.times { 1 + 1 }
+    size = ObjectSpace.memsize_of(Rperf._c_profiler_wrapper)
+    Rperf.stop
+    assert_operator size, :>, 0, "memsize_of should return positive value during profiling"
+  end
+
   # --- ActiveJob middleware require ---
 
   def test_active_job_middleware_loadable
