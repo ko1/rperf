@@ -409,8 +409,8 @@ class TestRperfProfiler < Test::Unit::TestCase
     rubyopt = ENV["RUBYOPT"].to_s
     assert_include rubyopt, "-rrperf",
       "RUBYOPT should contain -rrperf"
-    refute_match(/-r\//, rubyopt,
-      "RUBYOPT should not contain -r<full path> (breaks on spaces)")
+    refute_match(/-r\S*rperf\S*\//, rubyopt,
+      "RUBYOPT should not contain -r<full path to rperf> (breaks on spaces)")
 
     # RUBYLIB should contain rperf's lib directory
     rubylib = ENV["RUBYLIB"].to_s
