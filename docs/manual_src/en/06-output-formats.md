@@ -4,24 +4,29 @@ rperf supports four output formats. The format is auto-detected from the file ex
 
 ## JSON (default)
 
-The [JSON](#index:json) format is a gzip-compressed JSON representation of the profile data. This is rperf's native format and the default output.
+The [JSON](#index:json) format is rperf's native format and the default output. It comes in two variants:
 
-**Extension convention**: `.json.gz`
+- **`.json.gz`** (default) — gzip-compressed JSON. Compact, recommended for storage and sharing.
+- **`.json`** — plain text JSON. Readable by `jq`, text editors, and any JSON tool without decompression.
+
+Both variants are auto-detected by `Rperf.load` and `rperf report`.
 
 **How to view**:
 
 ```bash
 # Open rperf viewer
 rperf report profile.json.gz
+rperf report profile.json      # also works
 ```
 
 **How to load in Ruby**:
 
 ```ruby
-data = Rperf.load("profile.json.gz")
+data = Rperf.load("profile.json.gz")  # gzip
+data = Rperf.load("profile.json")     # plain text
 ```
 
-**Advantages**: Native rperf format, no external tools required to view. Portable, human-inspectable format. Can be loaded back into Ruby or processed by any JSON-capable tool.
+**Advantages**: Native rperf format, no external tools required to view. Portable format. Can be loaded back into Ruby or processed by any JSON-capable tool. Use `.json` when you want to inspect or pipe through `jq`.
 
 ## pprof
 

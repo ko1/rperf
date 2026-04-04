@@ -16,9 +16,9 @@ The Ruby encoders consume these arrays to produce the final output.
 
 ## JSON format (default)
 
-rperf's native output format is gzip-compressed JSON (`.json.gz`). This is the default when saving with `Rperf.save` or `rperf record`. The JSON file preserves all internal data: aggregated samples with frame stacks, weights, thread sequence numbers, label set IDs, and the full label sets array. It also includes profiling metadata (mode, frequency, duration, sample counts).
+rperf's native output format is JSON. The default extension is `.json.gz` (gzip-compressed); `.json` writes plain text JSON. Both are auto-detected by `Rperf.load`. The JSON file preserves all internal data: aggregated samples with frame stacks, weights, thread sequence numbers, label set IDs, and the full label sets array. It also includes profiling metadata (mode, frequency, duration, sample counts).
 
-JSON is the recommended format for use with the rperf viewer (`rperf report` opens it directly in the browser) and for programmatic analysis in Ruby. Unlike pprof, no external tools are needed.
+JSON is the recommended format for use with the rperf viewer (`rperf report` opens it directly in the browser) and for programmatic analysis in Ruby. Unlike pprof, no external tools are needed. Use `.json` when you want to inspect the output with `jq` or a text editor.
 
 ## pprof encoder
 

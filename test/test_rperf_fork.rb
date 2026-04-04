@@ -326,4 +326,42 @@ class TestRperfMultiProcess < Test::Unit::TestCase
   ensure
     File.delete(output_file) if output_file && File.exist?(output_file)
   end
+
+  # When aggregation fails (e.g., session dir removed early), root data
+  # should still be written to the user-specified output as fallback.
+  def test_aggregation_fallback_writes_root_data
+    Dir.mktmpdir do |dir|
+      output_file = File.join(dir, "fallback.json.gz")
+
+      Rperf.start(frequency: 100, mode: :cpu, output: output_file, inherit: :fork)
+
+      # Fork to trigger session dir creation via _on_first_fork
+      pid = fork do
+        5_000_000.times { 1 + 1 }
+        # Don't call Rperf.stop — child exits without writing profile
+      end
+      Process.waitpid(pid)
+
+      # Delete the session dir before root calls stop, so aggregation returns nil
+      session_dir = ENV["RPERF_SESSION_DIR"]
+      if session_dir && File.directory?(session_dir)
+        require "fileutils"
+        FileUtils.rm_rf(session_dir)
+      end
+
+      5_000_000.times { 1 + 1 }
+
+      old_stderr = $stderr
+      $stderr = StringIO.new
+      data = Rperf.stop
+      warning = $stderr.string
+      $stderr = old_stderr
+
+      assert_not_nil data, "stop should return root data as fallback"
+      assert_include warning, "aggregation failed",
+        "Should warn about aggregation failure"
+      assert File.exist?(output_file),
+        "Fallback should write root data to user-specified output"
+    end
+  end
 end

@@ -327,13 +327,14 @@ Returns the current thread's labels as a Hash. Empty hash if none set.
 
 ### Rperf.load(path)
 
-Loads a `.json.gz` profile file (saved by `rperf record` or `Rperf.save`)
+Loads a `.json.gz` or `.json` profile file (saved by `rperf record` or `Rperf.save`)
 and returns the parsed data hash (same format as `Rperf.stop` / `Rperf.snapshot`).
+Gzip is auto-detected by magic bytes, so both compressed and plain files work.
 Warns to stderr if the file was saved by a different rperf version.
 
 ```ruby
-data = Rperf.load("rperf.json.gz")
-# data is a Hash with :mode, :frequency, :aggregated_samples, etc.
+data = Rperf.load("rperf.json.gz")   # gzip compressed
+data = Rperf.load("profile.json")    # plain text JSON
 ```
 
 ### Rperf.save(path, data, format: nil)
@@ -475,12 +476,12 @@ Tag keys are sorted alphabetically (`%`-prefixed VM state keys appear first).
 
 ### json (default) — rperf native format
 
-Gzip-compressed JSON representation of the internal data hash
+JSON representation of the internal data hash
 (the same hash returned by `Rperf.stop` / `Rperf.snapshot` — see
 "Return value" above for the full structure).
 Preserves all data including labels, VM state, thread info, and statistics.
 Readable by non-Ruby tools (Python, jq, etc.).
-Extension convention: `.json.gz`
+Extension convention: `.json.gz` (gzip-compressed, default) or `.json` (plain text).
 View with: `rperf report` (opens rperf viewer in browser, no Go required).
 Load programmatically: `data = Rperf.load("rperf.json.gz")`
 
@@ -545,7 +546,8 @@ Example output:
 
 Format is auto-detected from the output file extension:
 
-    .json.gz    → json (rperf native, default)
+    .json.gz    → json (rperf native, gzip compressed, default)
+    .json       → json (plain text, readable by jq)
     .pb.gz      → pprof
     .collapsed  → collapsed
     .txt        → text

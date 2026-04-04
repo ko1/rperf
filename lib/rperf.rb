@@ -154,6 +154,15 @@ module Rperf
         save(File.join(session_dir, "profile-#{Process.pid}.json.gz"), data, format: :json)
       end
       merged = _aggregate_and_report
+      if merged.nil? && data
+        # Aggregation failed or returned nothing — fall back to writing
+        # root's own data so the user doesn't silently lose everything.
+        $stderr.puts "rperf: warning: multi-process aggregation failed; writing root process data only"
+        if @_aggregate_output
+          write_data(@_aggregate_output, data, @_aggregate_format)
+        end
+        print_stat(data) if @_aggregate_stat
+      end
       _cleanup_session_state
       return merged || data
     end
