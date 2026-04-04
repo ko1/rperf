@@ -1048,7 +1048,10 @@ details.mermaid-source pre {
                 <a href="#en--03-cli-usage--rperf-diff" class="toc-h2" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--rperf-diff')">3.5 rperf diff</a>
               </li>
               <li>
-                <a href="#en--03-cli-usage--rperf-help" class="toc-h2" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--rperf-help')">3.6 rperf help</a>
+                <a href="#en--03-cli-usage--multi-process-profiling" class="toc-h2" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--multi-process-profiling')">3.6 Multi-process profiling</a>
+              </li>
+              <li>
+                <a href="#en--03-cli-usage--rperf-help" class="toc-h2" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--rperf-help')">3.7 rperf help</a>
               </li>
             </ul>
           </li>
@@ -1168,7 +1171,7 @@ details.mermaid-source pre {
                 <a href="#en--08-architecture--gc-safety" class="toc-h2" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--gc-safety')">8.4 GC safety</a>
               </li>
               <li>
-                <a href="#en--08-architecture--fork-safety" class="toc-h2" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--fork-safety')">8.5 Fork safety</a>
+                <a href="#en--08-architecture--fork-safety-and-multi-process-profiling" class="toc-h2" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--fork-safety-and-multi-process-profiling')">8.5 Fork safety and multi-process profiling</a>
               </li>
               <li>
                 <a href="#en--08-architecture--known-limitations" class="toc-h2" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--known-limitations')">8.6 Known limitations</a>
@@ -1340,7 +1343,10 @@ details.mermaid-source pre {
                 <a href="#ja--03-cli-usage--rperf-diff" class="toc-h2" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--rperf-diff')">3.5 rperf diff</a>
               </li>
               <li>
-                <a href="#ja--03-cli-usage--rperf-help" class="toc-h2" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--rperf-help')">3.6 rperf help</a>
+                <a href="#ja--03-cli-usage--マルチプロセス-プロファイリング" class="toc-h2" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--マルチプロセス-プロファイリング')">3.6 マルチプロセス プロファイリング</a>
+              </li>
+              <li>
+                <a href="#ja--03-cli-usage--rperf-help" class="toc-h2" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--rperf-help')">3.7 rperf help</a>
               </li>
             </ul>
           </li>
@@ -1460,7 +1466,7 @@ details.mermaid-source pre {
                 <a href="#ja--08-architecture--gc-安全性" class="toc-h2" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--gc-安全性')">8.4 GC 安全性</a>
               </li>
               <li>
-                <a href="#ja--08-architecture--fork-安全性" class="toc-h2" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--fork-安全性')">8.5 Fork 安全性</a>
+                <a href="#ja--08-architecture--fork-安全性とマルチプロセス-プロファイリング" class="toc-h2" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--fork-安全性とマルチプロセス-プロファイリング')">8.5 Fork 安全性とマルチプロセス プロファイリング</a>
               </li>
               <li>
                 <a href="#ja--08-architecture--既知の制限事項" class="toc-h2" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--既知の制限事項')">8.6 既知の制限事項</a>
@@ -1643,7 +1649,12 @@ details.mermaid-source pre {
             <li class="toc-full-h3"><a href="#en--03-cli-usage--report-options" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--report-options'); return false;">3.4.2 report options</a></li>
             <li class="toc-full-h2"><a href="#en--03-cli-usage--rperf-diff" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--rperf-diff'); return false;">3.5 rperf diff</a></li>
             <li class="toc-full-h3"><a href="#en--03-cli-usage--workflow-example" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--workflow-example'); return false;">3.5.1 Workflow example</a></li>
-            <li class="toc-full-h2"><a href="#en--03-cli-usage--rperf-help" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--rperf-help'); return false;">3.6 rperf help</a></li>
+            <li class="toc-full-h2"><a href="#en--03-cli-usage--multi-process-profiling" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--multi-process-profiling'); return false;">3.6 Multi-process profiling</a></li>
+            <li class="toc-full-h3"><a href="#en--03-cli-usage--how-it-works" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--how-it-works'); return false;">3.6.1 How it works</a></li>
+            <li class="toc-full-h3"><a href="#en--03-cli-usage--disabling-child-tracking" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--disabling-child-tracking'); return false;">3.6.2 Disabling child tracking</a></li>
+            <li class="toc-full-h3"><a href="#en--03-cli-usage--example-fork-with-distinct-work" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--example-fork-with-distinct-work'); return false;">3.6.3 Example: Fork with distinct work</a></li>
+            <li class="toc-full-h3"><a href="#en--03-cli-usage--limitations" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--limitations'); return false;">3.6.4 Limitations</a></li>
+            <li class="toc-full-h2"><a href="#en--03-cli-usage--rperf-help" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--rperf-help'); return false;">3.7 rperf help</a></li>
 </ul>
         </div>
         <div class="toc-full-chapter">
@@ -1736,7 +1747,11 @@ details.mermaid-source pre {
             <li class="toc-full-h2"><a href="#en--08-architecture--global-profiler-state" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--global-profiler-state'); return false;">8.2 Global profiler state</a></li>
             <li class="toc-full-h2"><a href="#en--08-architecture--per-thread-data" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--per-thread-data'); return false;">8.3 Per-thread data</a></li>
             <li class="toc-full-h2"><a href="#en--08-architecture--gc-safety" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--gc-safety'); return false;">8.4 GC safety</a></li>
-            <li class="toc-full-h2"><a href="#en--08-architecture--fork-safety" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--fork-safety'); return false;">8.5 Fork safety</a></li>
+            <li class="toc-full-h2"><a href="#en--08-architecture--fork-safety-and-multi-process-profiling" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--fork-safety-and-multi-process-profiling'); return false;">8.5 Fork safety and multi-process profiling</a></li>
+            <li class="toc-full-h3"><a href="#en--08-architecture--fork-safety-c-level" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--fork-safety-c-level'); return false;">8.5.1 Fork safety (C level)</a></li>
+            <li class="toc-full-h3"><a href="#en--08-architecture--multi-process-profiling-ruby-level" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--multi-process-profiling-ruby-level'); return false;">8.5.2 Multi-process profiling (Ruby level)</a></li>
+            <li class="toc-full-h3"><a href="#en--08-architecture--session-directory" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--session-directory'); return false;">8.5.3 Session directory</a></li>
+            <li class="toc-full-h3"><a href="#en--08-architecture--label-merging" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--label-merging'); return false;">8.5.4 Label merging</a></li>
             <li class="toc-full-h2"><a href="#en--08-architecture--known-limitations" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--known-limitations'); return false;">8.6 Known limitations</a></li>
             <li class="toc-full-h3"><a href="#en--08-architecture--running-ec-race" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--running-ec-race'); return false;">8.6.1 Running EC race</a></li>
             <li class="toc-full-h3"><a href="#en--08-architecture--single-session" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--single-session'); return false;">8.6.2 Single session</a></li>
@@ -1819,9 +1834,9 @@ details.mermaid-source pre {
 
 <ul>
   <li><strong>Accurate profiling</strong>: Time-delta weighting corrects <span id="en--01-introduction--idx-7">safepoint bias</span>, producing results closer to real time distribution than traditional count-based profilers.</li>
-  <li><strong>GVL / GC visibility</strong>: In wall mode, tracks off-GVL blocking, GVL contention, and GC marking/sweeping as sample labels — no separate tool needed.</li>
+  <li><strong>GVL / GC visibility</strong>: Tracks GVL blocking and contention (wall mode) and GC marking/sweeping (both modes) as sample labels — no separate tool needed.</li>
   <li><strong>Standard output formats</strong>: Outputs <span id="en--01-introduction--idx-8">JSON</span> (rperf native, default), <span id="en--01-introduction--idx-9">pprof</span> protobuf (compatible with <code>go tool pprof</code>), <span id="en--01-introduction--idx-10">collapsed stacks</span> (for flame graphs / speedscope), and human-readable text.</li>
-  <li><strong>Built-in viewer</strong>: Includes an in-browser flamegraph viewer (<span id="en--01-introduction--idx-11"><code>Rperf::Viewer</code></span>) with tag filtering — no external tools required.</li>
+  <li><strong>Built-in viewer</strong>: Includes an in-browser flamegraph viewer (<span id="en--01-introduction--idx-11"><code>Rperf::Viewer</code></span>) with tag filtering. <code>--html</code> output loads d3 from CDN.</li>
   <li><strong>Low overhead</strong>: Default 1000 Hz sampling callback cost is &lt; 0.2%, suitable for production.</li>
   <li><strong>Simple CLI</strong>: <code>rperf stat</code> for a quick overview, <code>rperf record</code> + <code>rperf report</code> for detailed analysis.</li>
 </ul>
@@ -1880,7 +1895,7 @@ sequenceDiagram
 <h3 id="en--01-introduction--other-advantages">1.2.2 Other advantages</h3>
 
 <ul>
-  <li><strong>GVL and GC awareness</strong>: In wall mode, rperf tracks time spent blocked off the GVL, waiting to reacquire the GVL, and in GC marking/sweeping phases — each as sample labels (<code>%GVL</code> and <code>%GC</code>) that can be filtered with pprof’s <code>-tagfocus</code> and <code>-tagroot</code>.</li>
+  <li><strong>GVL and GC awareness</strong>: In wall mode, rperf tracks time spent blocked off the GVL and waiting to reacquire the GVL (<code>%GVL</code> labels). GC marking/sweeping time is tracked in both CPU and wall modes (<code>%GC</code> labels, always using wall time as the weight). These labels can be filtered with pprof’s <code>-tagfocus</code> and <code>-tagroot</code>.</li>
   <li><strong>perf-like CLI</strong>: The <span id="en--01-introduction--idx-14"><code>rperf stat</code></span> command gives you a quick performance overview (like <code>perf stat</code>), while <span id="en--01-introduction--idx-15"><code>rperf record</code></span> + <span id="en--01-introduction--idx-16"><code>rperf report</code></span> gives you detailed profiling.</li>
   <li><strong>Standard output</strong>: rperf outputs <span id="en--01-introduction--idx-17">JSON</span> (native format, default), <span id="en--01-introduction--idx-18">pprof</span> protobuf format (compatible with Go’s <code>pprof</code> tool ecosystem), <span id="en--01-introduction--idx-19">collapsed stacks</span> (for <span id="en--01-introduction--cite-3">flame graphs<sup class="cite-ref"><a href="#bib-gregg2016" title="Brendan Gregg. The Flame Graph. Communications of the ACM. Vol. 59. No. 6. pp. 48--57. 2016." onclick="showChapterAndScroll('__bibliography__', 'bib-gregg2016'); return false;">[Brendan, 2016]</a></sup></span> and speedscope), and human-readable text.</li>
   <li><strong>Low overhead</strong>: Default 1000 Hz sampling callback cost is &lt; 0.2%, suitable for production use.</li>
@@ -2147,6 +2162,10 @@ Run 'rperf help' for full documentation
       <td>Disable sample aggregation (keep raw samples)</td>
     </tr>
     <tr>
+      <td><code>--no-inherit</code></td>
+      <td>Do not profile forked/spawned child processes (default: inherit)</td>
+    </tr>
+    <tr>
       <td><code>-v</code></td>
       <td>Print additional sampling statistics</td>
     </tr>
@@ -2194,6 +2213,10 @@ Run 'rperf help' for full documentation
     <tr>
       <td><code>--no-aggregate</code></td>
       <td>Disable sample aggregation (keep raw samples)</td>
+    </tr>
+    <tr>
+      <td><code>--no-inherit</code></td>
+      <td>Do not profile forked/spawned child processes (default: inherit)</td>
     </tr>
     <tr>
       <td><code>-v</code></td>
@@ -2360,6 +2383,10 @@ Samples: 80, Frequency: 1000Hz
       <td>Disable sample aggregation (keep raw samples)</td>
     </tr>
     <tr>
+      <td><code>--no-inherit</code></td>
+      <td>Do not profile forked/spawned child processes (default: inherit)</td>
+    </tr>
+    <tr>
       <td><code>-v</code></td>
       <td>Print sampling statistics to stderr</td>
     </tr>
@@ -2389,7 +2416,7 @@ rperf report <span class="nt">--text</span>
 rperf report <span class="nt">--html</span> profile.json.gz <span class="o">&gt;</span> report.html
 </code></pre></div></div>
 
-<p>The <code>--html</code> flag generates a self-contained HTML file with the profile data embedded inline. It loads d3 and d3-flamegraph from CDN, so no server is needed to view the flamegraph — just open the file in a browser. This is useful for sharing profiles or hosting them on static sites like GitHub Pages.</p>
+<p>The <code>--html</code> flag generates a single HTML file with the profile data embedded inline. It loads d3 and d3-flamegraph from CDN, so an internet connection is required to view the flamegraph — just open the file in a browser. This is useful for sharing profiles or hosting them on static sites like GitHub Pages.</p>
 
 <h3 id="en--03-cli-usage--example-top-and-text-output">3.4.1 Example: Top and text output</h3>
 
@@ -2464,7 +2491,66 @@ rperf record <span class="nt">-o</span> after.pb.gz ruby my_app.rb
 rperf diff before.pb.gz after.pb.gz
 </code></pre></div></div>
 
-<h2 id="en--03-cli-usage--rperf-help">3.6 rperf help</h2>
+<h2 id="en--03-cli-usage--multi-process-profiling">3.6 Multi-process profiling</h2>
+
+<p>By default, all CLI subcommands (<code>stat</code>, <code>exec</code>, <code>record</code>) automatically profile <span id="en--03-cli-usage--idx-9">forked</span> and spawned Ruby child processes. Profiles from all processes are merged into a single output — the stat report shows aggregated data, and <code>record</code> produces a single merged file.</p>
+
+<p>This is particularly useful for <span id="en--03-cli-usage--idx-10">preforking servers</span> like Unicorn and Puma, where the master process forks worker processes:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Profile a Unicorn server with all its workers</span>
+rperf <span class="nb">stat</span> <span class="nt">-m</span> wall bundle <span class="nb">exec </span>unicorn <span class="nt">-c</span> config.rb
+
+<span class="c"># Record a merged profile from a Puma server</span>
+rperf record <span class="nt">-m</span> wall <span class="nt">-o</span> profile.json.gz bundle <span class="nb">exec </span>puma
+</code></pre></div></div>
+
+<h3 id="en--03-cli-usage--how-it-works">3.6.1 How it works</h3>
+
+<p>When child process tracking is enabled (the default), rperf:</p>
+
+<ol>
+  <li>Sets up a session directory for collecting per-process profiles</li>
+  <li>Installs a <code>Process._fork</code> hook that restarts profiling in forked children</li>
+  <li>Spawned Ruby children (via <code>spawn</code>, <code>system</code>, backticks) inherit <code>RUBYOPT=-rrperf</code> and auto-start profiling</li>
+  <li>Each child writes its profile to the session directory on exit</li>
+  <li>The root process aggregates all profiles and produces the final output</li>
+</ol>
+
+<p>Each child process’s samples are tagged with a <span id="en--03-cli-usage--idx-11"><code>%pid</code></span> label containing the process ID. This allows per-process filtering in the viewer (tagfocus by PID) or in pprof (<code>-tagfocus=%pid=1234</code>).</p>
+
+<h3 id="en--03-cli-usage--disabling-child-tracking">3.6.2 Disabling child tracking</h3>
+
+<p>Use <code>--no-inherit</code> to profile only the root process:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>rperf <span class="nb">stat</span> <span class="nt">--no-inherit</span> ruby my_app.rb
+</code></pre></div></div>
+
+<h3 id="en--03-cli-usage--example-fork-with-distinct-work">3.6.3 Example: Fork with distinct work</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>rperf <span class="nb">stat </span>ruby <span class="nt">-e</span> <span class="s1">'
+  def parent_work = 10_000_000.times { 1 + 1 }
+  def child_work  = 10_000_000.times { 1 + 1 }
+  fork { child_work }
+  Process.waitall
+  parent_work
+'</span>
+</code></pre></div></div>
+
+<p>The stat output shows aggregated data from both processes, with a “Ruby processes profiled” count:</p>
+
+<pre><code>               2            [Rperf] Ruby processes profiled
+</code></pre>
+
+<h3 id="en--03-cli-usage--limitations">3.6.4 Limitations</h3>
+
+<ul>
+  <li><strong>Daemon children</strong>: Processes that call <code>Process.daemon</code> and outlive the parent will have their profiles lost — the parent aggregates and cleans up the session directory at exit.</li>
+  <li><strong>Cross-process snapshots</strong>: <code>Rperf.snapshot</code> only covers the current process. There is no way to snapshot all children simultaneously.</li>
+  <li><strong>Non-Ruby children</strong>: Only Ruby child processes are profiled. Shell scripts, Python processes, etc. are not affected by rperf.</li>
+  <li><strong>Independent rperf users</strong>: Child processes that use rperf independently (<code>Rperf.start</code> in their own code) will conflict with the inherited auto-start session. Such programs should clear <code>RPERF_ENABLED</code> from their environment before requiring rperf.</li>
+</ul>
+
+<h2 id="en--03-cli-usage--rperf-help">3.7 rperf help</h2>
 
 <p><code>rperf help</code> prints the full reference documentation, including profiling modes, output formats, VM state labels, and diagnostic tips.</p>
 
@@ -2607,6 +2693,12 @@ Cumulative:
       <td>Boolean</td>
       <td><code>false</code></td>
       <td>Start with timer paused. Use <span id="en--04-library-usage--idx-2"><code>Rperf.profile</code></span> blocks to activate sampling for specific sections</td>
+    </tr>
+    <tr>
+      <td><code>inherit:</code></td>
+      <td><code>:fork</code>, <code>true</code>, or <code>false</code></td>
+      <td><code>:fork</code></td>
+      <td>Controls child process tracking. <code>:fork</code> tracks forked children via <code>Process._fork</code> hook. <code>true</code> also tracks spawned Ruby children (sets <code>RUBYOPT=-rrperf</code>). <code>false</code> disables child tracking</td>
     </tr>
   </tbody>
 </table>
@@ -3142,7 +3234,7 @@ graph TD
 
 <p><strong>How to view</strong>:</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Open rperf viewer (no external tools required)</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Open rperf viewer</span>
 rperf report profile.json.gz
 </code></pre></div></div>
 
@@ -3817,17 +3909,44 @@ graph TD
 
 <p>The frame table keys array starts at 4,096 entries and grows by 2× when full. Growth allocates a new array, copies existing data, and swaps the pointer atomically (<code>memory_order_release</code>). The old array is kept alive until <code>stop</code> to prevent use-after-free if GC’s mark phase is reading it concurrently. The <code>dmark</code> function loads the keys pointer with <code>memory_order_acquire</code> and the count with <code>memory_order_acquire</code> to ensure a consistent view.</p>
 
-<h2 id="en--08-architecture--fork-safety">8.5 Fork safety</h2>
+<h2 id="en--08-architecture--fork-safety-and-multi-process-profiling">8.5 Fork safety and multi-process profiling</h2>
+
+<h3 id="en--08-architecture--fork-safety-c-level">8.5.1 Fork safety (C level)</h3>
 
 <p>rperf registers a <code>pthread_atfork</code> child handler that silently stops profiling in the forked child process (<span id="en--08-architecture--idx-1">fork safety</span>):</p>
 
 <ul>
   <li>Clears the timer/signal state</li>
-  <li>Removes event hooks</li>
+  <li>Re-initializes mutex/condvar (may have been locked by parent’s worker thread at fork time)</li>
+  <li>Removes event hooks (thread events, GC events)</li>
   <li>Frees sample buffers, frame table, and aggregation table</li>
+  <li>Resets GC state, stats, and profile refcount</li>
 </ul>
 
 <p>The parent process continues profiling unaffected. The child can start a fresh profiling session if needed.</p>
+
+<h3 id="en--08-architecture--multi-process-profiling-ruby-level">8.5.2 Multi-process profiling (Ruby level)</h3>
+
+<p>When <span id="en--08-architecture--idx-2">multi-process profiling</span> is enabled (the default for CLI usage), rperf uses Ruby’s <code>Process._fork</code> hook (available since Ruby 3.1) to automatically restart profiling in forked child processes. The flow is:</p>
+
+<ol>
+  <li><strong>Before fork</strong>: The <code>_fork</code> hook creates a <span id="en--08-architecture--idx-3">session directory</span> (once, on first fork) for collecting per-process profiles. The root process’s output is redirected to the session directory.</li>
+  <li><strong>In child</strong>: After <code>pthread_atfork</code> cleans up C state, <code>_restart_in_child</code> starts a new profiling session with output directed to the session directory. A <code>%pid</code> label is set for per-process identification.</li>
+  <li><strong>On child exit</strong>: The inherited <code>at_exit</code> hook calls <code>Rperf.stop</code>, writing the child’s profile to the session directory as a <code>.json.gz</code> file.</li>
+  <li><strong>On root exit</strong>: The root writes its own profile, then aggregates all <code>.json.gz</code> files in the session directory into a single merged output (stat report or file). The session directory is then deleted.</li>
+</ol>
+
+<p>For spawned children (<code>spawn</code>, <code>system</code>), the child inherits <code>RUBYOPT=-rrperf</code> and environment variables (<code>RPERF_SESSION_DIR</code>, <code>RPERF_ROOT_PROCESS</code>). When the child Ruby process loads rperf, the auto-start block detects it is not the root process and writes its profile directly to the session directory.</p>
+
+<h3 id="en--08-architecture--session-directory">8.5.3 Session directory</h3>
+
+<p>The session directory is created under <code>$RPERF_TMPDIR</code>, <code>$XDG_RUNTIME_DIR</code>, or the system temp directory (in that priority order), inside a per-user subdirectory (<code>rperf-$UID/</code>, mode 0700). Each session gets a unique directory name: <code>rperf-$PID-$RANDOM</code>.</p>
+
+<p>Stale session directories from crashed processes are cleaned up automatically: when a new CLI session starts, it checks for session directories whose root PID is no longer alive and removes them.</p>
+
+<h3 id="en--08-architecture--label-merging">8.5.4 Label merging</h3>
+
+<p>When aggregating profiles from multiple processes, <span id="en--08-architecture--idx-4">label sets</span> are remapped to ensure consistency. If two child processes use the same label values (e.g., both have <code>endpoint: "GET /users"</code>), they share the same label set ID in the merged output. The <code>%pid</code> label ensures samples from different processes remain distinguishable even after merging.</p>
 
 <h2 id="en--08-architecture--known-limitations">8.6 Known limitations</h2>
 
@@ -4297,6 +4416,12 @@ rperf record <span class="nt">-o</span> profile.txt ruby my_app.rb
 <span class="c"># Record to collapsed stacks</span>
 rperf record <span class="nt">-o</span> profile.collapsed ruby my_app.rb
 
+<span class="c"># Profile a preforking server (all workers)</span>
+rperf <span class="nb">stat</span> <span class="nt">-m</span> wall bundle <span class="nb">exec </span>unicorn
+
+<span class="c"># Disable child process tracking</span>
+rperf <span class="nb">stat</span> <span class="nt">--no-inherit</span> ruby my_app.rb
+
 <span class="c"># View profile in rperf viewer</span>
 rperf report
 
@@ -4435,6 +4560,21 @@ rperf <span class="nb">help</span>
       <td>integer or <code>false</code></td>
       <td>Timer signal (Linux only): signal number, or <code>false</code> for nanosleep thread</td>
     </tr>
+    <tr>
+      <td><code>RPERF_ROOT_PROCESS</code></td>
+      <td>PID string</td>
+      <td>Root process PID for multi-process session (set by CLI)</td>
+    </tr>
+    <tr>
+      <td><code>RPERF_SESSION_DIR</code></td>
+      <td>path</td>
+      <td>Session directory for multi-process profile collection (set by CLI)</td>
+    </tr>
+    <tr>
+      <td><code>RPERF_TMPDIR</code></td>
+      <td>path</td>
+      <td>Override base directory for session directories (default: <code>$XDG_RUNTIME_DIR</code> or system tmpdir)</td>
+    </tr>
   </tbody>
 </table>
 
@@ -4552,10 +4692,16 @@ rperf <span class="nb">help</span>
       <td>both</td>
       <td>GC sweeping phase (wall time)</td>
     </tr>
+    <tr>
+      <td><code>%pid</code></td>
+      <td>PID string</td>
+      <td>both</td>
+      <td>Child process ID (multi-process mode only)</td>
+    </tr>
   </tbody>
 </table>
 
-<p>These labels are attached to samples alongside user labels. In pprof output, filter with <code>-tagfocus=%GVL=blocked</code>, <code>-tagroot=%GC</code>, etc.</p>
+<p>These labels are attached to samples alongside user labels. In pprof output, filter with <code>-tagfocus=%GVL=blocked</code>, <code>-tagroot=%GC</code>, <code>-tagfocus=%pid=1234</code>, etc.</p>
 
     <div class="edit-link">
       <a href="https://github.com/ko1/rperf/blob/HEAD/docs/manual_src/en/a1-reference.md" target="_blank" rel="noopener">View on GitHub</a>
@@ -4579,6 +4725,13 @@ rperf <span class="nb">help</span>
   </section>
   <section class="chapter index-chapter" id="chapter-en--__index__" data-lang="en" style="display: none;">
     <h1>Index</h1>
+    <div class="index-group">
+      <h2 class="index-letter">%</h2>
+      <dl class="index-entries">
+        <dt>%pid label</dt>
+        <dd><a href="#en--03-cli-usage--idx-11" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--idx-11'); return false;">3. CLI Usage</a></dd>
+      </dl>
+    </div>
     <div class="index-group">
       <h2 class="index-letter">C</h2>
       <dl class="index-entries">
@@ -4606,6 +4759,8 @@ rperf <span class="nb">help</span>
         <dd><a href="#en--04-library-usage--idx-9" onclick="showChapterAndScroll('en--04-library-usage', 'en--04-library-usage--idx-9'); return false;">4. Ruby API</a></dd>
         <dt>flat time</dt>
         <dd><a href="#en--05-interpreting-results--idx-0" onclick="showChapterAndScroll('en--05-interpreting-results', 'en--05-interpreting-results--idx-0'); return false;">5. Interpreting Results</a></dd>
+        <dt>fork</dt>
+        <dd><a href="#en--03-cli-usage--idx-9" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--idx-9'); return false;">3. CLI Usage</a></dd>
         <dt>fork safety</dt>
         <dd><a href="#en--08-architecture--idx-1" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--idx-1'); return false;">8. Architecture Overview</a></dd>
       </dl>
@@ -4629,6 +4784,20 @@ rperf <span class="nb">help</span>
       </dl>
     </div>
     <div class="index-group">
+      <h2 class="index-letter">L</h2>
+      <dl class="index-entries">
+        <dt>label set</dt>
+        <dd><a href="#en--08-architecture--idx-4" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--idx-4'); return false;">8. Architecture Overview</a></dd>
+      </dl>
+    </div>
+    <div class="index-group">
+      <h2 class="index-letter">M</h2>
+      <dl class="index-entries">
+        <dt>multi-process profiling</dt>
+        <dd><a href="#en--08-architecture--idx-2" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--idx-2'); return false;">8. Architecture Overview</a></dd>
+      </dl>
+    </div>
+    <div class="index-group">
       <h2 class="index-letter">P</h2>
       <dl class="index-entries">
         <dt>postponed job</dt>
@@ -4639,6 +4808,8 @@ rperf <span class="nb">help</span>
         <dd><a href="#en--01-introduction--idx-18" onclick="showChapterAndScroll('en--01-introduction', 'en--01-introduction--idx-18'); return false;">1. Introduction</a></dd>
         <dd><a href="#en--04-library-usage--idx-6" onclick="showChapterAndScroll('en--04-library-usage', 'en--04-library-usage--idx-6'); return false;">4. Ruby API</a></dd>
         <dd><a href="#en--06-output-formats--idx-1" onclick="showChapterAndScroll('en--06-output-formats', 'en--06-output-formats--idx-1'); return false;">6. Output Formats</a></dd>
+        <dt>preforking server</dt>
+        <dd><a href="#en--03-cli-usage--idx-10" onclick="showChapterAndScroll('en--03-cli-usage', 'en--03-cli-usage--idx-10'); return false;">3. CLI Usage</a></dd>
       </dl>
     </div>
     <div class="index-group">
@@ -4696,6 +4867,8 @@ rperf <span class="nb">help</span>
         <dd><a href="#en--01-introduction--idx-7" onclick="showChapterAndScroll('en--01-introduction', 'en--01-introduction--idx-7'); return false;">1. Introduction</a></dd>
         <dt>sampling</dt>
         <dd><a href="#en--01-introduction--idx-2" onclick="showChapterAndScroll('en--01-introduction', 'en--01-introduction--idx-2'); return false;">1. Introduction</a></dd>
+        <dt>session directory</dt>
+        <dd><a href="#en--08-architecture--idx-3" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--idx-3'); return false;">8. Architecture Overview</a></dd>
         <dt>single session</dt>
         <dd><a href="#en--08-architecture--idx-0" onclick="showChapterAndScroll('en--08-architecture', 'en--08-architecture--idx-0'); return false;">8. Architecture Overview</a></dd>
       </dl>
@@ -4782,7 +4955,12 @@ rperf <span class="nb">help</span>
             <li class="toc-full-h3"><a href="#ja--03-cli-usage--report-のオプション" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--report-のオプション'); return false;">3.4.2 report のオプション</a></li>
             <li class="toc-full-h2"><a href="#ja--03-cli-usage--rperf-diff" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--rperf-diff'); return false;">3.5 rperf diff</a></li>
             <li class="toc-full-h3"><a href="#ja--03-cli-usage--ワークフロー例" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--ワークフロー例'); return false;">3.5.1 ワークフロー例</a></li>
-            <li class="toc-full-h2"><a href="#ja--03-cli-usage--rperf-help" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--rperf-help'); return false;">3.6 rperf help</a></li>
+            <li class="toc-full-h2"><a href="#ja--03-cli-usage--マルチプロセス-プロファイリング" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--マルチプロセス-プロファイリング'); return false;">3.6 マルチプロセス プロファイリング</a></li>
+            <li class="toc-full-h3"><a href="#ja--03-cli-usage--仕組み" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--仕組み'); return false;">3.6.1 仕組み</a></li>
+            <li class="toc-full-h3"><a href="#ja--03-cli-usage--子プロセストラッキングの無効化" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--子プロセストラッキングの無効化'); return false;">3.6.2 子プロセストラッキングの無効化</a></li>
+            <li class="toc-full-h3"><a href="#ja--03-cli-usage--例-fork-で異なる処理を実行" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--例-fork-で異なる処理を実行'); return false;">3.6.3 例: fork で異なる処理を実行</a></li>
+            <li class="toc-full-h3"><a href="#ja--03-cli-usage--制限事項" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--制限事項'); return false;">3.6.4 制限事項</a></li>
+            <li class="toc-full-h2"><a href="#ja--03-cli-usage--rperf-help" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--rperf-help'); return false;">3.7 rperf help</a></li>
 </ul>
         </div>
         <div class="toc-full-chapter">
@@ -4874,7 +5052,11 @@ rperf <span class="nb">help</span>
             <li class="toc-full-h2"><a href="#ja--08-architecture--グローバルプロファイラ状態" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--グローバルプロファイラ状態'); return false;">8.2 グローバルプロファイラ状態</a></li>
             <li class="toc-full-h2"><a href="#ja--08-architecture--スレッドごとのデータ" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--スレッドごとのデータ'); return false;">8.3 スレッドごとのデータ</a></li>
             <li class="toc-full-h2"><a href="#ja--08-architecture--gc-安全性" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--gc-安全性'); return false;">8.4 GC 安全性</a></li>
-            <li class="toc-full-h2"><a href="#ja--08-architecture--fork-安全性" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--fork-安全性'); return false;">8.5 Fork 安全性</a></li>
+            <li class="toc-full-h2"><a href="#ja--08-architecture--fork-安全性とマルチプロセス-プロファイリング" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--fork-安全性とマルチプロセス-プロファイリング'); return false;">8.5 Fork 安全性とマルチプロセス プロファイリング</a></li>
+            <li class="toc-full-h3"><a href="#ja--08-architecture--fork-安全性c-レベル" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--fork-安全性c-レベル'); return false;">8.5.1 Fork 安全性（C レベル）</a></li>
+            <li class="toc-full-h3"><a href="#ja--08-architecture--マルチプロセス-プロファイリングruby-レベル" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--マルチプロセス-プロファイリングruby-レベル'); return false;">8.5.2 マルチプロセス プロファイリング（Ruby レベル）</a></li>
+            <li class="toc-full-h3"><a href="#ja--08-architecture--セッションディレクトリ" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--セッションディレクトリ'); return false;">8.5.3 セッションディレクトリ</a></li>
+            <li class="toc-full-h3"><a href="#ja--08-architecture--ラベルのマージ" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--ラベルのマージ'); return false;">8.5.4 ラベルのマージ</a></li>
             <li class="toc-full-h2"><a href="#ja--08-architecture--既知の制限事項" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--既知の制限事項'); return false;">8.6 既知の制限事項</a></li>
             <li class="toc-full-h3"><a href="#ja--08-architecture--running-ec-レース" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--running-ec-レース'); return false;">8.6.1 Running EC レース</a></li>
             <li class="toc-full-h3"><a href="#ja--08-architecture--単一セッション" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--単一セッション'); return false;">8.6.2 単一セッション</a></li>
@@ -4957,9 +5139,9 @@ rperf <span class="nb">help</span>
 
 <ul>
   <li><strong>正確なプロファイリング</strong>: 時間差分重み付けが<span id="ja--01-introduction--idx-7">セーフポイントバイアス</span>を補正し、従来のカウントベースのプロファイラよりも実際の時間分布に近い結果を生成します。</li>
-  <li><strong>GVL / GC の可視化</strong>: wall モードでは、GVL 外のブロッキング、GVL 競合、GC marking/sweeping をサンプルラベル（<code>%GVL</code>、<code>%GC</code>）として追跡します。別途ツールは不要です。</li>
+  <li><strong>GVL / GC の可視化</strong>: GVL ブロッキングと競合（wall モード）および GC marking/sweeping（両モード）をサンプルラベル（<code>%GVL</code>、<code>%GC</code>）として追跡します。別途ツールは不要です。</li>
   <li><strong>標準出力形式</strong>: <span id="ja--01-introduction--idx-8">JSON</span>（rperf ネイティブ、デフォルト）、<span id="ja--01-introduction--idx-9">pprof</span> protobuf（<code>go tool pprof</code> と互換）、<span id="ja--01-introduction--idx-10">collapsed stacks</span>（フレームグラフ / speedscope 向け）、人間が読めるテキスト形式で出力します。</li>
-  <li><strong>ビューア内蔵</strong>: ブラウザ内フレームグラフビューア（<span id="ja--01-introduction--idx-11"><code>Rperf::Viewer</code></span>）をタグフィルタリング付きで内蔵。外部ツール不要。</li>
+  <li><strong>ビューア内蔵</strong>: ブラウザ内フレームグラフビューア（<span id="ja--01-introduction--idx-11"><code>Rperf::Viewer</code></span>）をタグフィルタリング付きで内蔵。<code>--html</code> 出力は CDN から d3 を読み込みます。</li>
   <li><strong>低オーバーヘッド</strong>: デフォルト 1000 Hz でのサンプリングコールバックコストは &lt; 0.2% で、本番環境での使用に適しています。</li>
   <li><strong>シンプルな CLI</strong>: <code>rperf stat</code> で概要を素早く確認し、<code>rperf record</code> + <code>rperf report</code> で詳細な分析が可能です。</li>
 </ul>
@@ -5018,7 +5200,7 @@ sequenceDiagram
 <h3 id="ja--01-introduction--その他の利点">1.2.2 その他の利点</h3>
 
 <ul>
-  <li><strong>GVL と GC の認識</strong>: wall モードでは、rperf は GVL 外でのブロック時間、GVL の再取得待ち時間、GC の marking/sweeping フェーズの時間を、サンプルラベル（<code>%GVL=blocked</code>/<code>wait</code>、<code>%GC=mark</code>/<code>sweep</code>）として追跡します。これらはユーザーラベルと同様に <code>label_sets</code> に格納され、pprof で <code>-tagfocus</code> 等を使ってフィルタリングできます。</li>
+  <li><strong>GVL と GC の認識</strong>: wall モードでは、rperf は GVL 外でのブロック時間と GVL の再取得待ち時間を追跡します（<code>%GVL</code> ラベル）。GC の marking/sweeping フェーズの時間は CPU・wall 両モードで追跡されます（<code>%GC</code> ラベル、重みは常に wall time）。これらはユーザーラベルと同様に <code>label_sets</code> に格納され、pprof で <code>-tagfocus</code> 等を使ってフィルタリングできます。</li>
   <li><strong>perf ライクな CLI</strong>: <span id="ja--01-introduction--idx-14"><code>rperf stat</code></span> コマンドで性能の概要を素早く確認でき（<code>perf stat</code> のように）、<span id="ja--01-introduction--idx-15"><code>rperf record</code></span> + <span id="ja--01-introduction--idx-16"><code>rperf report</code></span> で詳細なプロファイリングが可能です。</li>
   <li><strong>標準出力</strong>: rperf は <span id="ja--01-introduction--idx-17">JSON</span>（ネイティブ形式、デフォルト）、<span id="ja--01-introduction--idx-18">pprof</span> protobuf 形式（Go の <code>pprof</code> ツールエコシステムと互換）、<span id="ja--01-introduction--idx-19">collapsed stacks</span>（<span id="ja--01-introduction--cite-3">フレームグラフ<sup class="cite-ref"><a href="#bib-gregg2016" title="Brendan Gregg. The Flame Graph. Communications of the ACM. Vol. 59. No. 6. pp. 48--57. 2016." onclick="showChapterAndScroll('__bibliography__', 'bib-gregg2016'); return false;">[Brendan, 2016]</a></sup></span>や speedscope 向け）、人間が読めるテキスト形式で出力します。</li>
   <li><strong>低オーバーヘッド</strong>: デフォルト 1000 Hz でのサンプリングコールバックコストは &lt; 0.2% で、本番環境での使用に適しています。</li>
@@ -5285,6 +5467,10 @@ Run 'rperf help' for full documentation
       <td>サンプル集約を無効化（生サンプルを保持）</td>
     </tr>
     <tr>
+      <td><code>--no-inherit</code></td>
+      <td>fork/spawn した子プロセスをプロファイルしない (デフォルト: inherit)</td>
+    </tr>
+    <tr>
       <td><code>-v</code></td>
       <td>追加のサンプリング統計を出力</td>
     </tr>
@@ -5332,6 +5518,10 @@ Run 'rperf help' for full documentation
     <tr>
       <td><code>--no-aggregate</code></td>
       <td>サンプル集約を無効化（生サンプルを保持）</td>
+    </tr>
+    <tr>
+      <td><code>--no-inherit</code></td>
+      <td>fork/spawn した子プロセスをプロファイルしない (デフォルト: inherit)</td>
     </tr>
     <tr>
       <td><code>-v</code></td>
@@ -5524,7 +5714,7 @@ rperf report <span class="nt">--text</span>
 rperf report <span class="nt">--html</span> profile.json.gz <span class="o">&gt;</span> report.html
 </code></pre></div></div>
 
-<p><code>--html</code> フラグはプロファイルデータをインラインで埋め込んだ自己完結型の HTML ファイルを生成します。d3 と d3-flamegraph は CDN から読み込むため、サーバーなしでブラウザでフレームグラフを表示できます。プロファイルの共有や GitHub Pages などの静的サイトでのホスティングに便利です。</p>
+<p><code>--html</code> フラグはプロファイルデータをインラインで埋め込んだ単一の HTML ファイルを生成します。d3 と d3-flamegraph は CDN から読み込むため、表示にはインターネット接続が必要ですが、サーバーは不要です。プロファイルの共有や GitHub Pages などの静的サイトでのホスティングに便利です。</p>
 
 <h3 id="ja--03-cli-usage--例-top-とテキスト出力">3.4.1 例: top とテキスト出力</h3>
 
@@ -5599,7 +5789,66 @@ rperf record <span class="nt">-o</span> after.pb.gz ruby my_app.rb
 rperf diff before.pb.gz after.pb.gz
 </code></pre></div></div>
 
-<h2 id="ja--03-cli-usage--rperf-help">3.6 rperf help</h2>
+<h2 id="ja--03-cli-usage--マルチプロセス-プロファイリング">3.6 マルチプロセス プロファイリング</h2>
+
+<p>デフォルトで、すべての CLI サブコマンド（<code>stat</code>、<code>exec</code>、<code>record</code>）は fork や spawn された Ruby 子プロセスも自動的にプロファイルします。全プロセスのプロファイルが 1 つの出力にマージされます。stat レポートには集約データが表示され、<code>record</code> は単一のマージ済みファイルを生成します。</p>
+
+<p>これは Unicorn や Puma のような<span id="ja--03-cli-usage--idx-9">プリフォーキングサーバー</span>で特に有用です:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Unicorn サーバーの全ワーカーをプロファイル</span>
+rperf <span class="nb">stat</span> <span class="nt">-m</span> wall bundle <span class="nb">exec </span>unicorn <span class="nt">-c</span> config.rb
+
+<span class="c"># Puma サーバーのマージ済みプロファイルを記録</span>
+rperf record <span class="nt">-m</span> wall <span class="nt">-o</span> profile.json.gz bundle <span class="nb">exec </span>puma
+</code></pre></div></div>
+
+<h3 id="ja--03-cli-usage--仕組み">3.6.1 仕組み</h3>
+
+<p>子プロセストラッキングが有効な場合（デフォルト）、rperf は:</p>
+
+<ol>
+  <li>プロセスごとのプロファイルを収集するためのセッションディレクトリを設定</li>
+  <li>fork された子プロセスでプロファイリングを再開する <code>Process._fork</code> フックをインストール</li>
+  <li>spawn された Ruby 子プロセス（<code>spawn</code>、<code>system</code>、バッククォート経由）は <code>RUBYOPT=-rrperf</code> を継承して自動的にプロファイリングを開始</li>
+  <li>各子プロセスが終了時にプロファイルをセッションディレクトリに書き込み</li>
+  <li>ルートプロセスが全プロファイルを集約して最終出力を生成</li>
+</ol>
+
+<p>各子プロセスのサンプルにはプロセス ID を含む <span id="ja--03-cli-usage--idx-10"><code>%pid</code></span> ラベルが付与されます。ビューアーで PID によるフィルタリング（tagfocus）や pprof での <code>-tagfocus=%pid=1234</code> が可能です。</p>
+
+<h3 id="ja--03-cli-usage--子プロセストラッキングの無効化">3.6.2 子プロセストラッキングの無効化</h3>
+
+<p><code>--no-inherit</code> でルートプロセスのみをプロファイルします:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>rperf <span class="nb">stat</span> <span class="nt">--no-inherit</span> ruby my_app.rb
+</code></pre></div></div>
+
+<h3 id="ja--03-cli-usage--例-fork-で異なる処理を実行">3.6.3 例: fork で異なる処理を実行</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>rperf <span class="nb">stat </span>ruby <span class="nt">-e</span> <span class="s1">'
+  def parent_work = 10_000_000.times { 1 + 1 }
+  def child_work  = 10_000_000.times { 1 + 1 }
+  fork { child_work }
+  Process.waitall
+  parent_work
+'</span>
+</code></pre></div></div>
+
+<p>stat 出力には両プロセスの集約データが表示され、「Ruby processes profiled」のカウントが含まれます:</p>
+
+<pre><code>               2            [Rperf] Ruby processes profiled
+</code></pre>
+
+<h3 id="ja--03-cli-usage--制限事項">3.6.4 制限事項</h3>
+
+<ul>
+  <li><strong>デーモン化した子プロセス</strong>: <code>Process.daemon</code> を呼び出して親より長く生きるプロセスのプロファイルは失われます。親が終了時にセッションディレクトリを集約・削除するためです。</li>
+  <li><strong>クロスプロセス スナップショット</strong>: <code>Rperf.snapshot</code> は現在のプロセスのみを対象とします。全子プロセスを同時にスナップショットする方法はありません。</li>
+  <li><strong>非 Ruby 子プロセス</strong>: Ruby 子プロセスのみがプロファイルされます。シェルスクリプトや Python プロセスなどは影響を受けません。</li>
+  <li><strong>独立した rperf 利用者</strong>: 子プロセスが独自に rperf を使用する場合（自身のコードで <code>Rperf.start</code>）、継承されたオートスタートセッションと競合します。そのようなプログラムは rperf を require する前に <code>RPERF_ENABLED</code> を環境変数から削除する必要があります。</li>
+</ul>
+
+<h2 id="ja--03-cli-usage--rperf-help">3.7 rperf help</h2>
 
 <p><code>rperf help</code> はプロファイリングモード、出力形式、VM 状態ラベル、診断のヒントを含む完全なリファレンスドキュメントを出力します。</p>
 
@@ -5742,6 +5991,12 @@ Cumulative:
       <td>Boolean</td>
       <td><code>false</code></td>
       <td>タイマーを一時停止した状態で開始。特定のセクションのサンプリングを有効にするには <span id="ja--04-library-usage--idx-2"><code>Rperf.profile</code></span> ブロックを使用</td>
+    </tr>
+    <tr>
+      <td><code>inherit:</code></td>
+      <td><code>:fork</code>, <code>true</code>, or <code>false</code></td>
+      <td><code>:fork</code></td>
+      <td>子プロセスの追跡を制御。<code>:fork</code> は <code>Process._fork</code> フックで fork された子を追跡。<code>true</code> は spawn された Ruby 子も追跡（<code>RUBYOPT=-rrperf</code> を設定）。<code>false</code> は子プロセス追跡を無効化</td>
     </tr>
   </tbody>
 </table>
@@ -6270,7 +6525,7 @@ graph TD
 
 <p><strong>表示方法</strong>:</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># rperf ビューアで開く（外部ツール不要）</span>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># rperf ビューアで開く</span>
 rperf report profile.json.gz
 </code></pre></div></div>
 
@@ -6945,17 +7200,44 @@ graph TD
 
 <p>フレームテーブルキー配列は 4,096 エントリから始まり、満杯時に 2 倍に拡張されます。拡張時は新しい配列を確保し、既存データをコピーし、ポインタをアトミックにスワップします（<code>memory_order_release</code>）。古い配列は <code>stop</code> まで保持され、GC の mark フェーズが同時にそれを読み取っている場合の use-after-free を防ぎます。<code>dmark</code> 関数はキーポインタを <code>memory_order_acquire</code> でロードし、カウントも <code>memory_order_acquire</code> でロードして一貫したビューを保証します。</p>
 
-<h2 id="ja--08-architecture--fork-安全性">8.5 Fork 安全性</h2>
+<h2 id="ja--08-architecture--fork-安全性とマルチプロセス-プロファイリング">8.5 Fork 安全性とマルチプロセス プロファイリング</h2>
+
+<h3 id="ja--08-architecture--fork-安全性c-レベル">8.5.1 Fork 安全性（C レベル）</h3>
 
 <p>rperf は fork された子プロセスでプロファイリングを静かに停止する <code>pthread_atfork</code> 子ハンドラを登録します（<span id="ja--08-architecture--idx-1">fork 安全性</span>）:</p>
 
 <ul>
   <li>タイマー/シグナル状態をクリア</li>
-  <li>イベントフックを削除</li>
+  <li>mutex/condvar を再初期化（fork 時に親のワーカースレッドがロックしていた可能性がある）</li>
+  <li>イベントフック（スレッドイベント、GC イベント）を削除</li>
   <li>サンプルバッファ、フレームテーブル、集約テーブルを解放</li>
+  <li>GC 状態、統計、profile refcount をリセット</li>
 </ul>
 
 <p>親プロセスは影響を受けずにプロファイリングを継続します。子プロセスは必要に応じて新しいプロファイリングセッションを開始できます。</p>
+
+<h3 id="ja--08-architecture--マルチプロセス-プロファイリングruby-レベル">8.5.2 マルチプロセス プロファイリング（Ruby レベル）</h3>
+
+<p><span id="ja--08-architecture--idx-2">マルチプロセス プロファイリング</span>が有効な場合（CLI のデフォルト）、rperf は Ruby の <code>Process._fork</code> フック（Ruby 3.1 以降）を使用して、fork された子プロセスで自動的にプロファイリングを再開します。流れは:</p>
+
+<ol>
+  <li><strong>fork 前</strong>: <code>_fork</code> フックが<span id="ja--08-architecture--idx-3">セッションディレクトリ</span>を作成（初回 fork 時のみ）。ルートプロセスの出力先がセッションディレクトリにリダイレクトされます。</li>
+  <li><strong>子プロセス内</strong>: <code>pthread_atfork</code> が C 状態をクリーンアップした後、<code>_restart_in_child</code> が新しいプロファイリングセッションを開始。出力先はセッションディレクトリ。<code>%pid</code> ラベルが設定されます。</li>
+  <li><strong>子プロセス終了時</strong>: 継承された <code>at_exit</code> フックが <code>Rperf.stop</code> を呼び、子のプロファイルを <code>.json.gz</code> ファイルとしてセッションディレクトリに書き込みます。</li>
+  <li><strong>ルートプロセス終了時</strong>: ルートが自身のプロファイルを書き込んだ後、セッションディレクトリ内のすべての <code>.json.gz</code> ファイルを集約して単一の出力（stat レポートまたはファイル）を生成。その後セッションディレクトリを削除します。</li>
+</ol>
+
+<p>spawn された子プロセス（<code>spawn</code>、<code>system</code>）の場合、子は <code>RUBYOPT=-rrperf</code> と環境変数（<code>RPERF_SESSION_DIR</code>、<code>RPERF_ROOT_PROCESS</code>）を継承します。子の Ruby プロセスが rperf を読み込むと、オートスタートブロックがルートプロセスでないことを検出し、プロファイルをセッションディレクトリに直接書き込みます。</p>
+
+<h3 id="ja--08-architecture--セッションディレクトリ">8.5.3 セッションディレクトリ</h3>
+
+<p>セッションディレクトリは <code>$RPERF_TMPDIR</code>、<code>$XDG_RUNTIME_DIR</code>、またはシステムの一時ディレクトリ（優先順）の下に、ユーザーごとのサブディレクトリ（<code>rperf-$UID/</code>、モード 0700）内に作成されます。各セッションは一意のディレクトリ名を持ちます: <code>rperf-$PID-$RANDOM</code>。</p>
+
+<p>クラッシュしたプロセスの古いセッションディレクトリは自動的にクリーンアップされます: 新しい CLI セッション開始時に、ルート PID が生存していないセッションディレクトリを検出して削除します。</p>
+
+<h3 id="ja--08-architecture--ラベルのマージ">8.5.4 ラベルのマージ</h3>
+
+<p>複数プロセスのプロファイルを集約する際、<span id="ja--08-architecture--idx-4">ラベルセット</span>は一貫性を保つために再マッピングされます。2 つの子プロセスが同じラベル値を使用している場合（例: 両方とも <code>endpoint: "GET /users"</code>）、マージ後の出力で同じラベルセット ID を共有します。<code>%pid</code> ラベルにより、マージ後も異なるプロセスのサンプルを区別できます。</p>
 
 <h2 id="ja--08-architecture--既知の制限事項">8.6 既知の制限事項</h2>
 
@@ -7427,6 +7709,12 @@ rperf record <span class="nt">-o</span> profile.txt ruby my_app.rb
 <span class="c"># collapsed stacks で記録</span>
 rperf record <span class="nt">-o</span> profile.collapsed ruby my_app.rb
 
+<span class="c"># プリフォーキングサーバーの全ワーカーをプロファイル</span>
+rperf <span class="nb">stat</span> <span class="nt">-m</span> wall bundle <span class="nb">exec </span>unicorn
+
+<span class="c"># 子プロセストラッキングを無効化</span>
+rperf <span class="nb">stat</span> <span class="nt">--no-inherit</span> ruby my_app.rb
+
 <span class="c"># rperf ビューアでプロファイルを表示</span>
 rperf report
 
@@ -7565,6 +7853,21 @@ rperf <span class="nb">help</span>
       <td>integer または <code>false</code></td>
       <td>タイマーシグナル (Linux のみ): シグナル番号、または <code>false</code> で nanosleep スレッド</td>
     </tr>
+    <tr>
+      <td><code>RPERF_ROOT_PROCESS</code></td>
+      <td>PID 文字列</td>
+      <td>マルチプロセスセッションのルートプロセス PID (CLI が設定)</td>
+    </tr>
+    <tr>
+      <td><code>RPERF_SESSION_DIR</code></td>
+      <td>パス</td>
+      <td>マルチプロセスプロファイル収集用セッションディレクトリ (CLI が設定)</td>
+    </tr>
+    <tr>
+      <td><code>RPERF_TMPDIR</code></td>
+      <td>パス</td>
+      <td>セッションディレクトリのベースディレクトリを上書き (デフォルト: <code>$XDG_RUNTIME_DIR</code> またはシステム tmpdir)</td>
+    </tr>
   </tbody>
 </table>
 
@@ -7654,6 +7957,7 @@ rperf <span class="nb">help</span>
       <th>ラベル</th>
       <th>モード</th>
       <th>意味</th>
+      <th> </th>
     </tr>
   </thead>
   <tbody>
@@ -7661,26 +7965,36 @@ rperf <span class="nb">help</span>
       <td><code>%GVL=blocked</code></td>
       <td>wall</td>
       <td>スレッドが GVL 外（I/O, sleep, C 拡張）</td>
+      <td> </td>
     </tr>
     <tr>
       <td><code>%GVL=wait</code></td>
       <td>wall</td>
       <td>スレッドが GVL 待ち（競合）</td>
+      <td> </td>
     </tr>
     <tr>
       <td><code>%GC=mark</code></td>
       <td>両方</td>
       <td>GC marking フェーズ（wall time）</td>
+      <td> </td>
     </tr>
     <tr>
       <td><code>%GC=sweep</code></td>
       <td>両方</td>
       <td>GC sweeping フェーズ（wall time）</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code>%pid</code></td>
+      <td>PID 文字列</td>
+      <td>両方</td>
+      <td>子プロセスのプロセス ID（マルチプロセスモードのみ）</td>
     </tr>
   </tbody>
 </table>
 
-<p>これらはサンプルのラベルとして <code>label_sets</code> に格納されます。pprof で <code>-tagfocus=%GVL=blocked</code> のようにフィルタリングできます。</p>
+<p>これらはサンプルのラベルとして <code>label_sets</code> に格納されます。pprof で <code>-tagfocus=%GVL=blocked</code>、<code>-tagfocus=%pid=1234</code> のようにフィルタリングできます。</p>
 
     <div class="edit-link">
       <a href="https://github.com/ko1/rperf/blob/HEAD/docs/manual_src/ja/a1-reference.md" target="_blank" rel="noopener">View on GitHub</a>
@@ -7704,6 +8018,13 @@ rperf <span class="nb">help</span>
   </section>
   <section class="chapter index-chapter" id="chapter-ja--__index__" data-lang="ja" style="display: none;">
     <h1>索引</h1>
+    <div class="index-group">
+      <h2 class="index-letter">%</h2>
+      <dl class="index-entries">
+        <dt>%pid label</dt>
+        <dd><a href="#ja--03-cli-usage--idx-10" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--idx-10'); return false;">3. CLI の使い方</a></dd>
+      </dl>
+    </div>
     <div class="index-group">
       <h2 class="index-letter">C</h2>
       <dl class="index-entries">
@@ -7754,6 +8075,20 @@ rperf <span class="nb">help</span>
       </dl>
     </div>
     <div class="index-group">
+      <h2 class="index-letter">L</h2>
+      <dl class="index-entries">
+        <dt>label set</dt>
+        <dd><a href="#ja--08-architecture--idx-4" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--idx-4'); return false;">8. アーキテクチャ概要</a></dd>
+      </dl>
+    </div>
+    <div class="index-group">
+      <h2 class="index-letter">M</h2>
+      <dl class="index-entries">
+        <dt>multi-process profiling</dt>
+        <dd><a href="#ja--08-architecture--idx-2" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--idx-2'); return false;">8. アーキテクチャ概要</a></dd>
+      </dl>
+    </div>
+    <div class="index-group">
       <h2 class="index-letter">P</h2>
       <dl class="index-entries">
         <dt>postponed job</dt>
@@ -7764,6 +8099,8 @@ rperf <span class="nb">help</span>
         <dd><a href="#ja--01-introduction--idx-18" onclick="showChapterAndScroll('ja--01-introduction', 'ja--01-introduction--idx-18'); return false;">1. イントロダクション</a></dd>
         <dd><a href="#ja--04-library-usage--idx-6" onclick="showChapterAndScroll('ja--04-library-usage', 'ja--04-library-usage--idx-6'); return false;">4. Ruby API</a></dd>
         <dd><a href="#ja--06-output-formats--idx-1" onclick="showChapterAndScroll('ja--06-output-formats', 'ja--06-output-formats--idx-1'); return false;">6. 出力形式</a></dd>
+        <dt>preforking server</dt>
+        <dd><a href="#ja--03-cli-usage--idx-9" onclick="showChapterAndScroll('ja--03-cli-usage', 'ja--03-cli-usage--idx-9'); return false;">3. CLI の使い方</a></dd>
       </dl>
     </div>
     <div class="index-group">
@@ -7821,6 +8158,8 @@ rperf <span class="nb">help</span>
         <dd><a href="#ja--01-introduction--idx-7" onclick="showChapterAndScroll('ja--01-introduction', 'ja--01-introduction--idx-7'); return false;">1. イントロダクション</a></dd>
         <dt>sampling</dt>
         <dd><a href="#ja--01-introduction--idx-2" onclick="showChapterAndScroll('ja--01-introduction', 'ja--01-introduction--idx-2'); return false;">1. イントロダクション</a></dd>
+        <dt>session directory</dt>
+        <dd><a href="#ja--08-architecture--idx-3" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--idx-3'); return false;">8. アーキテクチャ概要</a></dd>
         <dt>single session</dt>
         <dd><a href="#ja--08-architecture--idx-0" onclick="showChapterAndScroll('ja--08-architecture', 'ja--08-architecture--idx-0'); return false;">8. アーキテクチャ概要</a></dd>
       </dl>

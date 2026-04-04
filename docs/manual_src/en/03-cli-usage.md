@@ -294,7 +294,7 @@ rperf report --text
 rperf report --html profile.json.gz > report.html
 ```
 
-The `--html` flag generates a self-contained HTML file with the profile data embedded inline. It loads d3 and d3-flamegraph from CDN, so no server is needed to view the flamegraph — just open the file in a browser. This is useful for sharing profiles or hosting them on static sites like GitHub Pages.
+The `--html` flag generates a single HTML file with the profile data embedded inline. It loads d3 and d3-flamegraph from CDN, so an internet connection is required to view the flamegraph — just open the file in a browser. This is useful for sharing profiles or hosting them on static sites like GitHub Pages.
 
 ### Example: Top and text output
 

@@ -86,8 +86,8 @@ echo
 # --- 5. Record + fork ---
 echo "# 5. Record + fork"
 outfile="$TMPDIR/rperf-test5-$$.json.gz"
-out=$(out=$($RPERF record -f 100 -o "$outfile" -- "$RUBY" -e 'fork { 500_000.times { 1 + 1 } }; Process.waitall; 500_000.times { 1 + 1 }' 2>&1)
-check_no_errors "record write path" "$out")
+out=$($RPERF record -f 100 -o "$outfile" -- "$RUBY" -e 'fork { 500_000.times { 1 + 1 } }; Process.waitall; 500_000.times { 1 + 1 }' 2>&1)
+check_no_errors "record write path" "$out"
 check_no_errors "record+fork" "$out"
 info=$(ruby -Ilib -rrperf -e "d = Rperf.load('$outfile'); puts \"#{d[:process_count]}\"")
 check "process_count=2" "$info" "^2$"
@@ -503,6 +503,7 @@ echo
 # --- 24. Many fork workers (simulate preforking server) ---
 echo "# 24. Preforking server simulation (8 workers)"
 outfile="$TMPDIR/rperf-test24-$$.json.gz"
+errfile="$TMPDIR/rperf-test24-err-$$.txt"
 $RPERF record -f 1000 -m wall -o "$outfile" -- "$RUBY" -e '
 def master_setup = 5_000_000.times { 1 + 1 }
 def worker_request
@@ -512,7 +513,9 @@ end
 master_setup
 8.times { |i| fork { worker_request } }
 Process.waitall
-' 2>&1
+' 2>"$errfile"
+err=$(cat "$errfile")
+check_no_errors "prefork record" "$err"
 info=$(ruby -Ilib -rrperf -e "
 d = Rperf.load('$outfile')
 samples = d[:aggregated_samples]
@@ -530,6 +533,7 @@ check "8 distinct pids" "$info" "pid_labels=8"
 check "master_setup present" "$info" "master_setup=yes"
 check "worker_request present" "$info" "worker_request=yes"
 echo "$info" | sed 's/^/  INFO: /'
+rm -f "$errfile"
 rm -f "$outfile"
 echo
 
@@ -612,6 +616,7 @@ echo
 # --- 27. %pid label accuracy: matches actual PID, root has no %pid ---
 echo "# 27. %pid label accuracy"
 outfile="$TMPDIR/rperf-test27-$$.json.gz"
+errfile="$TMPDIR/rperf-test27-err-$$.txt"
 $RPERF record -f 500 -m wall -o "$outfile" -- "$RUBY" -e '
 rd, wr = IO.pipe
 fork {
@@ -626,24 +631,10 @@ rd.close
 Process.waitall
 5_000_000.times { 1 + 1 }
 $stderr.puts "CHILD_PID=#{child_pid}"
-' 2>&1
-child_pid=$(echo "$out" 2>&1 | grep CHILD_PID | head -1 | sed 's/.*=//')
-# Extract child_pid from stderr
-child_pid=$($RPERF record -f 500 -m wall -o "$outfile" -- "$RUBY" -e '
-rd, wr = IO.pipe
-fork {
-  rd.close
-  wr.puts Process.pid
-  wr.close
-  5_000_000.times { 1 + 1 }
-}
-wr.close
-child_pid = rd.read.strip
-rd.close
-Process.waitall
-5_000_000.times { 1 + 1 }
-$stderr.puts "CHILD_PID=#{child_pid}"
-' 2>&1 | grep CHILD_PID | sed 's/.*=//')
+' 2>"$errfile"
+err=$(cat "$errfile")
+check_no_errors "pid label record" "$err"
+child_pid=$(echo "$err" | grep CHILD_PID | head -1 | sed 's/.*=//')
 info=$(ruby -Ilib -rrperf -e "
 d = Rperf.load('$outfile')
 ls = d[:label_sets] || []
@@ -669,7 +660,7 @@ else
   pass "pid matches (child_pid not captured, skipping)"
 fi
 echo "$info" | sed 's/^/  INFO: /'
-rm -f "$outfile"
+rm -f "$outfile" "$errfile"
 echo
 
 # --- 28. GVL/GC labels preserved in multi-process merge ---

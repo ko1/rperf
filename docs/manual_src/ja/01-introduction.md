@@ -56,7 +56,7 @@ rperf は各サンプルの重みとして `clock_now - clock_prev` を記録す
 
 ### その他の利点
 
-- **GVL と GC の認識**: wall モードでは、rperf は GVL 外でのブロック時間、GVL の再取得待ち時間、GC の marking/sweeping フェーズの時間を、サンプルラベル（`%GVL=blocked`/`wait`、`%GC=mark`/`sweep`）として追跡します。これらはユーザーラベルと同様に `label_sets` に格納され、pprof で `-tagfocus` 等を使ってフィルタリングできます。
+- **GVL と GC の認識**: wall モードでは、rperf は GVL 外でのブロック時間と GVL の再取得待ち時間を追跡します（`%GVL` ラベル）。GC の marking/sweeping フェーズの時間は CPU・wall 両モードで追跡されます（`%GC` ラベル、重みは常に wall time）。これらはユーザーラベルと同様に `label_sets` に格納され、pprof で `-tagfocus` 等を使ってフィルタリングできます。
 - **perf ライクな CLI**: [`rperf stat`](#index:rperf stat) コマンドで性能の概要を素早く確認でき（`perf stat` のように）、[`rperf record`](#index:rperf record) + [`rperf report`](#index:rperf report) で詳細なプロファイリングが可能です。
 - **標準出力**: rperf は [JSON](#index:JSON)（ネイティブ形式、デフォルト）、[pprof](#index:pprof) protobuf 形式（Go の `pprof` ツールエコシステムと互換）、[collapsed stacks](#index:collapsed stacks)（[フレームグラフ](#cite:gregg2016)や speedscope 向け）、人間が読めるテキスト形式で出力します。
 - **低オーバーヘッド**: デフォルト 1000 Hz でのサンプリングコールバックコストは < 0.2% で、本番環境での使用に適しています。

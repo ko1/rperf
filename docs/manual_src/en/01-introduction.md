@@ -56,7 +56,7 @@ rperf solves this by recording `clock_now - clock_prev` as the weight of each sa
 
 ### Other advantages
 
-- **GVL and GC awareness**: In wall mode, rperf tracks time spent blocked off the GVL, waiting to reacquire the GVL, and in GC marking/sweeping phases — each as sample labels (`%GVL` and `%GC`) that can be filtered with pprof's `-tagfocus` and `-tagroot`.
+- **GVL and GC awareness**: In wall mode, rperf tracks time spent blocked off the GVL and waiting to reacquire the GVL (`%GVL` labels). GC marking/sweeping time is tracked in both CPU and wall modes (`%GC` labels, always using wall time as the weight). These labels can be filtered with pprof's `-tagfocus` and `-tagroot`.
 - **perf-like CLI**: The [`rperf stat`](#index:rperf stat) command gives you a quick performance overview (like `perf stat`), while [`rperf record`](#index:rperf record) + [`rperf report`](#index:rperf report) gives you detailed profiling.
 - **Standard output**: rperf outputs [JSON](#index:JSON) (native format, default), [pprof](#index:pprof) protobuf format (compatible with Go's `pprof` tool ecosystem), [collapsed stacks](#index:collapsed stacks) (for [flame graphs](#cite:gregg2016) and speedscope), and human-readable text.
 - **Low overhead**: Default 1000 Hz sampling callback cost is < 0.2%, suitable for production use.

@@ -856,15 +856,39 @@ module Rperf
       write_data(@_aggregate_output, merged_data, @_aggregate_format)
     end
 
-    require "fileutils"
-    FileUtils.rm_rf(session_dir)
+    _cleanup_session_dir(session_dir)
 
     merged_data
   rescue => e
     $stderr.puts "rperf: warning: failed to aggregate multi-process data: #{e.message}"
+    # Fallback: try to write whatever individual profiles exist as-is
+    _fallback_aggregate_output(session_dir)
+    _cleanup_session_dir(session_dir)
     nil
   end
   # Not private — called from at_exit block which runs in top-level context
+
+  def self._cleanup_session_dir(session_dir)
+    require "fileutils"
+    FileUtils.rm_rf(session_dir)
+  rescue => e
+    $stderr.puts "rperf: warning: failed to clean up session dir: #{e.message}"
+  end
+  private_class_method :_cleanup_session_dir
+
+  # Best-effort fallback: if aggregation failed, try to copy the first
+  # available child profile to @_aggregate_output so the user gets something.
+  def self._fallback_aggregate_output(session_dir)
+    return unless @_aggregate_output
+    return unless session_dir && File.directory?(session_dir)
+    files = Dir.glob(File.join(session_dir, "profile-*.json.gz"))
+    return if files.empty?
+    require "fileutils"
+    FileUtils.cp(files.first, @_aggregate_output)
+  rescue
+    # nothing more we can do
+  end
+  private_class_method :_fallback_aggregate_output
 
   def self._merge_into(merged_samples, merged_label_sets, data)
     child_label_sets = data[:label_sets] || [{}]
