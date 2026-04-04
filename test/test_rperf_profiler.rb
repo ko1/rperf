@@ -361,6 +361,45 @@ class TestRperfProfiler < Test::Unit::TestCase
     end
   end
 
+  # --- inherit: true ENV restoration ---
+
+  def test_inherit_true_restores_env_on_stop
+    original_rubyopt = ENV["RUBYOPT"]
+    original_enabled = ENV["RPERF_ENABLED"]
+    original_rubylib = ENV["RUBYLIB"]
+
+    Rperf.start(frequency: 100, inherit: true)
+    # ENV should be modified while profiling
+    assert_include ENV["RUBYOPT"].to_s, "-rrperf",
+      "RUBYOPT should contain -rrperf while profiling with inherit: true"
+    assert_equal "1", ENV["RPERF_ENABLED"]
+
+    sleep 0.02
+    Rperf.stop
+
+    # ENV should be restored after stop
+    assert_equal original_rubyopt, ENV["RUBYOPT"],
+      "RUBYOPT should be restored after stop"
+    assert_equal original_enabled, ENV["RPERF_ENABLED"],
+      "RPERF_ENABLED should be restored after stop"
+    assert_equal original_rubylib, ENV["RUBYLIB"],
+      "RUBYLIB should be restored after stop"
+  end
+
+  def test_inherit_true_no_rubyopt_duplication
+    original_rubyopt = ENV["RUBYOPT"]
+
+    # Two start/stop cycles should not accumulate -rrperf
+    2.times do
+      Rperf.start(frequency: 100, inherit: true)
+      sleep 0.02
+      Rperf.stop
+    end
+
+    assert_equal original_rubyopt, ENV["RUBYOPT"],
+      "RUBYOPT should not accumulate -rrperf across start/stop cycles"
+  end
+
   # --- ActiveJob middleware require ---
 
   def test_active_job_middleware_loadable

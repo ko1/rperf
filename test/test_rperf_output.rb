@@ -421,4 +421,65 @@ class TestRperfOutput < Test::Unit::TestCase
       assert_include content, "Flat:"
     end
   end
+
+  # --- Write failure for user-specified output ---
+
+  def test_write_failure_raises_for_user_output
+    assert_raise(Errno::ENOENT, Errno::EACCES) do
+      Rperf.start(output: "/proc/forbidden.json.gz", frequency: 500) do
+        5_000_000.times { 1 + 1 }
+      end
+    end
+  end
+
+  # --- .json extension writes plain JSON (not gzip) ---
+
+  def test_json_plain_output
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "test.json")
+      data = Rperf.start(frequency: 500) do
+        5_000_000.times { 1 + 1 }
+      end
+      Rperf.save(path, data)
+
+      content = File.binread(path)
+      # Should NOT start with gzip magic bytes
+      assert_not_equal "\x1f\x8b".b, content[0, 2],
+        ".json file should be plain text, not gzip"
+      # Should be valid JSON
+      require "json"
+      parsed = JSON.parse(content, symbolize_names: true)
+      assert_include parsed, :mode
+      assert_include parsed, :aggregated_samples
+    end
+  end
+
+  def test_json_gz_output_is_gzip
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "test.json.gz")
+      data = Rperf.start(frequency: 500) do
+        5_000_000.times { 1 + 1 }
+      end
+      Rperf.save(path, data)
+
+      content = File.binread(path)
+      assert_equal "\x1f\x8b".b, content[0, 2],
+        ".json.gz file should be gzip compressed"
+    end
+  end
+
+  def test_load_plain_json
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "test.json")
+      data = Rperf.start(frequency: 500) do
+        5_000_000.times { 1 + 1 }
+      end
+      Rperf.save(path, data)
+
+      loaded = Rperf.load(path)
+      assert_not_nil loaded
+      assert_equal data[:mode].to_s, loaded[:mode].to_s
+      assert_not_nil loaded[:aggregated_samples]
+    end
+  end
 end
