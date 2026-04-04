@@ -26,7 +26,7 @@ module Rperf
   #   .pb.gz     → pprof protobuf (gzip compressed)
   # inherit: controls child process profiling.
   #   :fork  — (default) automatically profile forked child processes via Process._fork hook.
-  #            Session dir is created lazily on first fork. Spawned processes are NOT tracked.
+  #            Session dir is created eagerly at start time. Spawned processes are NOT tracked.
   #   true   — profile both forked and spawned Ruby child processes. Sets RUBYOPT=-rrperf
   #            and RPERF_* env vars so spawned Ruby processes auto-start profiling.
   #            Use with caution: affects ALL spawned Ruby processes, including independent
@@ -1017,9 +1017,9 @@ module Rperf
         at_exit { stop }
       end
     elsif ENV["RPERF_SESSION_DIR"]
-      # Root process: save original output settings for aggregation on fork.
-      # Start with normal output — session dir is created lazily on first fork.
-      # If no fork happens, behaves exactly like single-process mode.
+      # Root process: save original output settings for aggregation.
+      # Session dir was created eagerly by CLI. Start with normal output —
+      # if no fork/spawn happens, behaves exactly like single-process mode.
       @_aggregate_output = _rperf_original_output
       @_aggregate_stat = _rperf_stat
       @_aggregate_format = _rperf_format

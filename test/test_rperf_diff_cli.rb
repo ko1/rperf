@@ -8,7 +8,7 @@ class TestRperfDiffCli < Test::Unit::TestCase
   LIB_DIR = File.expand_path("../lib", __dir__)
 
   def setup
-    skip "Go not available" unless system("go", "version", out: File::NULL, err: File::NULL)
+    omit "Go not available" unless system("go", "version", out: File::NULL, err: File::NULL)
   end
 
   private

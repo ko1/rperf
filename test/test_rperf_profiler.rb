@@ -370,7 +370,7 @@ class TestRperfProfiler < Test::Unit::TestCase
     rescue LoadError
       false
     end
-    skip "active_support not available" unless has_active_support
+    omit "active_support not available" unless has_active_support
 
     require "rperf/active_job"
     assert defined?(Rperf::ActiveJobMiddleware),

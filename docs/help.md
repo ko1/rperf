@@ -45,7 +45,8 @@ Uses wall mode by default. No file output by default.
     -v, --verbose           Print additional sampling statistics
 
 Shows: user/sys/real time, time breakdown (CPU execution, GVL blocked,
-GVL wait, GC marking, GC sweeping), GC/memory/OS stats, and profiler overhead.
+GVL wait, GC marking, GC sweeping), GC/memory/OS stats, and profiler overhead
+(shown as average per-process in multi-process mode).
 Lines are prefixed: `[Rperf]` for sampling-derived data, `[Ruby ]` for
 runtime info, `[OS   ]` for OS-level info.
 Use --report to add flat and cumulative top-50 function tables.
@@ -67,7 +68,8 @@ Like `stat --report`. Uses wall mode by default. No file output by default.
     --no-aggregate          Disable C-level sample aggregation (raw per-sample data)
     -v, --verbose           Print additional sampling statistics
 
-Shows: user/sys/real time, time breakdown, GC/memory/OS stats, profiler overhead,
+Shows: user/sys/real time, time breakdown, GC/memory/OS stats, profiler overhead
+(average per-process in multi-process mode),
 and flat/cumulative top-50 function tables.
 
 ### report: Open profile viewer or go tool pprof.
