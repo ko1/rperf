@@ -24,6 +24,12 @@ def run_pprof_subcommand(name, banner, min_files:)
       mode = :text
     end
 
+    opts.on("--format FORMAT", %w[table table-json],
+            "Flat #{min_files > 1 ? 'diff ' : ''}table for AI/machine consumption: " \
+            "'table' (TSV) or 'table-json' (JSON)") do |v|
+      mode = (v == "table") ? :table : :table_json
+    end
+
     if min_files == 1
       opts.on("--html", "Output static HTML viewer to stdout") do
         mode = :html
@@ -123,6 +129,12 @@ when "report"
       when :text
         $stdout.puts Rperf::Text.encode(data)
         exit
+      when :table
+        $stdout.print Rperf::Table.report_tsv(data)
+        exit
+      when :table_json
+        $stdout.puts Rperf::Table.report_json(data)
+        exit
       when :html
         $stdout.puts Rperf::Viewer.render_static_html(data)
         exit
@@ -166,6 +178,10 @@ when "report"
       handler.run(app, Port: port, Host: "localhost", Silent: true)
       exit
     else
+      if mode == :table || mode == :table_json
+        $stderr.puts "--format table requires a .json.gz / .json profile (got: #{report_file})"
+        exit 1
+      end
       unless system("go", "version", out: File::NULL, err: File::NULL)
         $stderr.puts "'go' command not found. Install Go to use pprof files, or use .json.gz format."
         $stderr.puts "  https://go.dev/dl/"
@@ -183,8 +199,25 @@ when "diff"
     "Usage: rperf diff [options] base target\n" \
     "       Compare two profiles (shows target - base).\n" \
     "       Accepts .json.gz (auto-converted) or .pb.gz files.\n" \
-    "       Requires Go (https://go.dev/dl/).",
+    "       Requires Go (https://go.dev/dl/), except --format table/table-json.",
     min_files: 2) do |mode, files|
+    # Table diff is computed in Ruby — no Go required
+    if mode == :table || mode == :table_json
+      unless files.all? { |f| f =~ /\.json(\.gz)?\z/ }
+        $stderr.puts "--format table requires .json.gz / .json profiles"
+        exit 1
+      end
+      require_relative "../lib/rperf"
+      base = Rperf.load(files[0])
+      head = Rperf.load(files[1])
+      if mode == :table
+        $stdout.print Rperf::Table.diff_tsv(base, head)
+      else
+        $stdout.puts Rperf::Table.diff_json(base, head)
+      end
+      exit
+    end
+
     unless system("go", "version", out: File::NULL, err: File::NULL)
       $stderr.puts "'go' command not found. Install Go to use 'rperf diff'."
       $stderr.puts "  https://go.dev/dl/"
