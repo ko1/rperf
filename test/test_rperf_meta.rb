@@ -240,6 +240,82 @@ class TestRperfMeta < Test::Unit::TestCase
     end
   end
 
+  def test_read_meta_string_escapes
+    # The brace scanner must not be fooled by escaped quotes, backslashes
+    # (including one right before the closing quote), or braces/brackets
+    # inside string values
+    ENV["RPERF_META_LABELS"] = JSON.generate(
+      "quote" => 'say "hi", she said',
+      "backslash" => "C:\\Users\\app\\",
+      "braces" => '}{][{"nested":1}',
+      "unicode" => "日本語 é "
+    )
+    data = profile_data
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "p.json.gz")
+      Rperf.save(path, data)
+      head = Rperf.read_meta(path)
+      loaded = Rperf.load(path)
+      assert_equal loaded[:meta], head[:meta]
+      assert_equal "C:\\Users\\app\\", head[:meta][:labels][:backslash]
+      assert_equal '}{][{"nested":1}', head[:meta][:labels][:braces]
+    end
+  end
+
+  def test_read_meta_escape_at_chunk_boundary
+    # 100K escaped backslashes encode to 200KB of "\\" pairs, so several
+    # 64KB chunk boundaries are guaranteed to fall inside escape pairs —
+    # the scanner must resume cleanly across them
+    ENV["RPERF_META_LABELS"] = JSON.generate("bs" => "\\" * (100 * 1024))
+    data = profile_data
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "p.json.gz")
+      Rperf.save(path, data)
+      head = Rperf.read_meta(path)
+      assert_equal 100 * 1024, head[:meta][:labels][:bs].size
+      assert_kind_of Hash, head[:summary]
+    end
+  end
+
+  def test_read_meta_exceeding_read_limit_returns_nil
+    # Safety net: a meta larger than READ_LIMIT (8MB decompressed) is given
+    # up on (nil = "treat as no meta"), not scanned forever
+    ENV["RPERF_META_LABELS"] = JSON.generate("huge" => "x" * (9 * 1024 * 1024))
+    data = profile_data
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "p.json.gz")
+      Rperf.save(path, data)
+      assert_nil Rperf.read_meta(path)
+      # The body itself is still fully loadable
+      assert_kind_of Hash, Rperf.load(path)[:meta]
+    end
+  end
+
+  def test_read_meta_corrupt_gzip_body_returns_nil
+    # Valid gzip magic, corrupt deflate stream → Zlib::DataError, which must
+    # be swallowed (one bad snapshot must not break a directory listing)
+    data = profile_data
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "p.json.gz")
+      Rperf.save(path, data)
+      bytes = File.binread(path)
+      bytes[12, 16] = "\x00" * 16
+      File.binwrite(path, bytes)
+      assert_nil Rperf.read_meta(path)
+    end
+  end
+
+  def test_read_meta_truncated_gzip_returns_nil
+    data = profile_data
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "p.json.gz")
+      Rperf.save(path, data)
+      bytes = File.binread(path)
+      File.binwrite(path, bytes.byteslice(0, 40))
+      assert_nil Rperf.read_meta(path)
+    end
+  end
+
   # --- backward compatibility ---
 
   def test_load_old_format_without_meta

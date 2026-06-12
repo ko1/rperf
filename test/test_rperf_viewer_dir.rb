@@ -128,6 +128,22 @@ class TestRperfViewerDir < Test::Unit::TestCase
     end
   end
 
+  def test_directory_listing_tolerates_corrupt_deflate_body
+    # Valid gzip header + corrupt deflate stream (Zlib::DataError) — one bad
+    # snapshot must not crash the listing of the whole directory
+    Dir.mktmpdir do |dir|
+      write_profile(File.join(dir, "good.json.gz"), sha: "a" * 40)
+      bytes = File.binread(File.join(dir, "good.json.gz"))
+      bytes[12, 16] = "\x00" * 16
+      File.binwrite(File.join(dir, "bad.json.gz"), bytes)
+      assert_equal 2, @viewer.add_snapshot_dir(dir)
+      list = json_get("/snapshots")
+      assert_equal 2, list.size
+      # The corrupt one is listed as unknown (no meta); the good one keeps its meta
+      assert_equal 1, list.count { |s| s["meta"] }
+    end
+  end
+
   def test_directory_ignores_max_snapshots
     Dir.mktmpdir do |dir|
       viewer = Rperf::Viewer.new(nil, path: "", max_snapshots: 2)
