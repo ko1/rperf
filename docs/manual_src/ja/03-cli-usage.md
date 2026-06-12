@@ -347,7 +347,18 @@ rperf report ./profiles/
 | `--text` | テキストレポートを出力 |
 | `--format FMT` | AI/機械可読向けフラットテーブル: `table` (TSV) または `table-json` (JSON 配列) |
 | `--html` | 静的 HTML ビューアを標準出力に出力（`.json.gz` のみ） |
+| `--port PORT` | Web UI のポート（デフォルト: 自動）。SSH ポートフォワードに便利 |
+| `--host HOST` | Web UI のバインドアドレス（デフォルト: localhost）。`0.0.0.0` で外部公開（**ビューアに認証はありません** — 基本は SSH ポートフォワード推奨） |
 | (デフォルト) | ブラウザでインタラクティブな Web UI を開く（ディレクトリ指定で時間旅行モード） |
+
+ブラウザの自動オープンは GUI がある環境（Linux では `DISPLAY` / `WAYLAND_DISPLAY` が設定済み）かつローカルバインドのときだけ行います。GUI がない環境（SSH 先など）では URL の表示のみで、w3m などの端末ブラウザにはフォールバックしません。SSH 先のプロファイルを見るには:
+
+```bash
+# SSH 先で
+rperf report --port 8080 ./profiles/
+# 手元で
+ssh -L 8080:localhost:8080 host   # → ブラウザで http://localhost:8080/
+```
 
 ## rperf diff
 

@@ -2594,11 +2594,30 @@ performance tracking workflow.</p>
       <td>Output static HTML viewer to stdout (<code>.json.gz</code> only)</td>
     </tr>
     <tr>
+      <td><code>--port PORT</code></td>
+      <td>Port for the web UI (default: auto). Useful for SSH port forwarding</td>
+    </tr>
+    <tr>
+      <td><code>--host HOST</code></td>
+      <td>Bind address for the web UI (default: localhost). <code>0.0.0.0</code> allows external access (<strong>the viewer has no authentication</strong> — prefer SSH port forwarding)</td>
+    </tr>
+    <tr>
       <td>(default)</td>
       <td>Open interactive web UI in browser (time-travel mode for a directory)</td>
     </tr>
   </tbody>
 </table>
+
+<p>The browser is auto-opened only when a GUI is available (<code>DISPLAY</code> /
+<code>WAYLAND_DISPLAY</code> on Linux) and the bind address is local. Without a GUI
+(e.g., over SSH) only the URL is printed — there is no terminal-browser
+(w3m) fallback. To view profiles on a remote host:</p>
+
+<pre><code class="language-bash"># on the remote host
+rperf report --port 8080 ./profiles/
+# locally
+ssh -L 8080:localhost:8080 host   # → open http://localhost:8080/
+</code></pre>
 
 <h2 id="en--03-cli-usage--rperf-diff">3.5 rperf diff</h2>
 
@@ -6058,11 +6077,27 @@ rperf report --html profile.json.gz &gt; report.html
       <td>静的 HTML ビューアを標準出力に出力（<code>.json.gz</code> のみ）</td>
     </tr>
     <tr>
+      <td><code>--port PORT</code></td>
+      <td>Web UI のポート（デフォルト: 自動）。SSH ポートフォワードに便利</td>
+    </tr>
+    <tr>
+      <td><code>--host HOST</code></td>
+      <td>Web UI のバインドアドレス（デフォルト: localhost）。<code>0.0.0.0</code> で外部公開（<strong>ビューアに認証はありません</strong> — 基本は SSH ポートフォワード推奨）</td>
+    </tr>
+    <tr>
       <td>(デフォルト)</td>
       <td>ブラウザでインタラクティブな Web UI を開く（ディレクトリ指定で時間旅行モード）</td>
     </tr>
   </tbody>
 </table>
+
+<p>ブラウザの自動オープンは GUI がある環境（Linux では <code>DISPLAY</code> / <code>WAYLAND_DISPLAY</code> が設定済み）かつローカルバインドのときだけ行います。GUI がない環境（SSH 先など）では URL の表示のみで、w3m などの端末ブラウザにはフォールバックしません。SSH 先のプロファイルを見るには:</p>
+
+<pre><code class="language-bash"># SSH 先で
+rperf report --port 8080 ./profiles/
+# 手元で
+ssh -L 8080:localhost:8080 host   # → ブラウザで http://localhost:8080/
+</code></pre>
 
 <h2 id="ja--03-cli-usage--rperf-diff">3.5 rperf diff</h2>
 
