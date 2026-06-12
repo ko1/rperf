@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self'; img-src data:; frame-ancestors 'none'">
+<title>rperf Viewer</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/d3-flame-graph@4/dist/d3-flamegraph.css" integrity="sha384-DgAQSBzzhv8bu6Qc6Lq08THluOr+kO5qLMHt1yv8A3my7Jz2OQv6aq/WSZRYIQkG" crossorigin="anonymous">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; background: #fafafa; color: #333; }
+
+/* Layout: optional snapshot sidebar + main */
+#layout { display: flex; align-items: stretch; min-height: 100vh; }
+#main { flex: 1; min-width: 0; }
+
+/* Sidebar (time-travel mode) */
+#sidebar {
+  display: none; width: 280px; min-width: 280px;
+  border-right: 1px solid #ddd; background: #fff;
+  flex-direction: column; max-height: 100vh; position: sticky; top: 0;
+}
+.pin-panel { padding: 10px 14px; border-bottom: 1px solid #eee; }
+.pin-head { display: flex; justify-content: space-between; align-items: baseline; }
+.pin-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #cc342d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pin-close { color: #999; cursor: pointer; font-size: 12px; padding-left: 6px; }
+.pin-share { color: #888; font-size: 11px; }
+.snapshot-list { overflow-y: auto; flex: 1; }
+.snap-group-header {
+  padding: 8px 14px 4px; color: #888; font-size: 11px;
+  letter-spacing: .06em; cursor: pointer; user-select: none; text-transform: uppercase;
+}
+.snap-group-header:hover { color: #555; }
+.snap-row { padding: 7px 10px 7px 14px; cursor: pointer; border-left: 3px solid transparent; }
+.snap-row:hover { background: #faf5f0; }
+.snap-row.current { background: #f5ece4; border-left-color: #cc342d; }
+.snap-row.diff-base { border-left-color: #4a9de8; }
+.snap-line1 { display: flex; align-items: center; gap: 6px; }
+.snap-sha { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #333; }
+.snap-row.current .snap-sha { color: #cc342d; font-weight: 600; }
+.snap-date { color: #999; font-size: 11px; }
+.snap-warn { font-size: 11px; }
+.snap-spacer { flex: 1; }
+.diff-btn {
+  font-size: 12px; padding: 0 5px; border-radius: 4px; color: #999;
+  border: 1px solid #ddd; cursor: pointer; background: transparent; line-height: 16px;
+}
+.diff-btn:hover { border-color: #4a9de8; color: #4a9de8; }
+.diff-btn.active { background: #4a9de8; border-color: #4a9de8; color: #fff; }
+.snap-msg { color: #777; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.snap-badge { font-size: 10.5px; margin-top: 2px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #999; }
+.alloc-up { color: #c0392b; }
+.alloc-down { color: #2980b9; }
+.sidebar-footer { padding: 8px 14px; border-top: 1px solid #eee; color: #aaa; font-size: 11px; }
+
+/* Header */
+.header { background: #fff; padding: 10px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid #ddd; }
+.controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.controls label { font-size: 13px; color: #555; }
+.controls select, .controls input[type="text"] {
+  background: #fff; color: #333; border: 1px solid #ccc; border-radius: 4px;
+  padding: 4px 8px; font-size: 13px; font-family: inherit;
+}
+.controls input[type="text"] { width: 120px; }
+.dropdown-cb { position: relative; display: inline-block; vertical-align: middle; }
+.dropdown-cb-btn {
+  background: #fff; color: #888; border: 1px solid #ccc; border-radius: 4px;
+  padding: 4px 8px; font-size: 13px; font-family: inherit; cursor: pointer; min-width: 60px; text-align: left;
+}
+.dropdown-cb-btn.has-selection { color: #333; }
+.dropdown-cb-btn:hover { border-color: #999; }
+.dropdown-cb-list {
+  display: none; position: absolute; top: 100%; left: 0; z-index: 100;
+  background: #fff; border: 1px solid #ccc; border-radius: 4px;
+  padding: 4px 0; min-width: 180px; max-height: 240px; overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.dropdown-cb-list.open { display: block; }
+.dropdown-cb-list label {
+  display: block; padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap;
+  color: #333; background: none; border: none; border-radius: 0;
+}
+.dropdown-cb-list label:hover { background: #f0e8e0; }
+.controls input[type="text"]::placeholder { color: #aaa; }
+
+/* Tabs */
+.tabs { display: flex; background: #fff; border-bottom: 1px solid #ddd; padding: 0 20px; }
+.tab {
+  padding: 8px 20px; font-size: 13px; color: #888; cursor: pointer;
+  border-bottom: 2px solid transparent; transition: color 0.15s;
+}
+.tab:hover { color: #555; }
+.tab.active { color: #cc342d; border-bottom-color: #cc342d; }
+
+/* Snapshot toolbar (time-travel mode) */
+#snap-toolbar {
+  display: none; align-items: center; gap: 12px; padding: 6px 20px;
+  border-bottom: 1px solid #eee; background: #fff; font-size: 12px; flex-wrap: wrap;
+}
+.tb-sha { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.tb-sha.cur { color: #cc342d; }
+.tb-sha.base { color: #4a9de8; }
+.tb-msg { color: #888; }
+.tb-stat { color: #888; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.tb-stat b { color: #333; font-weight: 600; }
+.tb-spacer { flex: 1; }
+.diff-clear {
+  font-size: 11px; color: #888; border: 1px solid #ddd; border-radius: 10px;
+  padding: 2px 8px; cursor: pointer; background: #fff;
+}
+.diff-clear:hover { color: #555; border-color: #aaa; }
+
+/* Info bar */
+.info-bar { background: #f5f5f5; padding: 6px 20px; font-size: 12px; color: #888; border-bottom: 1px solid #eee; }
+
+/* Tab content */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+#panel-flamegraph { background: #fff; min-height: 300px; }
+.empty-state { display: flex; align-items: center; justify-content: center; height: 400px; color: #aaa; font-size: 16px; }
+#panel-flamegraph .d3-flame-graph rect { stroke: #fff; stroke-width: 0.5px; }
+.diff-legend { padding: 8px 20px 12px; font-size: 11px; color: #888; display: flex; gap: 14px; background: #fff; }
+
+/* Top table */
+#panel-top { padding: 16px 20px; background: #fff; }
+#panel-top table { width: 100%; border-collapse: collapse; font-size: 13px; }
+#panel-top th { text-align: left; color: #cc342d; border-bottom: 2px solid #eee; padding: 6px 8px; cursor: pointer; }
+#panel-top th:hover { color: #a82a24; }
+#panel-top td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; }
+#panel-top tr:hover td { background: #faf5f0; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Tags panel */
+#panel-tags { padding: 16px 20px; background: #fff; }
+.tag-group { margin-bottom: 20px; }
+.tag-group h3 { font-size: 14px; color: #cc342d; margin-bottom: 8px; }
+.tag-group table { width: 100%; max-width: 600px; border-collapse: collapse; font-size: 13px; }
+.tag-group th { text-align: left; color: #888; border-bottom: 2px solid #eee; padding: 5px 8px; }
+.tag-group td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; }
+.tag-group tr:hover td { background: #faf5f0; }
+.tag-group tr { cursor: pointer; }
+.tag-bar { display: inline-block; height: 12px; background: #cc342d; border-radius: 2px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div id="layout">
+<div id="sidebar">
+  <div id="pin-panel" class="pin-panel" style="display:none"></div>
+  <div id="snapshot-list" class="snapshot-list"></div>
+  <div class="sidebar-footer">j / k: newer / older snapshot · Shift+click: pin method</div>
+</div>
+<div id="main">
+<div class="header">
+  <a href="https://github.com/ko1/rperf" target="_blank" rel="noopener" title="rperf on GitHub" style="display:flex;align-items:center;text-decoration:none;">
+    <!-- LOGO -->
+  </a>
+  <div class="controls">
+    <label>Snapshot:
+      <select id="sel-snapshot"><option value="">Loading...</option></select>
+    </label>
+    <label>tagfocus: <input type="text" id="in-tagfocus" placeholder="value regex"></label>
+    <label>tagignore:
+      <span class="dropdown-cb">
+        <button type="button" id="btn-tagignore" class="dropdown-cb-btn">none</button>
+        <div id="cb-tagignore" class="dropdown-cb-list"></div>
+      </span>
+    </label>
+    <label>tagroot:
+      <span class="dropdown-cb">
+        <button type="button" id="btn-tagroot" class="dropdown-cb-btn">none</button>
+        <div id="cb-tagroot" class="dropdown-cb-list"></div>
+      </span>
+    </label>
+    <label>tagleaf:
+      <span class="dropdown-cb">
+        <button type="button" id="btn-tagleaf" class="dropdown-cb-btn">none</button>
+        <div id="cb-tagleaf" class="dropdown-cb-list"></div>
+      </span>
+    </label>
+  </div>
+</div>
+<div class="tabs">
+  <div class="tab active" data-tab="flamegraph">Flamegraph</div>
+  <div class="tab" data-tab="top">Top</div>
+  <div class="tab" data-tab="tags">Tags</div>
+</div>
+<div id="snap-toolbar"></div>
+<div id="info-bar" class="info-bar"></div>
+<div id="panel-flamegraph" class="tab-content active"></div>
+<div id="diff-legend" class="diff-legend" style="display:none">
+  <span><span style="color:#e85d4a">■</span> share increased</span>
+  <span><span style="color:#4a9de8">■</span> share decreased</span>
+  <span><span style="color:#ccc">■</span> neutral (&lt;0.4pt)</span>
+</div>
+<div id="panel-top" class="tab-content"></div>
+<div id="panel-tags" class="tab-content"></div>
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js" integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-flame-graph@4/dist/d3-flamegraph.min.js" integrity="sha384-p4NaVVE+k6MT/enE0MtQ8B15rM9BGzHCnx8DizawPGks1ssZUeNdw6bAPpH2gp2w" crossorigin="anonymous"></script>
+<script>
+"use strict";
+
+var BASE = location.pathname.replace(/\/$/, "");
+
+// Data source is replaceable at runtime (e.g., signed URLs from a hosting
+// service): define window.RPERF_DATA_SOURCE before this script, with
+// listUrl()/snapshotUrl(id) and optionally onAuthError(url) — an async hook
+// called on HTTP 403 that may return a fresh URL to retry once.
+var dataSource = Object.assign({
+  listUrl: function() { return BASE + "/snapshots"; },
+  snapshotUrl: function(id) { return BASE + "/snapshots/" + id; },
+  onAuthError: null
+}, window.RPERF_DATA_SOURCE || {});
+
+// Diff / badge thresholds (design constants, tuned after real-world use)
+var DIFF_NEUTRAL_PT = 0.4;    // |delta| below this renders neutral
+var DIFF_FULL_SCALE_PT = 12;  // |delta| at full color intensity
+var ALLOC_WARN_PCT = 15;      // sidebar warning badge threshold
+
+var snapshotList = [];        // server order: oldest -> newest
+var currentData = null;
+var curId = null;
+var baseId = null;            // diff base snapshot id (null = single view)
+var baseShares = null;        // name->cumulative-share map of diff base
+var pinnedName = null;
+var sharesCache = {};         // id -> {total:, shares:{name: weight}}
+var sparkToken = 0;
+var groupCollapsed = {};      // branch -> bool (explicit user toggles)
+var currentTab = "flamegraph";
+var filteredSamples = null;   // cached after filter
+var totalFilteredNs = 0;
+
+// --- Helpers ---
+
+function fmtMs(ns) { return (ns / 1e6).toFixed(2); }
+function fmtPct(ns, total) { return total > 0 ? (ns / total * 100).toFixed(1) : "0.0"; }
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function escAttr(s) { return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+function escRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+function findSnap(id) {
+  for (var i = 0; i < snapshotList.length; i++) if (snapshotList[i].id === id) return snapshotList[i];
+  return null;
+}
+function indexOfId(id) {
+  for (var i = 0; i < snapshotList.length; i++) if (snapshotList[i].id === id) return i;
+  return -1;
+}
+
+// --- Data fetching ---
+
+async function fetchJSON(url) {
+  var res = await fetch(url);
+  if (res.status === 403 && dataSource.onAuthError) {
+    // URL may have expired (e.g., signed URL): ask the hook for a fresh one
+    var newUrl = await dataSource.onAuthError(url);
+    if (newUrl) res = await fetch(newUrl);
+  }
+  if (!res.ok) throw new Error(res.status + " " + res.statusText);
+  return res.json();
+}
+
+async function loadSnapshotList() {
+  snapshotList = await fetchJSON(dataSource.listUrl());
+  var sel = document.getElementById("sel-snapshot");
+  sel.innerHTML = "";
+  if (snapshotList.length === 0) {
+    sel.innerHTML = '<option value="">No snapshots</option>';
+    return;
+  }
+  var reversed = snapshotList.slice().reverse();
+  reversed.forEach(function(s) {
+    var opt = document.createElement("option");
+    opt.value = s.id;
+    var t = new Date(s.taken_at);
+    var durS = s.duration_ns != null ? (s.duration_ns / 1e9).toFixed(1)
+             : (s.summary && s.summary.total_ms != null ? (s.summary.total_ms / 1000).toFixed(1) : "?");
+    var cnt = s.sampling_count != null ? s.sampling_count
+            : (s.summary && s.summary.samples != null ? s.summary.samples : "?");
+    opt.textContent = "#" + s.id + " " + t.toLocaleTimeString() +
+      " (" + (s.mode || "?") + ", " + durS + "s, " + cnt + " samples)";
+    sel.appendChild(opt);
+  });
+  if (snapshotList.length > 1) {
+    // Time-travel mode: sidebar replaces the dropdown
+    document.getElementById("sidebar").style.display = "flex";
+    sel.parentElement.style.display = "none";
+    renderSidebar();
+  }
+  await selectSnapshot(snapshotList[snapshotList.length - 1].id);
+}
+
+async function selectSnapshot(id) {
+  curId = id;
+  var sel = document.getElementById("sel-snapshot");
+  if (sel) sel.value = String(id);
+  currentData = await fetchJSON(dataSource.snapshotUrl(id));
+  cacheShares(id, currentData);
+  if (baseId === curId) { baseId = null; baseShares = null; }
+  renderSidebar();
+  updateToolbar();
+  updateTagDropdowns();
+  applyAndRender();
+  updateSparkline();
+}
+
+// Kept for backwards compatibility with older integrations
+var loadSnapshot = selectSnapshot;
+
+// --- Cumulative share per method name (for diff coloring and sparkline) ---
+
+function computeShares(data) {
+  var shares = {}, total = 0;
+  (data.samples || []).forEach(function(s) {
+    total += s.weight;
+    var seen = {};
+    for (var i = 0; i < s.stack.length; i++) {
+      var n = s.stack[i];
+      if (!seen[n]) { seen[n] = true; shares[n] = (shares[n] || 0) + s.weight; }
+    }
+  });
+  return { total: total, shares: shares };
+}
+
+function cacheShares(id, data) {
+  if (!sharesCache[id]) sharesCache[id] = computeShares(data);
+}
+
+function shareOf(entry, name) {
+  return entry && entry.total > 0 ? (entry.shares[name] || 0) / entry.total : 0;
+}
+
+// --- Diff mode ---
+
+async function setDiffBase(id) {
+  if (id === null || id === baseId || id === curId) {
+    baseId = null;
+    baseShares = null;
+  } else {
+    baseId = id;
+    if (!sharesCache[id]) {
+      try {
+        var data = await fetchJSON(dataSource.snapshotUrl(id));
+        cacheShares(id, data);
+      } catch (e) {
+        baseId = null;
+      }
+    }
+    baseShares = baseId !== null ? sharesCache[baseId] : null;
+  }
+  renderSidebar();
+  updateToolbar();
+  renderCurrentTab();
+}
+
+function diffColor(deltaPt) {
+  if (Math.abs(deltaPt) < DIFF_NEUTRAL_PT) return "#ececec";
+  var t = Math.min(Math.abs(deltaPt) / DIFF_FULL_SCALE_PT, 1);
+  var base = deltaPt > 0 ? [232, 93, 74] : [74, 157, 232];
+  // blend from near-white toward the full color as |delta| grows
+  var mix = base.map(function(c) { return Math.round(255 - (255 - c) * (0.3 + 0.7 * t)); });
+  return "rgb(" + mix[0] + "," + mix[1] + "," + mix[2] + ")";
+}
+
+// --- Snapshot sidebar ---
+
+function snapshotTitle(s) {
+  if (s.meta && s.meta.git && s.meta.git.sha) {
+    return s.meta.git.sha.slice(0, 7) + (s.meta.git.dirty ? "*" : "");
+  }
+  return "#" + s.id;
+}
+
+function snapshotSubject(s) {
+  if (s.meta && s.meta.git && s.meta.git.subject) return s.meta.git.subject;
+  if (s.file) return s.file;
+  if (!s.meta) return "(unknown snapshot)";
+  return "";
+}
+
+function snapshotDateStr(s) {
+  var t = (s.meta && s.meta.git && s.meta.git.committed_at) ||
+          (s.meta && s.meta.created_at) || s.taken_at;
+  var d = new Date(t);
+  return isNaN(d.getTime()) ? "" : (d.getMonth() + 1) + "/" + d.getDate();
+}
+
+function gcCount(sum) {
+  if (!sum) return null;
+  if (sum.gc_count_minor == null && sum.gc_count_major == null) return null;
+  return (sum.gc_count_minor || 0) + (sum.gc_count_major || 0);
+}
+
+function allocDeltaPct(s, prev) {
+  if (!s.summary || !prev || !prev.summary) return null;
+  var a = s.summary.allocated_objects, pa = prev.summary.allocated_objects;
+  if (a == null || pa == null || pa <= 0) return null;
+  return (a - pa) / pa * 100;
+}
+
+function groupSnapshots() {
+  var groups = [], idx = {};
+  snapshotList.forEach(function(s) {
+    var br = (s.meta && s.meta.git && s.meta.git.branch) || "(no branch)";
+    if (!(br in idx)) { idx[br] = groups.length; groups.push({ branch: br, items: [] }); }
+    groups[idx[br]].items.push(s);
+  });
+  return groups;
+}
+
+function isGroupCollapsed(g, groupCount) {
+  if (g.branch in groupCollapsed) return groupCollapsed[g.branch];
+  if (groupCount === 1) return false;
+  if (g.branch === "main" || g.branch === "master") return false;
+  // also expand the group holding the current snapshot
+  return !g.items.some(function(s) { return s.id === curId; });
+}
+
+function renderSidebar() {
+  var listEl = document.getElementById("snapshot-list");
+  if (snapshotList.length <= 1) return;
+  listEl.innerHTML = "";
+  var groups = groupSnapshots();
+  groups.forEach(function(g) {
+    var collapsed = isGroupCollapsed(g, groups.length);
+    var header = document.createElement("div");
+    header.className = "snap-group-header";
+    header.textContent = (collapsed ? "▸ " : "▾ ") + g.branch + " — " + g.items.length;
+    header.addEventListener("click", function() {
+      groupCollapsed[g.branch] = !isGroupCollapsed(g, groups.length);
+      renderSidebar();
+    });
+    listEl.appendChild(header);
+    if (collapsed) return;
+    g.items.slice().reverse().forEach(function(s) {
+      listEl.appendChild(buildSnapshotRow(s));
+    });
+  });
+}
+
+function buildSnapshotRow(s) {
+  var i = indexOfId(s.id);
+  var prev = i > 0 ? snapshotList[i - 1] : null;
+  var row = document.createElement("div");
+  row.className = "snap-row" + (s.id === curId ? " current" : "") + (s.id === baseId ? " diff-base" : "");
+
+  var dAlloc = allocDeltaPct(s, prev);
+  var warn = dAlloc !== null && Math.abs(dAlloc) > ALLOC_WARN_PCT;
+
+  var line1 = '<div class="snap-line1">' +
+    '<span class="snap-sha">' + escHtml(snapshotTitle(s)) + '</span>' +
+    '<span class="snap-date">' + escHtml(snapshotDateStr(s)) + '</span>' +
+    (warn ? '<span class="snap-warn" title="alloc changed >' + ALLOC_WARN_PCT + '%">⚠️</span>' : '') +
+    '<span class="snap-spacer"></span>' +
+    '<button type="button" class="diff-btn' + (s.id === baseId ? " active" : "") +
+      '" title="Diff against this snapshot">⇄</button>' +
+    '</div>';
+  var subject = snapshotSubject(s);
+  var line2 = subject ? '<div class="snap-msg">' + escHtml(subject) + '</div>' : "";
+  var badge = "";
+  if (prev && (dAlloc !== null || gcCount(s.summary) !== null)) {
+    var parts = [];
+    if (dAlloc !== null) {
+      var cls = dAlloc > 2 ? "alloc-up" : dAlloc < -2 ? "alloc-down" : "";
+      parts.push('<span class="' + cls + '">alloc ' + (dAlloc >= 0 ? "+" : "") + dAlloc.toFixed(0) + '%</span>');
+    }
+    var gc = gcCount(s.summary);
+    if (gc !== null) parts.push("GC " + gc);
+    badge = '<div class="snap-badge">' + parts.join(" · ") + '</div>';
+  }
+  row.innerHTML = line1 + line2 + badge;
+
+  row.addEventListener("click", function() { selectSnapshot(s.id); });
+  row.querySelector(".diff-btn").addEventListener("click", function(e) {
+    e.stopPropagation();
+    setDiffBase(s.id === baseId ? null : s.id);
+  });
+  return row;
+}
+
+// --- Snapshot toolbar (current snapshot / diff header + summary stats) ---
+
+function updateToolbar() {
+  var el = document.getElementById("snap-toolbar");
+  if (snapshotList.length <= 1) { el.style.display = "none"; return; }
+  el.style.display = "flex";
+  var cur = findSnap(curId);
+  var base = baseId !== null ? findSnap(baseId) : null;
+  if (!cur) { el.innerHTML = ""; return; }
+
+  var html = "";
+  if (base) {
+    html += '<span class="tb-sha base">' + escHtml(snapshotTitle(base)) + '</span>' +
+            '<span style="color:#aaa">→</span>' +
+            '<span class="tb-sha cur">' + escHtml(snapshotTitle(cur)) + '</span>';
+  } else {
+    html += '<span class="tb-sha cur">' + escHtml(snapshotTitle(cur)) + '</span>';
+  }
+  var subject = snapshotSubject(cur);
+  if (subject) html += '<span class="tb-msg">' + escHtml(subject) + '</span>';
+
+  var sum = cur.summary || {};
+  if (sum.total_ms != null) html += '<span class="tb-stat">total <b>' + sum.total_ms.toFixed(0) + 'ms</b></span>';
+  if (sum.allocated_objects != null) html += '<span class="tb-stat">alloc <b>' + sum.allocated_objects.toLocaleString() + '</b></span>';
+  var gc = gcCount(sum);
+  if (gc !== null) html += '<span class="tb-stat">GC <b>' + gc + '</b></span>';
+
+  if (base && base.summary && cur.summary &&
+      base.summary.allocated_objects != null && cur.summary.allocated_objects != null &&
+      base.summary.allocated_objects > 0) {
+    var d = (cur.summary.allocated_objects - base.summary.allocated_objects) / base.summary.allocated_objects * 100;
+    var color = d > 0 ? "#c0392b" : "#2980b9";
+    html += '<span class="tb-stat">Δalloc <b style="color:' + color + '">' +
+            (d >= 0 ? "+" : "") + d.toFixed(1) + '%</b></span>';
+  }
+  html += '<span class="tb-spacer"></span>';
+  if (base) html += '<button type="button" class="diff-clear" id="btn-diff-clear">clear diff ✕</button>';
+  el.innerHTML = html;
+  var clearBtn = document.getElementById("btn-diff-clear");
+  if (clearBtn) clearBtn.addEventListener("click", function() { setDiffBase(null); });
+}
+
+// --- Pin + sparkline ---
+
+function togglePin(name) {
+  pinnedName = (pinnedName === name) ? null : name;
+  updatePinPanel();
+  applyPinStyles();
+  updateSparkline();
+}
+
+function updatePinPanel() {
+  var panel = document.getElementById("pin-panel");
+  if (!pinnedName || snapshotList.length <= 1) { panel.style.display = "none"; return; }
+  panel.style.display = "block";
+  panel.innerHTML =
+    '<div class="pin-head">' +
+      '<span class="pin-name" title="' + escAttr(pinnedName) + '">📌 ' + escHtml(pinnedName) + '</span>' +
+      '<span class="pin-close" id="pin-close">✕</span>' +
+    '</div>' +
+    '<svg id="sparkline" width="100%" viewBox="0 0 240 40"></svg>' +
+    '<div class="pin-share" id="pin-share"></div>';
+  document.getElementById("pin-close").addEventListener("click", function() { togglePin(pinnedName); });
+}
+
+// Progressively fetch snapshot bodies to fill the sparkline (shares are
+// cached per snapshot; a stale token aborts when the pin changes).
+async function updateSparkline() {
+  if (!pinnedName || snapshotList.length <= 1) return;
+  drawSparkline();
+  var token = ++sparkToken;
+  for (var i = 0; i < snapshotList.length; i++) {
+    var s = snapshotList[i];
+    if (sharesCache[s.id]) continue;
+    var data = null;
+    try { data = await fetchJSON(dataSource.snapshotUrl(s.id)); } catch (e) { /* skip */ }
+    if (token !== sparkToken || !pinnedName) return;
+    if (data) { cacheShares(s.id, data); drawSparkline(); }
+  }
+}
+
+function drawSparkline() {
+  var svg = document.getElementById("sparkline");
+  if (!svg || !pinnedName) return;
+  var W = 240, H = 40, n = snapshotList.length;
+  var vals = snapshotList.map(function(s) {
+    return sharesCache[s.id] ? shareOf(sharesCache[s.id], pinnedName) : null;
+  });
+  var known = vals.filter(function(v) { return v !== null; });
+  var max = Math.max.apply(null, known.concat([0.0001]));
+  var pts = vals.map(function(v, i) {
+    if (v === null) return null;
+    var x = n > 1 ? 8 + (i / (n - 1)) * (W - 16) : W / 2;
+    return [x, H - 5 - (v / max) * (H - 12), i];
+  });
+  var poly = pts.filter(Boolean).map(function(p) { return p[0] + "," + p[1]; }).join(" ");
+  var html = '<polyline points="' + poly + '" fill="none" stroke="#cc342d" stroke-width="1.5"/>';
+  pts.forEach(function(p) {
+    if (!p) return;
+    var s = snapshotList[p[2]];
+    var isCur = s.id === curId;
+    html += '<circle data-id="' + s.id + '" cx="' + p[0] + '" cy="' + p[1] + '" r="' + (isCur ? 4 : 2.5) +
+      '" fill="' + (isCur ? "#cc342d" : "#fff") + '" stroke="#cc342d" stroke-width="1" style="cursor:pointer">' +
+      '<title>' + escHtml(snapshotTitle(s)) + ' — ' + (shareOf(sharesCache[s.id], pinnedName) * 100).toFixed(1) + '%</title>' +
+      '</circle>';
+  });
+  svg.innerHTML = html;
+  svg.querySelectorAll("circle").forEach(function(c) {
+    c.addEventListener("click", function() { selectSnapshot(parseInt(c.getAttribute("data-id"), 10)); });
+  });
+  var shareEl = document.getElementById("pin-share");
+  if (shareEl && sharesCache[curId]) {
+    var cur = findSnap(curId);
+    shareEl.textContent = "share " + (shareOf(sharesCache[curId], pinnedName) * 100).toFixed(1) + "% @ " +
+      (cur ? snapshotTitle(cur) : "");
+  }
+}
+
+function applyPinStyles() {
+  if (typeof d3 === "undefined") return;
+  var sel = d3.select("#panel-flamegraph").selectAll("rect");
+  if (!pinnedName) {
+    sel.style("opacity", 1).style("stroke", null).style("stroke-width", null);
+    return;
+  }
+  sel.style("opacity", function(d) {
+    return d && d.data && d.data.name === pinnedName ? 1 : 0.45;
+  }).style("stroke", function(d) {
+    return d && d.data && d.data.name === pinnedName ? "#f2b134" : null;
+  }).style("stroke-width", function(d) {
+    return d && d.data && d.data.name === pinnedName ? "2px" : null;
+  });
+}
+
+// --- Update tag key/value dropdowns from current snapshot ---
+
+function updateTagDropdowns() {
+  if (!currentData || !currentData.label_sets) return;
+  var labelSets = currentData.label_sets;
+
+  // Collect all keys and all key:value pairs
+  var keys = {};
+  var vals = {};
+  labelSets.forEach(function(ls) {
+    if (!ls) return;
+    Object.keys(ls).forEach(function(k) {
+      keys[k] = true;
+      var compound = k + " = " + ls[k];
+      vals[compound] = true;
+    });
+  });
+
+  var sortedKeys = Object.keys(keys).sort();
+  // Group by key: for each key, (none) first, then values sorted
+  var sortedVals = [];
+  sortedKeys.forEach(function(k) {
+    sortedVals.push(k + " = (none)");
+    Object.keys(vals).sort().forEach(function(v) {
+      if (v.substring(0, k.length + 3) === k + " = ") sortedVals.push(v);
+    });
+  });
+
+  // tagroot / tagleaf: dropdown checkboxes for label keys
+  ["tagroot", "tagleaf"].forEach(function(name) {
+    var container = document.getElementById("cb-" + name);
+    var prev = getCheckedValues(container);
+    container.innerHTML = "";
+    sortedKeys.forEach(function(k) {
+      var lbl = document.createElement("label");
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.value = k;
+      if (prev.indexOf(k) >= 0) cb.checked = true;
+      cb.addEventListener("change", function() {
+        updateDropdownButton("btn-" + name, "cb-" + name, "none");
+        applyAndRender();
+      });
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(" " + k));
+      container.appendChild(lbl);
+    });
+    updateDropdownButton("btn-" + name, "cb-" + name, "none");
+  });
+
+  // tagignore: dropdown with checkboxes for key=value pairs
+  var container = document.getElementById("cb-tagignore");
+  var prev = getCheckedValues(container);
+  container.innerHTML = "";
+  sortedVals.forEach(function(display) {
+    var lbl = document.createElement("label");
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = display;
+    if (prev.indexOf(display) >= 0) cb.checked = true;
+    cb.addEventListener("change", function() {
+      updateDropdownButton("btn-tagignore", "cb-tagignore", "none");
+      applyAndRender();
+    });
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(" " + display));
+    container.appendChild(lbl);
+  });
+  updateDropdownButton("btn-tagignore", "cb-tagignore", "none");
+}
+
+function updateDropdownButton(btnId, containerId, emptyText) {
+  var vals = getCheckedValues(document.getElementById(containerId));
+  var btn = document.getElementById(btnId);
+  if (vals.length === 0) {
+    btn.textContent = emptyText;
+    btn.classList.remove("has-selection");
+  } else {
+    btn.textContent = vals.join(", ");
+    btn.classList.add("has-selection");
+  }
+}
+
+function getCheckedValues(container) {
+  var result = [];
+  var cbs = container.querySelectorAll("input[type=checkbox]:checked");
+  for (var i = 0; i < cbs.length; i++) result.push(cbs[i].value);
+  return result;
+}
+
+// --- Tag filtering ---
+
+function getFilteredSamples() {
+  if (!currentData) return [];
+  var samples = currentData.samples;
+  var labelSets = currentData.label_sets || [];
+  var tagfocus = document.getElementById("in-tagfocus").value.trim();
+  var tagignoreVals = getCheckedValues(document.getElementById("cb-tagignore"));
+  var tagroots = getCheckedValues(document.getElementById("cb-tagroot"));
+  var tagleaves = getCheckedValues(document.getElementById("cb-tagleaf"));
+
+  var filtered = samples;
+
+  // tagfocus: keep only samples whose label values match the regex
+  if (tagfocus) {
+    try { var re = new RegExp(tagfocus); } catch(e) { /* invalid regex, skip filter */ }
+    if (!re) return filtered;
+    filtered = filtered.filter(function(s) {
+      if (s.label_set_id === 0) return false;
+      var ls = labelSets[s.label_set_id];
+      if (!ls) return false;
+      return Object.values(ls).some(function(v) { return re.test(String(v)); });
+    });
+  }
+
+  // tagignore: remove samples matching selected key=value pairs (or missing key for "(none)")
+  if (tagignoreVals.length > 0) {
+    var ignores = tagignoreVals.map(function(s) {
+      var idx = s.indexOf(" = ");
+      return { key: s.substring(0, idx), val: s.substring(idx + 3) };
+    });
+    filtered = filtered.filter(function(s) {
+      var ls = (s.label_set_id > 0) ? labelSets[s.label_set_id] : null;
+      return !ignores.some(function(ig) {
+        if (ig.val === "(none)") {
+          // Match samples that do NOT have this key
+          return !ls || !(ig.key in ls);
+        }
+        return ls && ls[ig.key] !== undefined && String(ls[ig.key]) === ig.val;
+      });
+    });
+  }
+
+  // tagroot: prepend label values as root frames (outermost first)
+  if (tagroots.length > 0) {
+    filtered = filtered.map(function(s) {
+      if (s.label_set_id === 0) return s;
+      var ls = labelSets[s.label_set_id];
+      if (!ls) return s;
+      var extra = [];
+      for (var i = 0; i < tagroots.length; i++) {
+        var k = tagroots[i];
+        if (k in ls) extra.push("[" + k + ": " + ls[k] + "]");
+      }
+      if (extra.length === 0) return s;
+      return Object.assign({}, s, { stack: extra.concat(s.stack) });
+    });
+  }
+
+  // tagleaf: append label values as leaf frames (innermost first)
+  if (tagleaves.length > 0) {
+    filtered = filtered.map(function(s) {
+      if (s.label_set_id === 0) return s;
+      var ls = labelSets[s.label_set_id];
+      if (!ls) return s;
+      var extra = [];
+      for (var i = 0; i < tagleaves.length; i++) {
+        var k = tagleaves[i];
+        if (k in ls) extra.push("[" + k + ": " + ls[k] + "]");
+      }
+      if (extra.length === 0) return s;
+      return Object.assign({}, s, { stack: s.stack.concat(extra) });
+    });
+  }
+
+  return filtered;
+}
+
+function applyAndRender() {
+  filteredSamples = getFilteredSamples();
+  totalFilteredNs = 0;
+  for (var i = 0; i < filteredSamples.length; i++) totalFilteredNs += filteredSamples[i].weight;
+
+  // Update info bar
+  if (!currentData) return;
+  var dur = (currentData.duration_ns / 1e9).toFixed(2);
+  document.getElementById("info-bar").textContent =
+    "Mode: " + currentData.mode + " | Freq: " + currentData.frequency + "Hz | Duration: " + dur + "s" +
+    " | Stacks: " + filteredSamples.length + " | Total weight: " + fmtMs(totalFilteredNs) + "ms";
+
+  renderCurrentTab();
+}
+
+function renderCurrentTab() {
+  if (currentTab === "flamegraph") renderFlamegraph();
+  else if (currentTab === "top") renderTop();
+  else if (currentTab === "tags") renderTags();
+}
+
+// ==================== Flamegraph ====================
+
+function buildTree(samples) {
+  var root = { name: "root", value: 0, children: [] };
+  for (var si = 0; si < samples.length; si++) {
+    var sample = samples[si];
+    var node = root;
+    for (var i = 0; i < sample.stack.length; i++) {
+      var name = sample.stack[i];
+      var child = null;
+      for (var j = 0; j < node.children.length; j++) {
+        if (node.children[j].name === name) { child = node.children[j]; break; }
+      }
+      if (!child) {
+        child = { name: name, value: 0, children: [] };
+        node.children.push(child);
+      }
+      node = child;
+    }
+    node.value += sample.weight;
+  }
+  computeSubtreeTotals(root);
+  return root;
+}
+
+function computeSubtreeTotals(node) {
+  var t = node.value || 0;
+  for (var i = 0; i < node.children.length; i++) t += computeSubtreeTotals(node.children[i]);
+  node.total = t;
+  return t;
+}
+
+function renderFlamegraph() {
+  var el = document.getElementById("panel-flamegraph");
+  el.innerHTML = "";
+  var legend = document.getElementById("diff-legend");
+  legend.style.display = (baseShares && currentTab === "flamegraph") ? "flex" : "none";
+  if (!filteredSamples || filteredSamples.length === 0) {
+    el.innerHTML = '<div class="empty-state">No matching samples</div>';
+    return;
+  }
+  var tree = buildTree(filteredSamples);
+  var total = totalFilteredNs;
+  var width = el.clientWidth || document.body.clientWidth;
+  var chart = flamegraph()
+    .width(width)
+    .cellHeight(20)
+    .selfValue(true)
+    .getName(function(d) {
+      return d.data.name + " (" + fmtMs(d.data.value) + "ms, " + fmtPct(d.data.value, total) + "%)";
+    });
+  if (baseShares && typeof chart.setColorMapper === "function") {
+    // Diff coloring: current subtree share vs the method's cumulative share
+    // in the base snapshot (name-based comparison, as in the design mockup)
+    chart.setColorMapper(function(d) {
+      var cur = total > 0 ? (d.data.total || 0) / total : 0;
+      var base = shareOf(baseShares, d.data.name);
+      return diffColor((cur - base) * 100);
+    });
+  }
+  d3.select("#panel-flamegraph").datum(tree).call(chart);
+  applyPinStyles();
+}
+
+// ==================== Top ====================
+
+var topSortKey = "flat";
+var topSortAsc = false;
+
+function renderTop() {
+  var el = document.getElementById("panel-top");
+  if (!filteredSamples || filteredSamples.length === 0) {
+    el.innerHTML = '<div class="empty-state">No matching samples</div>';
+    return;
+  }
+
+  // Compute flat (leaf) and cumulative (any position) per function
+  var flatMap = {};
+  var cumMap = {};
+  for (var si = 0; si < filteredSamples.length; si++) {
+    var s = filteredSamples[si];
+    var stack = s.stack;
+    var w = s.weight;
+    var leaf = stack[stack.length - 1];
+    flatMap[leaf] = (flatMap[leaf] || 0) + w;
+    var seen = {};
+    for (var i = 0; i < stack.length; i++) {
+      if (!seen[stack[i]]) {
+        seen[stack[i]] = true;
+        cumMap[stack[i]] = (cumMap[stack[i]] || 0) + w;
+      }
+    }
+  }
+
+  var rows = [];
+  var allNames = {};
+  Object.keys(flatMap).forEach(function(k) { allNames[k] = true; });
+  Object.keys(cumMap).forEach(function(k) { allNames[k] = true; });
+  Object.keys(allNames).forEach(function(name) {
+    rows.push({ name: name, flat: flatMap[name] || 0, cum: cumMap[name] || 0 });
+  });
+
+  // Sort
+  var key = topSortKey;
+  var asc = topSortAsc;
+  rows.sort(function(a, b) {
+    var va = (key === "name") ? a.name : a[key];
+    var vb = (key === "name") ? b.name : b[key];
+    if (key === "name") {
+      return asc ? va.localeCompare(vb) : vb.localeCompare(va);
+    }
+    return asc ? va - vb : vb - va;
+  });
+
+  var total = totalFilteredNs;
+  var arrow = function(k) { return (topSortKey === k) ? (topSortAsc ? " ▲" : " ▼") : ""; };
+  var html = '<table><thead><tr>' +
+    '<th class="num" data-sort="flat">Flat' + arrow("flat") + '</th>' +
+    '<th class="num" data-sort="cum">Cum' + arrow("cum") + '</th>' +
+    '<th data-sort="name">Function' + arrow("name") + '</th>' +
+    '</tr></thead><tbody>';
+  var limit = Math.min(rows.length, 50);
+  for (var ri = 0; ri < limit; ri++) {
+    var r = rows[ri];
+    html += '<tr>' +
+      '<td class="num">' + fmtMs(r.flat) + 'ms (' + fmtPct(r.flat, total) + '%)</td>' +
+      '<td class="num">' + fmtMs(r.cum) + 'ms (' + fmtPct(r.cum, total) + '%)</td>' +
+      '<td>' + escHtml(r.name) + '</td>' +
+      '</tr>';
+  }
+  html += '</tbody></table>';
+  if (rows.length > 50) {
+    html += '<p style="color:#888;margin-top:8px;font-size:12px;">Showing top 50 of ' + rows.length + ' functions</p>';
+  }
+  el.innerHTML = html;
+
+  // Attach sort handlers
+  el.querySelectorAll("th[data-sort]").forEach(function(th) {
+    th.addEventListener("click", function() {
+      var newKey = th.getAttribute("data-sort");
+      if (topSortKey === newKey) {
+        topSortAsc = !topSortAsc;
+      } else {
+        topSortKey = newKey;
+        topSortAsc = (newKey === "name");
+      }
+      renderTop();
+    });
+  });
+}
+
+// ==================== Tags ====================
+
+function renderTags() {
+  var el = document.getElementById("panel-tags");
+  if (!currentData) { el.innerHTML = '<div class="empty-state">No data</div>'; return; }
+
+  var samples = filteredSamples || [];
+  var labelSets = currentData.label_sets || [];
+  if (labelSets.length === 0) {
+    el.innerHTML = '<div class="empty-state">No tags in this snapshot</div>';
+    return;
+  }
+
+  // Collect all tag keys
+  var tagKeys = {};
+  labelSets.forEach(function(ls) {
+    if (!ls) return;
+    Object.keys(ls).forEach(function(k) { tagKeys[k] = true; });
+  });
+
+  var keys = Object.keys(tagKeys);
+  if (keys.length === 0) {
+    el.innerHTML = '<div class="empty-state">No tags in this snapshot</div>';
+    return;
+  }
+
+  // For each key, aggregate weight per value
+  var html = "";
+  keys.forEach(function(key) {
+    var byVal = {};     // value -> weight
+    var untagged = 0;   // weight without this key
+    for (var i = 0; i < samples.length; i++) {
+      var s = samples[i];
+      var ls = (s.label_set_id > 0) ? labelSets[s.label_set_id] : null;
+      if (ls && key in ls) {
+        var v = String(ls[key]);
+        byVal[v] = (byVal[v] || 0) + s.weight;
+      } else {
+        untagged += s.weight;
+      }
+    }
+
+    var entries = [];
+    Object.keys(byVal).forEach(function(v) { entries.push({ val: v, weight: byVal[v] }); });
+    entries.sort(function(a, b) { return b.weight - a.weight; });
+    var maxWeight = entries.length > 0 ? entries[0].weight : 0;
+    var total = totalFilteredNs;
+
+    html += '<div class="tag-group"><h3>' + escHtml(key) +
+      ' <span style="color:#666;font-weight:normal;">(' + entries.length + ' values)</span></h3>';
+    html += '<table><thead><tr><th>Value</th><th class="num">Weight</th><th class="num">%</th><th style="width:200px"></th></tr></thead><tbody>';
+    entries.forEach(function(e) {
+      var barW = maxWeight > 0 ? Math.max(1, Math.round(e.weight / maxWeight * 180)) : 0;
+      html += '<tr data-tagfocus="' + escAttr(key) + ':' + escAttr(e.val) + '">' +
+        '<td>' + escHtml(e.val) + '</td>' +
+        '<td class="num">' + fmtMs(e.weight) + 'ms</td>' +
+        '<td class="num">' + fmtPct(e.weight, total) + '%</td>' +
+        '<td><span class="tag-bar" style="width:' + barW + 'px"></span></td>' +
+        '</tr>';
+    });
+    if (untagged > 0) {
+      html += '<tr style="color:#666"><td>(untagged)</td>' +
+        '<td class="num">' + fmtMs(untagged) + 'ms</td>' +
+        '<td class="num">' + fmtPct(untagged, total) + '%</td>' +
+        '<td></td></tr>';
+    }
+    html += '</tbody></table></div>';
+  });
+
+  el.innerHTML = html;
+
+  // Click on a tag value row -> set tagfocus and switch to flamegraph
+  el.querySelectorAll("tr[data-tagfocus]").forEach(function(tr) {
+    tr.addEventListener("click", function() {
+      var parts = tr.getAttribute("data-tagfocus").split(":");
+      var val = parts.slice(1).join(":");
+      document.getElementById("in-tagfocus").value = "^" + escRegex(val) + "$";
+      switchTab("flamegraph");
+      applyAndRender();
+    });
+  });
+}
+
+// ==================== Tab switching ====================
+
+function switchTab(name) {
+  currentTab = name;
+  document.querySelectorAll(".tab").forEach(function(t) {
+    t.classList.toggle("active", t.getAttribute("data-tab") === name);
+  });
+  document.querySelectorAll(".tab-content").forEach(function(c) {
+    c.classList.toggle("active", c.id === "panel-" + name);
+  });
+  document.getElementById("diff-legend").style.display =
+    (baseShares && name === "flamegraph") ? "flex" : "none";
+  renderCurrentTab();
+}
+
+// ==================== Events ====================
+
+document.getElementById("sel-snapshot").addEventListener("change", function(e) {
+  if (e.target.value) selectSnapshot(parseInt(e.target.value, 10));
+});
+
+// Shift+click on a flamegraph frame pins that method (capture phase so the
+// chart's own zoom-on-click does not fire)
+document.getElementById("panel-flamegraph").addEventListener("click", function(e) {
+  if (!e.shiftKey || typeof d3 === "undefined") return;
+  var t = e.target, datum = null;
+  while (t && t !== this) {
+    datum = d3.select(t).datum();
+    if (datum && datum.data && datum.data.name) break;
+    datum = null;
+    t = t.parentNode;
+  }
+  if (!datum) return;
+  e.stopPropagation();
+  e.preventDefault();
+  togglePin(datum.data.name);
+}, true);
+
+// j / k: move to newer / older snapshot (time-travel mode)
+document.addEventListener("keydown", function(e) {
+  if (snapshotList.length <= 1) return;
+  var tag = (e.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "select" || tag === "textarea") return;
+  if (e.key !== "j" && e.key !== "k") return;
+  var idx = indexOfId(curId);
+  if (idx < 0) return;
+  if (e.key === "j" && idx < snapshotList.length - 1) selectSnapshot(snapshotList[idx + 1].id);
+  if (e.key === "k" && idx > 0) selectSnapshot(snapshotList[idx - 1].id);
+});
+
+// Dropdown toggles for tagignore, tagroot, tagleaf
+["tagignore", "tagroot", "tagleaf"].forEach(function(name) {
+  document.getElementById("btn-" + name).addEventListener("click", function(e) {
+    e.stopPropagation();
+    // Close other dropdowns first
+    ["tagignore", "tagroot", "tagleaf"].forEach(function(other) {
+      if (other !== name) document.getElementById("cb-" + other).classList.remove("open");
+    });
+    document.getElementById("cb-" + name).classList.toggle("open");
+  });
+});
+document.addEventListener("click", function(e) {
+  ["tagignore", "tagroot", "tagleaf"].forEach(function(name) {
+    var list = document.getElementById("cb-" + name);
+    if (!list.contains(e.target) && e.target.id !== "btn-" + name) {
+      list.classList.remove("open");
+    }
+  });
+});
+
+document.querySelectorAll(".tab").forEach(function(t) {
+  t.addEventListener("click", function() { switchTab(t.getAttribute("data-tab")); });
+});
+
+var inputs = document.querySelectorAll(".controls input[type=text]");
+for (var i = 0; i < inputs.length; i++) {
+  inputs[i].addEventListener("keydown", function(e) {
+    if (e.key === "Enter") applyAndRender();
+  });
+}
+
+// --- Init ---
+loadSnapshotList();
+</script>
+</body>
+</html>

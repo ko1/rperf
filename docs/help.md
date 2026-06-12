@@ -90,6 +90,28 @@ and flat/cumulative top-50 function tables.
 Default (no flag): opens interactive web UI in browser.
 Default file: rperf.json.gz
 
+#### Time-travel mode (directory input)
+
+    rperf report ./profiles/
+
+Passing a directory lists all `*.json(.gz)` profiles in a sidebar — one row
+per snapshot with commit SHA (a `*` marks a dirty working tree), commit
+subject, date, and alloc/GC badges versus the previous snapshot (⚠️ when
+allocation changed more than ±15%). Rows are grouped by git branch
+(main/master expanded by default). Only meta/summary heads are read for the
+listing; profile bodies are lazy-loaded on selection, so directories with
+100+ snapshots open instantly. Works well with `rperf record --snapshot-dir`.
+
+- Click a row to view that snapshot; j / k move to the newer / older one.
+- ⇄ on a row diffs the current snapshot against it: the flamegraph is
+  recolored by share change (red = increased, blue = decreased, neutral
+  below ±0.4pt; direction is base (older) → current).
+- Shift+click a frame to pin that method: a sparkline of its share across
+  all snapshots appears at the top of the sidebar (points are filled in as
+  bodies load; click a point to jump). The pinned frame is highlighted and
+  others are dimmed.
+- Files without meta (saved by older rperf) appear as unknown snapshots.
+
 `--html` generates an HTML file with profile data embedded inline.
 No server is needed — open it directly in a browser. d3 and
 d3-flamegraph are loaded from CDN, so an internet connection is
@@ -199,8 +221,11 @@ Limitations:
     rperf exec -m cpu ruby app.rb
     rperf report
     rperf report --top profile.pb.gz
+    rperf report --format table profile.json.gz
+    rperf report ./profiles/
     rperf diff before.pb.gz after.pb.gz
     rperf diff --top before.pb.gz after.pb.gz
+    rperf diff --format table before.json.gz after.json.gz
 
 ## RUBY API
 
@@ -443,7 +468,19 @@ use Rperf::Viewer, max_snapshots: 12      # keep fewer snapshots (default: 24)
 ```
 
 Take snapshots via `Rperf::Viewer.instance.take_snapshot!` or
-`Rperf::Viewer.instance.add_snapshot(data)`.
+`Rperf::Viewer.instance.add_snapshot(data)`. Snapshots carry the same
+meta/summary as saved profiles, so when more than one snapshot exists the
+UI shows the time-travel sidebar (list, diff, pin/sparkline, j/k) — see
+"Time-travel mode" under the report subcommand.
+`add_snapshot_dir(dir)` loads a directory of saved profiles (lazy-loaded;
+`max_snapshots` does not apply to directory entries).
+
+The UI fetches data from `<path>/snapshots` (list) and
+`<path>/snapshots/<id>` (body). The URLs are replaceable at runtime:
+define `window.RPERF_DATA_SOURCE` (with `listUrl()` / `snapshotUrl(id)`,
+and optionally an async `onAuthError(url)` hook that returns a fresh URL
+when a fetch hits HTTP 403, e.g. an expired signed URL) before the viewer
+script runs to read snapshots from another source.
 
 #### Typical setup with RackMiddleware and periodic snapshots
 
@@ -489,7 +526,8 @@ end
 
 #### UI tabs
 
-- **Flamegraph** — Interactive flamegraph (d3-flame-graph). Click to zoom.
+- **Flamegraph** — Interactive flamegraph (d3-flame-graph). Click to zoom;
+  Shift+click to pin a method (sparkline across snapshots in the sidebar).
 - **Top** — Flat/cumulative weight table. Click column headers to sort.
 - **Tags** — Label key/value breakdown with weight bars. Click a row to
   set tagfocus and switch to Flamegraph.
