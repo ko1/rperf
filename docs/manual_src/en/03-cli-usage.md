@@ -374,7 +374,21 @@ performance tracking workflow.
 | `--text` | Print text report |
 | `--format FMT` | Flat table for AI/machine consumption: `table` (TSV) or `table-json` (JSON array) |
 | `--html` | Output static HTML viewer to stdout (`.json.gz` only) |
+| `--port PORT` | Port for the web UI (default: auto). Useful for SSH port forwarding |
+| `--host HOST` | Bind address for the web UI (default: localhost). `0.0.0.0` allows external access (**the viewer has no authentication** — prefer SSH port forwarding) |
 | (default) | Open interactive web UI in browser (time-travel mode for a directory) |
+
+The browser is auto-opened only when a GUI is available (`DISPLAY` /
+`WAYLAND_DISPLAY` on Linux) and the bind address is local. Without a GUI
+(e.g., over SSH) only the URL is printed — there is no terminal-browser
+(w3m) fallback. To view profiles on a remote host:
+
+```bash
+# on the remote host
+rperf report --port 8080 ./profiles/
+# locally
+ssh -L 8080:localhost:8080 host   # → open http://localhost:8080/
+```
 
 ## rperf diff
 

@@ -3,6 +3,7 @@ require "rperf/viewer"
 require "open3"
 require "json"
 require "tmpdir"
+require "socket"
 
 # Phase 2: time-travel viewer — directory snapshots, lazy loading,
 # meta/summary in list responses, unified take_snapshot! format.
@@ -224,6 +225,54 @@ class TestRperfViewerDir < Test::Unit::TestCase
       _, stderr, status = Open3.capture3(*cmd)
       refute_equal 0, status.exitstatus
       assert_include stderr, "time-travel viewer"
+    end
+  end
+
+  def test_cli_report_port_out_of_range
+    _, stderr, status = Open3.capture3(RbConfig.ruby, "-I", LIB_DIR, RPERF_EXE,
+                                       "report", "--port", "99999", "x.json.gz")
+    refute_equal 0, status.exitstatus
+    assert_include stderr, "--port must be 1..65535"
+  end
+
+  def test_cli_report_serves_on_given_port_and_host
+    Dir.mktmpdir do |dir|
+      write_profile(File.join(dir, "p.json.gz"), sha: "a" * 40)
+      port = nil
+      TCPServer.open("localhost", 0) { |s| port = s.addr[1] }
+      cmd = [RbConfig.ruby, "-I", LIB_DIR, RPERF_EXE,
+             "report", "--port", port.to_s, "--host", "127.0.0.1", dir]
+      # Escape the bundler environment: rackup is not in the Gemfile, so a
+      # bundled child could not require it
+      errlog = File.join(dir, "server.log")
+      env = { "DISPLAY" => nil, "WAYLAND_DISPLAY" => nil }
+      pid =
+        if defined?(Bundler)
+          Bundler.with_unbundled_env { spawn(env, *cmd, out: File::NULL, err: errlog) }
+        else
+          spawn(env, *cmd, out: File::NULL, err: errlog)
+        end
+      begin
+        body = nil
+        last_error = nil
+        50.times do
+          require "net/http"
+          begin
+            body = Net::HTTP.get(URI("http://127.0.0.1:#{port}/snapshots"))
+            break
+          rescue StandardError => e
+            last_error = e
+            sleep 0.1
+          end
+        end
+        server_log = File.exist?(errlog) ? File.read(errlog) : "(no log)"
+        assert_not_nil body,
+          "viewer should respond on --port #{port} (last error: #{last_error.inspect})\nserver log:\n#{server_log}"
+        assert_equal 1, JSON.parse(body).size
+      ensure
+        Process.kill(:TERM, pid) rescue nil
+        Process.wait(pid) rescue nil
+      end
     end
   end
 end

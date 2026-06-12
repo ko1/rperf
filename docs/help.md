@@ -86,6 +86,15 @@ and flat/cumulative top-50 function tables.
     --format FORMAT         Flat table for AI/machine consumption:
                             'table' (TSV) or 'table-json' (JSON array)
     --html                  Output static HTML viewer to stdout
+    --port PORT             Port for the web UI (default: auto).
+                            Useful for SSH port forwarding
+    --host HOST             Bind address for the web UI (default: localhost).
+                            0.0.0.0 allows external access — the viewer has
+                            NO authentication; prefer SSH port forwarding
+
+The browser is auto-opened only when a GUI is available (DISPLAY /
+WAYLAND_DISPLAY on Linux) and the bind address is local; otherwise the URL
+is printed for manual opening (no terminal-browser fallback).
 
 Default (no flag): opens interactive web UI in browser.
 Default file: rperf.json.gz
@@ -130,6 +139,8 @@ Accepts `.json.gz` (auto-converted to pprof) or `.pb.gz` files.
                             'table' (TSV) or 'table-json' (JSON array).
                             Computed in Ruby — no Go required.
                             .json.gz / .json files only.
+    --port PORT             Port for the web UI (default: auto)
+    --host HOST             Bind address for the web UI (default: localhost)
 
 Default (no flag): opens diff in browser.
 

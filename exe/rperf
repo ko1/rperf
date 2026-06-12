@@ -10,25 +10,47 @@ def find_available_port
   port
 end
 
-# Serve a Rperf::Viewer app on a local port and open the browser.
-# Does not return (runs the Rack handler until interrupted).
-def serve_viewer(app)
-  port = find_available_port
-  url = "http://localhost:#{port}/"
-  $stderr.puts "Serving rperf viewer at #{url}"
+# Whether a GUI browser can be opened. Without a display, xdg-open /
+# sensible-browser fall back to terminal browsers (w3m etc.), which take
+# over the TTY and cannot run the viewer's JavaScript anyway.
+def can_open_browser?
+  case RUBY_PLATFORM
+  when /darwin/ then true
+  when /linux/  then !!(ENV["DISPLAY"] || ENV["WAYLAND_DISPLAY"])
+  else false
+  end
+end
+
+# Serve a Rperf::Viewer app and open the browser (only with a GUI and a
+# local bind). Does not return (runs the Rack handler until interrupted).
+def serve_viewer(app, port: nil, host: nil)
+  port ||= find_available_port
+  host ||= "localhost"
+  local = %w[localhost 127.0.0.1 ::1].include?(host)
+  # 0.0.0.0 binds all interfaces; show a URL that works from outside
+  display_host = (host == "0.0.0.0") ? Socket.gethostname : host
+  url = "http://#{display_host}:#{port}/"
+  $stderr.puts "Serving rperf viewer at #{url} (bound to #{host})"
+  unless local
+    $stderr.puts "WARNING: the viewer has no authentication; anyone who can reach #{host}:#{port} can read the profile."
+  end
+  auto_open = local && can_open_browser?
+  $stderr.puts "Open the URL in a browser (not auto-opening)." unless auto_open
   $stderr.puts "Press Ctrl-C to stop."
 
   # Open browser after server is ready
-  Thread.new do
-    20.times do
-      TCPSocket.new("localhost", port).close
-      break
-    rescue Errno::ECONNREFUSED
-      sleep 0.1
-    end
-    case RUBY_PLATFORM
-    when /darwin/ then system("open", url)
-    when /linux/  then system("xdg-open", url, err: File::NULL) || system("sensible-browser", url, err: File::NULL)
+  if auto_open
+    Thread.new do
+      20.times do
+        TCPSocket.new(host, port).close
+        break
+      rescue Errno::ECONNREFUSED
+        sleep 0.1
+      end
+      case RUBY_PLATFORM
+      when /darwin/ then system("open", url)
+      when /linux/  then system("xdg-open", url, err: File::NULL) || system("sensible-browser", url, err: File::NULL)
+      end
     end
   end
 
@@ -41,14 +63,29 @@ def serve_viewer(app)
     exit 1
   end
   handler = Rackup::Handler.default
-  handler.run(app, Port: port, Host: "localhost", Silent: true)
+  handler.run(app, Port: port, Host: host, Silent: true)
 end
 
 def run_pprof_subcommand(name, banner, min_files:)
   mode = :http
+  port = nil
+  host = nil
 
   parser = OptionParser.new do |opts|
     opts.banner = banner
+
+    opts.on("--port PORT", Integer, "Port for the web UI (default: auto). Useful for SSH port forwarding") do |v|
+      unless v.between?(1, 65535)
+        $stderr.puts "Error: --port must be 1..65535, got #{v}"
+        exit 1
+      end
+      port = v
+    end
+
+    opts.on("--host HOST", "Bind address for the web UI (default: localhost). " \
+                           "Use 0.0.0.0 to allow external access — the viewer has NO authentication") do |v|
+      host = v
+    end
 
     opts.on("--top", "Print top functions by #{min_files > 1 ? 'diff' : 'flat time'}") do
       mode = :top
@@ -107,7 +144,7 @@ def run_pprof_subcommand(name, banner, min_files:)
   end
 
   # Go check is deferred — only needed for pprof files, not marshal/json
-  yield mode, files
+  yield mode, files, port, host
 end
 
 def self.help_text
@@ -147,7 +184,7 @@ when "report"
     "       Default file: rperf.json.gz\n" \
     "       For .json.gz: opens rperf viewer (no Go required).\n" \
     "       For .pb.gz: opens go tool pprof (requires Go).",
-    min_files: 1) do |mode, files|
+    min_files: 1) do |mode, files, port, host|
     report_file = files[0]
     if File.directory?(report_file)
       # Time-travel mode: list all profiles in the directory (meta/summary
@@ -168,7 +205,7 @@ when "report"
         exit 1
       end
       $stderr.puts "Loaded #{count} snapshot#{count == 1 ? '' : 's'} from #{report_file}"
-      serve_viewer(app)
+      serve_viewer(app, port: port, host: host)
       exit
     elsif report_file =~ /\.json(\.gz)?\z/
       # Use rperf viewer
@@ -200,7 +237,7 @@ when "report"
         path: ""
       )
       app.add_snapshot(data)
-      serve_viewer(app)
+      serve_viewer(app, port: port, host: host)
       exit
     else
       if mode == :table || mode == :table_json
@@ -215,7 +252,7 @@ when "report"
       case mode
       when :top  then exec("go", "tool", "pprof", "-top", report_file)
       when :text then exec("go", "tool", "pprof", "-text", report_file)
-      else            exec("go", "tool", "pprof", "-http=localhost:#{find_available_port}", report_file)
+      else            exec("go", "tool", "pprof", "-http=#{host || %q(localhost)}:#{port || find_available_port}", report_file)
       end
     end
   end
@@ -225,7 +262,7 @@ when "diff"
     "       Compare two profiles (shows target - base).\n" \
     "       Accepts .json.gz (auto-converted) or .pb.gz files.\n" \
     "       Requires Go (https://go.dev/dl/), except --format table/table-json.",
-    min_files: 2) do |mode, files|
+    min_files: 2) do |mode, files, port, host|
     # Table diff is computed in Ruby — no Go required
     if mode == :table || mode == :table_json
       unless files.all? { |f| f =~ /\.json(\.gz)?\z/ }
@@ -268,7 +305,7 @@ when "diff"
     pprof_args = case mode
                  when :top  then ["-top", "-diff_base=#{base_file}", target_file]
                  when :text then ["-text", "-diff_base=#{base_file}", target_file]
-                 else            ["-http=localhost:#{find_available_port}", "-diff_base=#{base_file}", target_file]
+                 else            ["-http=#{host || %q(localhost)}:#{port || find_available_port}", "-diff_base=#{base_file}", target_file]
                  end
     if tmpfiles.empty?
       exec("go", "tool", "pprof", *pprof_args)
