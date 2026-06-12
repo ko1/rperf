@@ -154,7 +154,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monos
     <!-- LOGO -->
   </a>
   <div class="controls">
-    <label>Snapshot:
+    <label id="lbl-snapshot">Snapshot:
       <select id="sel-snapshot"><option value="">Loading...</option></select>
     </label>
     <label>tagfocus: <input type="text" id="in-tagfocus" placeholder="value regex"></label>
@@ -296,7 +296,11 @@ async function selectSnapshot(id) {
   curId = id;
   var sel = document.getElementById("sel-snapshot");
   if (sel) sel.value = String(id);
-  currentData = await fetchJSON(dataSource.snapshotUrl(id));
+  var data = await fetchJSON(dataSource.snapshotUrl(id));
+  // Stale-response guard: with rapid j/k navigation an older, slower fetch
+  // can resolve after a newer one — drop it instead of overwriting the UI
+  if (curId !== id) return;
+  currentData = data;
   cacheShares(id, currentData);
   if (baseId === curId) { baseId = null; baseShares = null; }
   renderSidebar();
@@ -719,14 +723,25 @@ function getFilteredSamples() {
 
   // tagfocus: keep only samples whose label values match the regex
   if (tagfocus) {
-    try { var re = new RegExp(tagfocus); } catch(e) { /* invalid regex, skip filter */ }
-    if (!re) return filtered;
-    filtered = filtered.filter(function(s) {
-      if (s.label_set_id === 0) return false;
-      var ls = labelSets[s.label_set_id];
-      if (!ls) return false;
-      return Object.values(ls).some(function(v) { return re.test(String(v)); });
-    });
+    var re = null;
+    try { re = new RegExp(tagfocus); } catch(e) { /* invalid regex */ }
+    var tfInput = document.getElementById("in-tagfocus");
+    tfInput.style.outline = re ? "" : "2px solid #d33";
+    tfInput.title = re ? "" : "Invalid regular expression";
+    // Invalid regex skips only the tagfocus stage — tagignore/tagroot/
+    // tagleaf below must still apply
+    if (re) {
+      filtered = filtered.filter(function(s) {
+        if (s.label_set_id === 0) return false;
+        var ls = labelSets[s.label_set_id];
+        if (!ls) return false;
+        return Object.values(ls).some(function(v) { return re.test(String(v)); });
+      });
+    }
+  } else {
+    var tfInput2 = document.getElementById("in-tagfocus");
+    tfInput2.style.outline = "";
+    tfInput2.title = "";
   }
 
   // tagignore: remove samples matching selected key=value pairs (or missing key for "(none)")
@@ -1119,7 +1134,15 @@ for (var i = 0; i < inputs.length; i++) {
 }
 
 // --- Init ---
-loadSnapshotList();
+// A failed list fetch must not leave the UI stuck at "Loading..." with only
+// a console rejection
+function showLoadError(e) {
+  var chart = document.getElementById("chart");
+  if (chart) chart.textContent = "Failed to load snapshots: " + (e && e.message ? e.message : e);
+}
+// NOTE: the literal next line is the replacement marker for
+// Rperf::Viewer.render_static_html — keep it byte-identical
+loadSnapshotList().catch(showLoadError);
 </script>
 </body>
 </html>

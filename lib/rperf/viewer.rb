@@ -67,7 +67,12 @@ class Rperf::Viewer
       @next_id += 1
       entry = { id: @next_id, taken_at: Time.now, data: data }
       @snapshots << entry
-      @snapshots.shift while @snapshots.size > @max_snapshots
+      # Evict only in-memory snapshots: directory entries (time-travel mode)
+      # are exempt from max_snapshots and hold no body memory anyway
+      while @snapshots.count { |s| s[:data] } > @max_snapshots
+        idx = @snapshots.index { |s| s[:data] }
+        @snapshots.delete_at(idx)
+      end
       entry
     end
   end
@@ -80,11 +85,17 @@ class Rperf::Viewer
   # max_snapshots does not apply. Returns the number of files added.
   def add_snapshot_dir(dir)
     files = Dir.glob(File.join(dir, "*.json.gz")) + Dir.glob(File.join(dir, "*.json"))
-    entries = files.map do |file|
+    entries = files.filter_map do |file|
       head = Rperf.read_meta(file)
       meta = head && head[:meta]
       summary = head && head[:summary]
-      mtime = File.mtime(file)
+      # File may vanish between glob and stat — skip instead of aborting the
+      # whole listing
+      mtime = begin
+        File.mtime(file)
+      rescue SystemCallError
+        next
+      end
       { path: file, meta: meta, summary: summary, taken_at: mtime,
         sort_time: snapshot_sort_time(meta, mtime) }
     end
@@ -131,11 +142,12 @@ class Rperf::Viewer
   # Stack is stored top-to-bottom (leaf first) in C; reverse to root-first for flamegraph.
   # Label set keys are converted from symbols to strings for JSON.
   def self.samples_to_json(samples, label_sets)
-    json_samples = samples.map do |frames, weight, thread_seq, label_set_id|
+    json_samples = samples.map do |frames, weight, _thread_seq, label_set_id|
+      # thread_seq is intentionally omitted: the viewer UI never reads it,
+      # and it would bloat the largest responses the viewer serves
       {
         stack: frames.reverse.map { |_, label| label },
         weight: weight,
-        thread_seq: thread_seq || 0,
         label_set_id: label_set_id || 0,
       }
     end
@@ -171,8 +183,9 @@ class Rperf::Viewer
 
     html = VIEWER_HTML.sub("<!-- LOGO -->") { logo }
 
-    # Hide snapshot selector (single snapshot, no server)
-    html = html.sub('<select id="sel-snapshot"', '<select id="sel-snapshot" style="display:none"')
+    # Hide the snapshot selector including its "Snapshot:" label text
+    # (single snapshot, no server)
+    html = html.sub('<label id="lbl-snapshot">', '<label id="lbl-snapshot" style="display:none">')
 
     # Replace dynamic loading with inline data.
     # Escape for safe embedding in <script>:
@@ -182,8 +195,11 @@ class Rperf::Viewer
       .gsub("</", "<\\/")
       .gsub(" ", "\\u2028")
       .gsub(" ", "\\u2029")
-    html = html.sub("loadSnapshotList();",
-      "currentData = #{json_safe}; updateTagDropdowns(); applyAndRender();")
+    # Block form: the String-replacement form of sub interprets \\ and \&
+    # in the replacement, corrupting JSON that contains backslashes
+    html = html.sub("loadSnapshotList().catch(showLoadError);") {
+      "currentData = #{json_safe}; updateTagDropdowns(); applyAndRender();"
+    }
 
     html
   end
@@ -225,7 +241,9 @@ class Rperf::Viewer
         {
           id: s[:id],
           taken_at: s[:taken_at].iso8601,
-          file: s[:path] ? File.basename(s[:path]) : nil,
+          # scrub: one non-UTF8 filename must not make JSON.generate raise
+          # and 500 the whole snapshot list
+          file: s[:path] ? File.basename(s[:path]).dup.force_encoding(Encoding::UTF_8).scrub : nil,
           mode: data ? data[:mode] : s.dig(:meta, :mode),
           duration_ns: data && data[:duration_ns],
           sampling_count: data && data[:sampling_count],

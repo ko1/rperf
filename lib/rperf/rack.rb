@@ -16,10 +16,15 @@ class Rperf::RackMiddleware
     @label_proc = label
   end
 
-  UUID_RE = %r{/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}i
-  NUMERIC_RE = %r{/\d+}
+  UUID_RE = %r{/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=/|\z)}i
+  NUMERIC_RE = %r{/\d+(?=/|\z)}
 
   def call(env)
+    # No-op when the profiler is not running (Rperf.profile would raise):
+    # the app may boot without Rperf.start, stop mid-run, or run in a forked
+    # worker where the atfork handler silently stopped profiling.
+    return @app.call(env) unless Rperf.running?
+
     endpoint = if @label_proc == :raw
       "#{env["REQUEST_METHOD"]} #{env["PATH_INFO"]}"
     elsif @label_proc

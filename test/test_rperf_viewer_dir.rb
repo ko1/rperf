@@ -195,7 +195,7 @@ class TestRperfViewerDir < Test::Unit::TestCase
     assert_include html, 'id="snapshot-list"'
     assert_include html, "RPERF_DATA_SOURCE"
     assert_include html, "onAuthError"
-    assert_include html, "loadSnapshotList();"
+    assert_include html, "loadSnapshotList().catch(showLoadError);"
   end
 
   def test_static_html_still_renders
@@ -203,8 +203,17 @@ class TestRperfViewerDir < Test::Unit::TestCase
              aggregated_samples: [[[["app.rb", "Object#work"]], 1_000_000, 0, 0]] }
     html = Rperf::Viewer.render_static_html(data)
     assert_include html, "currentData = {"
-    assert_not_include html, "loadSnapshotList();"
-    assert_include html, 'id="sel-snapshot" style="display:none"'
+    assert_not_include html, "loadSnapshotList().catch"
+    assert_include html, 'id="lbl-snapshot" style="display:none"'
+  end
+
+  def test_static_html_preserves_backslashes
+    # String-replacement sub would eat one level of backslash escaping
+    data = { mode: :cpu, frequency: 100, duration_ns: 1_000_000, sampling_count: 1,
+             aggregated_samples: [[[["C:\\Users\\app.rb", "Object#work"]], 1_000_000, 0, 1]],
+             label_sets: [{}, { dir: "C:\\Users" }] }
+    html = Rperf::Viewer.render_static_html(data)
+    assert_include html, '"C:\\\\Users"'
   end
 
   # --- CLI ---
