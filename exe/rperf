@@ -24,6 +24,15 @@ end
 # Serve a Rperf::Viewer app and open the browser (only with a GUI and a
 # local bind). Does not return (runs the Rack handler until interrupted).
 def serve_viewer(app, port: nil, host: nil)
+  # Find an available Rack handler first, before claiming to serve
+  begin
+    require "rackup/handler"
+  rescue LoadError
+    $stderr.puts "Error: 'rackup' gem is required for 'rperf report'. Install it with:"
+    $stderr.puts "  gem install rackup"
+    exit 1
+  end
+
   port ||= find_available_port
   host ||= "localhost"
   local = %w[localhost 127.0.0.1 ::1].include?(host)
@@ -54,14 +63,6 @@ def serve_viewer(app, port: nil, host: nil)
     end
   end
 
-  # Find an available Rack handler
-  begin
-    require "rackup/handler"
-  rescue LoadError
-    $stderr.puts "Error: 'rackup' gem is required for 'rperf report'. Install it with:"
-    $stderr.puts "  gem install rackup"
-    exit 1
-  end
   handler = Rackup::Handler.default
   handler.run(app, Port: port, Host: host, Silent: true)
 end

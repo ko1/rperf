@@ -10,9 +10,19 @@ class TestRperfMeta < Test::Unit::TestCase
   RPERF_EXE = File.expand_path("../exe/rperf", __dir__)
   LIB_DIR = File.expand_path("../lib", __dir__)
 
+  # Isolate in-process tests from a real CI environment (these are set
+  # when the test suite itself runs on GitHub Actions)
+  CI_GIT_ENV = %w[GITHUB_SHA GITHUB_REF_NAME GITHUB_HEAD_REF].freeze
+
+  def setup
+    super
+    @saved_ci_env = CI_GIT_ENV.to_h { |k| [k, ENV.delete(k)] }
+  end
+
   def teardown
     ENV.delete("RPERF_META_GIT")
     ENV.delete("RPERF_META_LABELS")
+    @saved_ci_env.each { |k, v| v ? ENV[k] = v : ENV.delete(k) }
     super
   end
 
@@ -154,10 +164,15 @@ class TestRperfMeta < Test::Unit::TestCase
       assert_equal fake_sha, git[:sha]
       assert_equal "feature/x", git[:branch]
       assert_equal false, git[:dirty]
+
+      # On pull_request builds GITHUB_HEAD_REF takes priority over REF_NAME
+      ENV["GITHUB_HEAD_REF"] = "pr-head"
+      assert_equal "pr-head", Rperf::Meta.collect_git(dir)[:branch]
     end
   ensure
     ENV.delete("GITHUB_SHA")
     ENV.delete("GITHUB_REF_NAME")
+    ENV.delete("GITHUB_HEAD_REF")
   end
 
   # --- snapshot_filename ---

@@ -242,16 +242,11 @@ class TestRperfViewerDir < Test::Unit::TestCase
       TCPServer.open("localhost", 0) { |s| port = s.addr[1] }
       cmd = [RbConfig.ruby, "-I", LIB_DIR, RPERF_EXE,
              "report", "--port", port.to_s, "--host", "127.0.0.1", dir]
-      # Escape the bundler environment: rackup is not in the Gemfile, so a
-      # bundled child could not require it
+      # rackup/webrick come from the Gemfile (development group), so keep
+      # the bundler environment for the child
       errlog = File.join(dir, "server.log")
       env = { "DISPLAY" => nil, "WAYLAND_DISPLAY" => nil }
-      pid =
-        if defined?(Bundler)
-          Bundler.with_unbundled_env { spawn(env, *cmd, out: File::NULL, err: errlog) }
-        else
-          spawn(env, *cmd, out: File::NULL, err: errlog)
-        end
+      pid = spawn(env, *cmd, out: File::NULL, err: errlog)
       begin
         body = nil
         last_error = nil
