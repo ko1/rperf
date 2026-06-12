@@ -69,9 +69,15 @@ GC の sweeping フェーズに費やされた時間。常に wall time で計�
 
 `%GC=sweep` のサンプルが多い場合、短寿命のオブジェクトが多すぎます。オブジェクトの再利用やオブジェクトプールの使用を検討してください。
 
-ビューアで tagfocus に `mark` や `sweep` を入力して絞り込むか、tagroot で `%GC` をチェックしてフェーズごとにグループ化できます。
+### VM 状態ラベルのフィルタリング
 
-pprof 形式の場合、`go tool pprof -tagfocus=%GC profile.pb.gz` や `-tagroot=%GC` で同等の操作が可能です。
+rperf ビューアまたは `Rperf::Viewer` では:
+
+- **tagfocus**: `blocked`、`wait`、`mark`、`sweep` を入力して特定の VM 状態に絞り込み
+- **tagignore**: `%GVL=blocked` をチェックして GVL 外のサンプルを除外
+- **tagroot**: `%GVL` または `%GC` をチェックしてフレームグラフを VM 状態でグループ化
+
+pprof 形式の場合、`go tool pprof -tagfocus=%GVL=blocked profile.pb.gz` などのフラグで同等のフィルタリングが可能です。
 
 ## よくある問題の診断
 

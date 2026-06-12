@@ -7,7 +7,7 @@ rperf provides optional integrations that automatically profile and label sample
 
 ## Rack middleware
 
-`Rperf::RackMiddleware` profiles each request and labels it with its endpoint (`METHOD /path`). By default, dynamic segments are normalized (numeric IDs → `:id`, UUIDs → `:uuid`) to keep label cardinality low. Use `label: :raw` for the original PATH_INFO, or pass a custom `label:` proc for framework-specific route normalization.
+`Rperf::RackMiddleware` profiles each request and labels it with its endpoint (`METHOD /path`). By default, dynamic segments are normalized (numeric IDs → `:id`, UUIDs → `:uuid`) to keep label cardinality low. Use `label: :raw` for the original PATH_INFO, or pass a custom `label:` proc for framework-specific route normalization. When the profiler is not running, the middleware is a no-op — the request passes straight through.
 
 ### Rails
 
@@ -110,7 +110,7 @@ end
 
 ## In-browser viewer
 
-`Rperf::Viewer` is a Rack middleware that serves an interactive profiling UI at a configurable mount path. It stores snapshots in memory and renders them in the browser using [d3-flame-graph](https://github.com/nicedoc/d3-flame-graph). No gem dependencies or build tools are required. The viewer loads d3.js and d3-flame-graph from CDNs (cdnjs.cloudflare.com, cdn.jsdelivr.net) at runtime, so an internet connection is needed on first access.
+`Rperf::Viewer` is a Rack middleware that serves an interactive profiling UI at a configurable mount path. It stores snapshots in memory and renders them in the browser using [d3-flame-graph](https://github.com/spiermar/d3-flame-graph). No gem dependencies or build tools are required. The viewer loads d3.js and d3-flame-graph from CDNs (cdnjs.cloudflare.com, cdn.jsdelivr.net) at runtime, so an internet connection is needed on first access.
 
 > [!WARNING]
 > `Rperf::Viewer` has no built-in authentication. Profiling data — including stack traces and label values — is exposed to anyone who can access the endpoint. In production, always restrict access using your framework's authentication (see "Access control" below).

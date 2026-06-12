@@ -169,7 +169,7 @@ element is `{"summary": {...}}`.
 
 Feed the result to an LLM:
 
-    rperf diff base.json.gz head.json.gz --format table | claude -p "回帰の原因を分析して"
+    rperf diff --format table base.json.gz head.json.gz | claude -p "回帰の原因を分析して"
 
 ### Multi-process profiling
 
@@ -286,18 +286,23 @@ nil if profiler was not running; otherwise a Hash:
   detected_thread_count: 4,        # threads seen during profiling
   start_time_ns: 17740...,         # CLOCK_REALTIME epoch nanos
   duration_ns: 10000000,           # profiling duration in nanos
-  aggregated_samples: [                  # when aggregate: true (default)
+  aggregated_samples: [                  # always present
     [frames, weight, seq, label_set_id], #   frames: [[path, label], ...] deepest-first
     ...                                  #   weight: Integer (nanoseconds, merged per unique stack)
   ],                                     #   seq: Integer (thread sequence, 1-based)
                                          #   label_set_id: Integer (0 = no labels)
   label_sets: [{}, {request: "abc"}, ...], # label set table (index = label_set_id)
-  # --- OR ---
-  raw_samples: [                   # when aggregate: false
-    [frames, weight, seq, label_set_id], # one entry per timer sample (not merged)
-    ...
-  ] }
+  # additionally, when aggregate: false:
+  raw_samples: [                             # one entry per timer sample (not merged)
+    [frames, weight, seq, label_set_id, vm_state],
+    ...                                      #   vm_state: Integer (raw VM state; NOT
+  ] }                                        #   converted to %GVL/%GC labels — only
+                                             #   aggregated_samples gets that conversion)
 ```
+
+With `aggregate: false`, BOTH keys are present: `aggregated_samples` is built
+in Ruby from the raw samples (so encoders always work), and `raw_samples`
+preserves the unmerged per-sample data.
 
 ### Rperf.snapshot(clear: false)
 
@@ -405,6 +410,10 @@ running). Raises `RuntimeError` if not started, `ArgumentError` without block.
 
 Returns the current thread's labels as a Hash. Empty hash if none set.
 
+### Rperf.running?
+
+Returns true while a profiling session is active (between start and stop).
+
 ### Rperf.load(path)
 
 Loads a `.json.gz` or `.json` profile file (saved by `rperf record` or `Rperf.save`)
@@ -436,6 +445,8 @@ use Rperf::RackMiddleware
 
 The middleware uses `Rperf.profile` to activate timer and set labels.
 Start profiling separately. Option: `label_key:` (default: `:endpoint`).
+When the profiler is not running, the middleware is a no-op (passes the
+request straight through).
 
 ### Rperf::ActiveJobMiddleware
 
@@ -627,7 +638,8 @@ Notes:
 - `git.dirty` is true when the working tree has uncommitted changes.
 - GC counts and allocation counts are deltas over the profiled period
   (`GC.stat` baselines are captured at `Rperf.start`). `maxrss_mb` is the
-  process-lifetime peak (no period delta is possible).
+  process-lifetime peak (no period delta is possible; on macOS the value
+  comes from `ps -o rss=` and is the current RSS, not the peak).
 - `summary.top_methods` lists up to 50 methods by self time.
 - In multi-process profiling, GC/memory stats come from the root process
   only (same policy as `rperf stat`); time and sample stats are aggregated.
@@ -811,7 +823,7 @@ Or convert to text with pprof CLI:
 
     go tool pprof -text profile.pb.gz
     go tool pprof -top profile.pb.gz
-    go tool pprof -flame profile.pb.gz
+    go tool pprof -http=:8080 profile.pb.gz   # web UI (includes flame graph view)
 
 ## ENVIRONMENT VARIABLES
 

@@ -53,8 +53,10 @@ The sampling callback:
 2. Reads the current clock (`CLOCK_THREAD_CPUTIME_ID` for CPU mode, `CLOCK_MONOTONIC` for wall mode)
 3. Computes weight as `time_now - prev_time`
 4. Captures the backtrace with `rb_profile_frames` directly into the frame pool
-5. Records the sample (frame start index, depth, weight, type)
+5. Records the sample (frame start index, depth, weight, `vm_state`)
 6. Updates `prev_time`
+
+The `vm_state` field is `NORMAL` for regular timer samples; GVL/GC events set the corresponding state (`GVL_BLOCKED`, `GVL_WAIT`, `GC_MARK`, `GC_SWEEP`). At stop time, `Rperf.stop` converts `vm_state` to `%GVL`/`%GC` labels via `merge_vm_state_labels!`.
 
 ## GVL event tracking (wall mode)
 
@@ -91,7 +93,7 @@ When a thread reacquires the GVL:
 2. Record a sample with `vm_state = GVL_BLOCKED`: weight = `ready_at - suspended_at` (off-GVL time)
 3. Record a sample with `vm_state = GVL_WAIT`: weight = `resumed_at - ready_at` (GVL contention time)
 
-These `vm_state` values are later converted to labels (`%GVL: blocked` and `%GVL: wait`) by the Ruby layer at encoding time. This way, off-GVL time and GVL contention are accurately attributed to the code that triggered them, even though no timer-based sampling can occur while the thread is off the GVL.
+This way, off-GVL time and GVL contention are accurately attributed to the code that triggered them, even though no timer-based sampling can occur while the thread is off the GVL. At stop time, these `vm_state` values are converted to `%GVL=blocked` / `%GVL=wait` labels.
 
 ## GC phase tracking
 
@@ -105,7 +107,7 @@ rperf hooks into Ruby's internal GC events to track garbage collection time:
 | `GC_ENTER` | Capture wall timestamp and thread info |
 | `GC_EXIT` | Capture backtrace, record sample with `vm_state = GC_MARK` or `vm_state = GC_SWEEP` |
 
-GC samples always use wall time regardless of the profiling mode, because GC time is real elapsed time that affects application latency.
+GC samples always use wall time regardless of the profiling mode, because GC time is real elapsed time that affects application latency. At stop time, `vm_state` is converted to `%GC=mark` / `%GC=sweep` labels.
 
 ## Deferred string resolution
 

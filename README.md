@@ -84,7 +84,7 @@ rperf report ./profiles/                             # sidebar: per-commit list,
 rperf diff --format table base.json.gz head.json.gz | claude -p "analyze the regression"
 ```
 
-On `rperf report`, you can see the profile result like this page: [rprof viewer](https://ko1.github.io/rperf/examples/cpu_intensive_profile.html)
+On `rperf report`, you can see the profile result like this page: [rperf viewer](https://ko1.github.io/rperf/examples/cpu_intensive_profile.html)
 
 ### Ruby API
 
@@ -126,9 +126,11 @@ Thread.new { loop { sleep 3600; Rperf::Viewer.instance&.take_snapshot! } }
 Profile without code changes (e.g., Rails):
 
 ```bash
-RPERF_ENABLED=1 RPERF_MODE=wall ruby app.rb    # → rperf.json.gz
-rperf report                                    # open in viewer
+RPERF_ENABLED=1 RPERF_MODE=wall RUBYOPT=-rrperf ruby app.rb    # → rperf.json.gz
+rperf report                                                    # open in viewer
 ```
+
+`RPERF_ENABLED` takes effect when rperf is loaded — if rperf is already in your Gemfile (e.g., Rails), `RUBYOPT=-rrperf` is unnecessary.
 
 Run `rperf help` for full documentation, or see the [online manual](https://ko1.github.io/rperf/docs/manual/).
 
@@ -195,7 +197,7 @@ rperf hooks GVL and GC events to attribute non-CPU time. These are recorded as l
 - **Accurate despite safepoints** — Safepoint sampling is *safer* (no async-signal-safety issues), but normally *inaccurate*. rperf compensates with real time-delta weights, so profiles faithfully reflect where time is actually spent.
 - **See the whole picture** (wall mode) — GVL contention, off-GVL I/O, GC marking/sweeping — all attributed to the call stacks responsible, via sample labels.
 - **Built-in viewer** — Flamegraph, Top, Tags tabs with interactive tag filtering. No external tools needed to analyze profiles.
-- **Low overhead** — Signal-based timer on Linux (no extra thread). ~1–5 us per sample.
+- **Low overhead** — Signal-based timer on Linux (signals delivered to a dedicated worker thread — Ruby threads are never interrupted). ~1–5 us per sample.
 - **Zero code changes** — Profile any Ruby program via CLI or environment variables. Drop-in for Rails, too.
 - **`perf`-like CLI** — `record`, `stat`, `report`, `diff` — if you know Linux perf, you already know rperf.
 - **Multi-process** — automatically profiles forked/spawned Ruby child processes (e.g., Unicorn/Puma workers). Use `--no-inherit` to disable.

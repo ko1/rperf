@@ -29,50 +29,50 @@ All weights in rperf are in **nanoseconds**, regardless of profiling mode:
 
 ## VM state labels
 
-In addition to normal Ruby frames, rperf tracks non-CPU activity as **labels** (tags) on samples. The C extension records a `vm_state` for each sample, and Ruby converts these to labels with keys `%GVL` and `%GC` before encoding. These labels appear in `label_sets` alongside user labels (like `endpoint`), and can be filtered with the viewer's tagfocus, tagroot, and tagleaf controls.
+In addition to normal Ruby frames, rperf tracks non-CPU activity as **labels** (tags) on samples. The C extension records a `vm_state` for each sample, and `Rperf.stop` converts these to labels with keys `%GVL` and `%GC` via `merge_vm_state_labels!`. These labels appear in `label_sets` alongside user labels (like `endpoint`), and can be filtered with the viewer's tagfocus, tagroot, and tagleaf controls.
 
-### %GVL: blocked
+### %GVL=blocked
 
 **Mode**: wall only
 
 Time the thread spent off the GVL — during I/O operations, `sleep`, or C extensions that release the [GVL](#index:GVL). This time is attributed to the stack captured at the SUSPENDED event (when the thread released the GVL).
 
-High `%GVL: blocked` time indicates your program is I/O bound. Look at the cumulative view to find which functions are triggering the I/O.
+High `%GVL=blocked` time indicates your program is I/O bound. Look at the cumulative view to find which functions are triggering the I/O.
 
 In the viewer, use tagfocus with `blocked` to isolate these samples, or tagroot with `%GVL` to group by GVL state.
 
-### %GVL: wait
+### %GVL=wait
 
 **Mode**: wall only
 
 Time the thread spent waiting to reacquire the GVL after becoming ready. This indicates GVL contention — another thread is holding the GVL while this thread wants to run.
 
-High `%GVL: wait` time means your threads are serialized on the GVL. Consider reducing GVL-holding work, using Ractors, or moving work to child processes.
+High `%GVL=wait` time means your threads are serialized on the GVL. Consider reducing GVL-holding work, using Ractors, or moving work to child processes.
 
 In the viewer, use tagfocus with `wait` to isolate these samples.
 
-### %GC: mark
+### %GC=mark
 
 **Mode**: cpu and wall
 
 Time spent in the GC marking phase. Always measured in wall time. Attributed to the stack that triggered GC.
 
-High `%GC: mark` time means too many live objects. Reduce the number of long-lived allocations.
+High `%GC=mark` time means too many live objects. Reduce the number of long-lived allocations.
 
-### %GC: sweep
+### %GC=sweep
 
 **Mode**: cpu and wall
 
 Time spent in the GC sweeping phase. Always measured in wall time. Attributed to the stack that triggered GC.
 
-High `%GC: sweep` time means too many short-lived objects. Consider reusing objects or using object pools.
+High `%GC=sweep` time means too many short-lived objects. Consider reusing objects or using object pools.
 
 ### Filtering VM state labels
 
 In the rperf viewer or `Rperf::Viewer`:
 
 - **tagfocus**: Enter `blocked`, `wait`, `mark`, or `sweep` to isolate specific VM states
-- **tagignore**: Check `%GVL: blocked` to exclude off-GVL samples
+- **tagignore**: Check `%GVL=blocked` to exclude off-GVL samples
 - **tagroot**: Check `%GVL` or `%GC` to group the flamegraph by VM state
 
 When using pprof format, `go tool pprof -tagfocus=%GVL=blocked profile.pb.gz` and similar flags provide equivalent filtering.
@@ -93,17 +93,17 @@ Look for functions with high flat CPU time. These are the functions consuming CP
 
 Look for functions with high cumulative wall time.
 
-- If `%GVL: blocked` time is dominant: I/O or sleep is the bottleneck. Check database queries, HTTP calls, file I/O.
-- If `%GVL: wait` time is dominant: GVL contention. Reduce GVL-holding work or move to Ractors/child processes.
+- If `%GVL=blocked` time is dominant: I/O or sleep is the bottleneck. Check database queries, HTTP calls, file I/O.
+- If `%GVL=wait` time is dominant: GVL contention. Reduce GVL-holding work or move to Ractors/child processes.
 
 ### GC pressure
 
 **Mode**: cpu or wall
 
-Look for samples with `%GC: mark` and `%GC: sweep` labels.
+Look for samples with `%GC=mark` and `%GC=sweep` labels.
 
-- High `%GC: mark` time: Too many live objects. Reduce allocations of long-lived objects.
-- High `%GC: sweep` time: Too many short-lived objects. Reuse or pool objects.
+- High `%GC=mark` time: Too many live objects. Reduce allocations of long-lived objects.
+- High `%GC=sweep` time: Too many short-lived objects. Reuse or pool objects.
 
 The `rperf stat` output also shows GC counts and allocated/freed object counts, which can help diagnose allocation-heavy code.
 
@@ -111,7 +111,7 @@ The `rperf stat` output also shows GC counts and allocated/freed object counts, 
 
 **Mode**: wall
 
-Look for `%GVL: wait` time across threads.
+Look for `%GVL=wait` time across threads.
 
 ```bash
 rperf stat ruby threaded_app.rb

@@ -75,7 +75,8 @@ Thread data is created lazily on first encounter and freed on the `EXITED` event
 Frame VALUEs must be protected from garbage collection. rperf wraps the profiler struct in a `TypedData` object with a custom `dmark` function that marks three regions:
 
 1. **Both frame pools** (active and standby buffers)
-2. **Frame table keys** (unique frame VALUEs)
+2. **The `label_sets` array** (Ruby Array of label set Hashes)
+3. **Frame table keys** (unique frame VALUEs)
 
 The frame table keys array starts at 4,096 entries and grows by 2× when full. Growth allocates a new array, copies existing data, and swaps the pointer atomically (`memory_order_release`). The old array is kept alive until `stop` to prevent use-after-free if GC's mark phase is reading it concurrently. The `dmark` function loads the keys pointer with `memory_order_acquire` and the count with `memory_order_acquire` to ensure a consistent view.
 

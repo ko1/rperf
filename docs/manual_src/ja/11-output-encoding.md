@@ -10,7 +10,7 @@
 2. **集約テーブル**: `[frame_ids, weight, thread_seq, label_set_id, vm_state]` エントリの配列。
 3. **ラベルセット**: ラベルキーと値のマッピングを持つ frozen Hash の配列。
 
-Ruby の `Rperf.stop` は `merge_vm_state_labels!` を呼び出して、各サンプルの `vm_state` を `%GVL`/`%GC` ラベルに変換し、既存の `label_sets` にマージします。例えば、`vm_state=GVL_BLOCKED` は `%GVL: "blocked"` ラベルになります。これにより、VM 状態がユーザーラベル（`endpoint` など）と同じ仕組みで pprof のサンプルラベルに書き込まれます。
+Ruby の `Rperf.stop` は `merge_vm_state_labels!` を呼び出して、各サンプルの `vm_state` を `%GVL`/`%GC` ラベルに変換し、既存の `label_sets` にマージします。例えば、`vm_state = GVL_BLOCKED` は `{"%GVL" => "blocked"}` になり、`GVL_WAIT` は `{"%GVL" => "wait"}`、`GC_MARK` は `{"%GC" => "mark"}`、`GC_SWEEP` は `{"%GC" => "sweep"}` になります。これにより、VM 状態がユーザーラベル（`endpoint` など）と同じ仕組みで pprof のサンプルラベルに書き込まれます。
 
 Ruby エンコーダーがこれらの配列を消費して最終出力を生成します。
 

@@ -96,6 +96,7 @@ rperf stat [options] command [args...]
 | `-f HZ` | サンプリング周波数 (Hz) (デフォルト: 1000) |
 | `-m MODE` | `cpu` または `wall` (デフォルト: `wall`) |
 | `--report` | フラット/キュムレイティブなプロファイルテーブルを出力に含める |
+| `--label KEY=VALUE` | プロファイルメタデータにラベルを追加（複数指定可） |
 | `--signal VALUE` | タイマーシグナル (Linux のみ): シグナル番号、または `false` で nanosleep スレッド |
 | `--no-aggregate` | サンプル集約を無効化（生サンプルを保持） |
 | `--no-inherit` | fork/spawn した子プロセスをプロファイルしない (デフォルト: inherit) |
@@ -122,6 +123,7 @@ rperf exec [options] command [args...]
 | `-o PATH` | プロファイルをファイルにも保存 (デフォルト: なし) |
 | `-f HZ` | サンプリング周波数 (Hz) (デフォルト: 1000) |
 | `-m MODE` | `cpu` または `wall` (デフォルト: `wall`) |
+| `--label KEY=VALUE` | プロファイルメタデータにラベルを追加（複数指定可） |
 | `--signal VALUE` | タイマーシグナル (Linux のみ): シグナル番号、または `false` で nanosleep スレッド |
 | `--no-aggregate` | サンプル集約を無効化（生サンプルを保持） |
 | `--no-inherit` | fork/spawn した子プロセスをプロファイルしない (デフォルト: inherit) |
@@ -228,7 +230,7 @@ Samples: 80, Frequency: 1000Hz
             58.0 ms  18.6%  Object#cpu_work (mixed.rb)
 ```
 
-wall モードでは、`%GVL: blocked` ラベルが支配的なコストを示しています -- これは `io_work` の sleep 時間です。`cpu_work` の CPU 時間は明確に分離されています。GVL や GC のアクティビティはスタックフレームではなくサンプルのラベルとして記録され、pprof の `-tagfocus` フラグ（例: `-tagfocus=%GVL=blocked`）でフィルタリングできます。カテゴリごとの時間内訳（CPU 実行、GVL ブロック、GVL 待機、GC マーキング、GC スイーピング）は `rperf stat` で確認できます。
+wall モードでは、`%GVL=blocked` ラベルが支配的なコストを示しています -- これは `io_work` の sleep 時間です。`cpu_work` の CPU 時間は明確に分離されています。GVL や GC のアクティビティはスタックフレームではなくサンプルのラベルとして記録され、pprof の `-tagfocus` フラグ（例: `-tagfocus=%GVL=blocked`）でフィルタリングできます。カテゴリごとの時間内訳（CPU 実行、GVL ブロック、GVL 待機、GC マーキング、GC スイーピング）は `rperf stat` で確認できます。
 
 ### Verbose 出力
 
@@ -265,7 +267,10 @@ rperf record [options] command [args...]
 | `--label KEY=VALUE` | プロファイルメタデータにラベルを追加（複数指定可） |
 | `--signal VALUE` | タイマーシグナル (Linux のみ): シグナル番号、または `false` で nanosleep スレッド |
 | `--no-aggregate` | サンプル集約を無効化（生サンプルを保持） |
+| `--no-inherit` | fork/spawn した子プロセスをプロファイルしない (デフォルト: inherit) |
 | `-v` | サンプリング統計を stderr に出力 |
+
+`record`・`stat`・`exec` では、相対パスの `-o` 出力先は rperf を起動したディレクトリを基準に解決されます（プロファイル対象アプリが `chdir` しても出力先は変わりません）。また、出力先に書き込めない場合はコマンド実行前にエラーとして報告されます。
 
 ### スナップショットディレクトリへの記録
 
@@ -275,18 +280,21 @@ rperf record [options] command [args...]
 rperf record --snapshot-dir ./profiles ruby my_app.rb
 ```
 
-JSON プロファイルには `meta`（git の SHA・ブランチ・コミットメッセージ・dirty フラグ、ホスト名、Ruby/rperf バージョン、`--label` で付けた任意ラベル）と `summary`（実行時間、GC 回数、アロケーション数、self 時間上位 50 メソッドなど）が自動的に埋め込まれます。GitHub Actions 環境では `GITHUB_SHA` などの環境変数が git コマンドより優先されます。蓄積したディレクトリは `rperf report ./profiles/`（後述の時間旅行モード）でコミットを横断して閲覧できます。
+JSON プロファイルには `meta`（git の SHA・ブランチ・コミットメッセージ・dirty フラグ、ホスト名、Ruby/rperf バージョン、`--label` で付けた任意ラベル）と `summary`（実行時間、GC 回数、アロケーション数、self 時間上位 50 メソッドなど）が自動的に埋め込まれます。GitHub Actions 環境では `GITHUB_SHA` などの環境変数が git コマンドより優先されます。出力先のファイル名がすでに存在する場合（同一コミット・同一秒）は `-<pid>` サフィックスが付加されます。蓄積したディレクトリは `rperf report ./profiles/`（後述の時間旅行モード）でコミットを横断して閲覧できます。
 
 ## rperf report
 
 [`rperf report`](#index:rperf report) はプロファイルを分析用に開きます。JSON 形式 (`.json.gz`) のファイルには rperf の組み込みビューアを使用し（Go 不要）、pprof 形式 (`.pb.gz`) のファイルには `go tool pprof` を使用します（Go が必要）。
 
 ```bash
-# インタラクティブな Web UI を開く (デフォルト)
+# rperf ビューアを開く (デフォルト、JSON 形式)
 rperf report
 
 # 特定のファイルを開く
 rperf report profile.json.gz
+
+# pprof ファイルを開く (Go が必要)
+rperf report profile.pb.gz
 
 # 上位の関数を出力
 rperf report --top
@@ -320,7 +328,7 @@ rperf report --top rperf.json.gz
 
 `.pb.gz` ファイルの場合、`--top` と `--text` は `go tool pprof` を使用し、pprof 形式の出力を生成します。
 
-デフォルト動作（`--top` や `--text` なし）では、フレームグラフ、上位関数ビュー、コールグラフの可視化を備えたインタラクティブな Web UI がブラウザで開きます。JSON 形式では rperf 組み込みビューア、pprof 形式では [pprof](#cite:ren2010) を利用します。
+デフォルト動作（`--top` や `--text` なし）では、JSON ファイルは rperf ビューアで、`.pb.gz` ファイルは [pprof](#cite:ren2010) によるインタラクティブな Web UI で開きます。
 
 ### 時間旅行モード（ディレクトリ指定）
 
@@ -351,6 +359,8 @@ rperf report ./profiles/
 | `--host HOST` | Web UI のバインドアドレス（デフォルト: localhost）。`0.0.0.0` で外部公開（**ビューアに認証はありません** — 基本は SSH ポートフォワード推奨） |
 | (デフォルト) | ブラウザでインタラクティブな Web UI を開く（ディレクトリ指定で時間旅行モード） |
 
+オプションはファイル引数より前に指定してください。ファイル引数の後に置かれたオプションはエラーになります。
+
 ブラウザの自動オープンは GUI がある環境（Linux では `DISPLAY` / `WAYLAND_DISPLAY` が設定済み）かつローカルバインドのときだけ行います。GUI がない環境（SSH 先など）では URL の表示のみで、w3m などの端末ブラウザにはフォールバックしません。SSH 先のプロファイルを見るには:
 
 ```bash
@@ -375,7 +385,7 @@ rperf diff --top before.pb.gz after.pb.gz
 rperf diff --text before.pb.gz after.pb.gz
 ```
 
-ブラウザ表示・`--top`・`--text` には Go が必要です。次の `--format table` だけは Ruby 内で計算するため Go 不要です。
+ブラウザ表示・`--top`・`--text` には Go が必要です。次の `--format table` だけは Ruby 内で計算するため Go 不要です。オプションはファイル引数より前に指定してください。ファイル引数の後に置かれたオプションはエラーになります。
 
 ### AI / 機械可読向けテーブル出力 (--format table)
 
@@ -386,7 +396,7 @@ rperf diff --text before.pb.gz after.pb.gz
 rperf diff --format table base.json.gz head.json.gz
 
 # LLM に分析させる
-rperf diff base.json.gz head.json.gz --format table | claude -p "回帰の原因を分析して"
+rperf diff --format table base.json.gz head.json.gz | claude -p "回帰の原因を分析して"
 ```
 
 diff テーブルの列は `method`、`self_pct_base`、`self_pct_head`、`delta_pt`（|delta| 降順、上位 50 件）です。末尾の `# summary` 行に total_ms / アロケーション数 / GC 回数の base・head・差分が入ります。サンプリングプロファイラの性質上メソッド単位のアロケーション情報は存在しないため、アロケーションはプロファイル全体の差分としてのみ表示されます。

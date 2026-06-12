@@ -148,12 +148,12 @@ end
 
 ## VM 状態ラベル
 
-| ラベル | モード | 意味 |
-|-------|------|---------|
-| `%GVL=blocked` | wall | スレッドが GVL 外（I/O, sleep, C 拡張） |
-| `%GVL=wait` | wall | スレッドが GVL 待ち（競合） |
-| `%GC=mark` | 両方 | GC marking フェーズ（wall time） |
-| `%GC=sweep` | 両方 | GC sweeping フェーズ（wall time） |
+| ラベル | 値 | モード | 意味 |
+|-------|-------|------|---------|
+| `%GVL` | `blocked` | wall | スレッドが GVL 外（I/O, sleep, C 拡張） |
+| `%GVL` | `wait` | wall | スレッドが GVL 待ち（競合） |
+| `%GC` | `mark` | 両方 | GC marking フェーズ（wall time） |
+| `%GC` | `sweep` | 両方 | GC sweeping フェーズ（wall time） |
 | `%pid` | PID 文字列 | 両方 | 子プロセスのプロセス ID（マルチプロセスモードのみ） |
 
-これらはサンプルのラベルとして `label_sets` に格納されます。pprof で `-tagfocus=%GVL=blocked`、`-tagfocus=%pid=1234` のようにフィルタリングできます。
+これらはユーザーラベルと同様にサンプルのラベルとして付与されます。pprof で `-tagfocus=%GVL=blocked`、`-tagroot=%GC`、`-tagfocus=%pid=1234` のようにフィルタリングできます。

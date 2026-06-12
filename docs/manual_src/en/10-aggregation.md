@@ -50,7 +50,7 @@ The aggregation table merges identical stacks by summing their weights:
 
 Frame IDs are stored contiguously in a separate stack pool. Each aggregation table entry points into this pool (start index + depth).
 
-The `vm_state` field records the VM activity at sample time (e.g., `GVL_BLOCKED`, `GVL_WAIT`, `GC_MARK`, `GC_SWEEP`, or `NORMAL`). It is part of the aggregation key so that samples with the same stack but different VM states are kept separate. At encoding time, the Ruby layer converts `vm_state` to labels (`%GVL` and `%GC`) via `merge_vm_state_labels!`.
+The `vm_state` field records the VM activity at sample time (e.g., `GVL_BLOCKED`, `GVL_WAIT`, `GC_MARK`, `GC_SWEEP`, or `NORMAL`). It is part of the aggregation key so that samples with the same stack but different VM states are kept separate. At stop time, `Rperf.stop` converts `vm_state` to labels (`%GVL` and `%GC`) via `merge_vm_state_labels!` and merges them into `label_sets`.
 
 The `label_set_id` is also part of the key, so samples with the same stack but different user labels are kept separate.
 

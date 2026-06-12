@@ -96,6 +96,7 @@ rperf stat [options] command [args...]
 | `-f HZ` | Sampling frequency in Hz (default: 1000) |
 | `-m MODE` | `cpu` or `wall` (default: `wall`) |
 | `--report` | Include flat/cumulative profile tables in output |
+| `--label KEY=VALUE` | Add a label to profile metadata (repeatable) |
 | `--signal VALUE` | Timer signal (Linux only): signal number, or `false` for nanosleep thread |
 | `--no-aggregate` | Disable sample aggregation (keep raw samples) |
 | `--no-inherit` | Do not profile forked/spawned child processes (default: inherit) |
@@ -122,6 +123,7 @@ rperf exec [options] command [args...]
 | `-o PATH` | Also save profile to file (default: none) |
 | `-f HZ` | Sampling frequency in Hz (default: 1000) |
 | `-m MODE` | `cpu` or `wall` (default: `wall`) |
+| `--label KEY=VALUE` | Add a label to profile metadata (repeatable) |
 | `--signal VALUE` | Timer signal (Linux only): signal number, or `false` for nanosleep thread |
 | `--no-aggregate` | Disable sample aggregation (keep raw samples) |
 | `--no-inherit` | Do not profile forked/spawned child processes (default: inherit) |
@@ -228,7 +230,7 @@ Samples: 80, Frequency: 1000Hz
             58.0 ms  18.6%  Object#cpu_work (mixed.rb)
 ```
 
-In wall mode, the `%GVL: blocked` label accounts for the dominant cost — this is the sleep time in `io_work`. The CPU time for `cpu_work` is clearly separated. GVL and GC activity appear as labels on samples rather than as stack frames, and can be filtered with pprof's `-tagfocus` flag (e.g., `-tagfocus=%GVL=blocked`). Use `rperf stat` to see the time breakdown by category (CPU execution, GVL blocked, GVL wait, GC marking, GC sweeping).
+In wall mode, the `%GVL=blocked` label accounts for the dominant cost — this is the sleep time in `io_work`. The CPU time for `cpu_work` is clearly separated. GVL and GC activity appear as labels on samples rather than as stack frames, and can be filtered with pprof's `-tagfocus` flag (e.g., `-tagfocus=%GVL=blocked`). Use `rperf stat` to see the time breakdown by category (CPU execution, GVL blocked, GVL wait, GC marking, GC sweeping).
 
 ### Verbose output
 
@@ -244,7 +246,7 @@ rperf record -v ruby my_app.rb
 [Rperf] samples recorded: 904
 [Rperf] top 10 by flat:
 [Rperf]       53.4ms  50.1%  Object#cpu_work (-e)
-[rperf]       17.0ms  15.9%  Integer#times (<internal:numeric>)
+[Rperf]       17.0ms  15.9%  Integer#times (<internal:numeric>)
 ...
 ```
 
@@ -268,6 +270,8 @@ rperf record [options] command [args...]
 | `--no-inherit` | Do not profile forked/spawned child processes (default: inherit) |
 | `-v` | Print sampling statistics to stderr |
 
+For `record`, `stat`, and `exec`, a relative `-o` output path is resolved against the directory where rperf was invoked (a `chdir` in the profiled app does not relocate it), and an unwritable output path is reported as an error before the command runs.
+
 ### Recording into a snapshot directory
 
 [`--snapshot-dir`](#index:--snapshot-dir) accumulates per-commit profiles in a single
@@ -283,8 +287,10 @@ JSON profiles automatically embed `meta` (git SHA, branch, commit subject,
 dirty flag, hostname, Ruby/rperf versions, and any `--label` values) and
 `summary` (run time, GC counts, allocation counts, top 50 methods by self
 time). In GitHub Actions, environment variables such as `GITHUB_SHA` take
-priority over git commands. Browse the accumulated directory across commits
-with `rperf report ./profiles/` (time-travel mode, described below).
+priority over git commands. If the target filename already exists (same
+commit, same second), a `-<pid>` suffix is appended. Browse the accumulated
+directory across commits with `rperf report ./profiles/` (time-travel mode,
+described below).
 
 ## rperf report
 
@@ -378,6 +384,8 @@ performance tracking workflow.
 | `--host HOST` | Bind address for the web UI (default: localhost). `0.0.0.0` allows external access (**the viewer has no authentication** — prefer SSH port forwarding) |
 | (default) | Open interactive web UI in browser (time-travel mode for a directory) |
 
+Options must come before the file argument; options placed after it are rejected with an error.
+
 The browser is auto-opened only when a GUI is available (`DISPLAY` /
 `WAYLAND_DISPLAY` on Linux) and the bind address is local. Without a GUI
 (e.g., over SSH) only the URL is printed — there is no terminal-browser
@@ -406,7 +414,8 @@ rperf diff --text before.pb.gz after.pb.gz
 ```
 
 Browser mode, `--top`, and `--text` require Go. `--format table` (below) is
-computed in Ruby — no Go required.
+computed in Ruby — no Go required. Options must come before the file
+arguments; options placed after them are rejected with an error.
 
 ### Table output for AI analysis (--format table)
 
@@ -419,7 +428,7 @@ needed, so an LLM can analyze the result directly:
 rperf diff --format table base.json.gz head.json.gz
 
 # Feed it to an LLM
-rperf diff base.json.gz head.json.gz --format table | claude -p "analyze the regression"
+rperf diff --format table base.json.gz head.json.gz | claude -p "analyze the regression"
 ```
 
 Diff table columns are `method`, `self_pct_base`, `self_pct_head`, and

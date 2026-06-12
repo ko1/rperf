@@ -199,7 +199,7 @@ Samples: 509, Frequency: 1000Hz
 | ファイルサイズ | 中 (json + gzip) | 小 (バイナリ + gzip) | 中 (テキスト) | 小 (テキスト) |
 | フレームグラフ | あり (rperf ビューア) | あり (pprof Web UI) | あり (flamegraph.pl) | なし |
 | コールグラフ | なし | あり | なし | なし |
-| 差分比較 | あり (`rperf diff`、Go 必要) | あり (`rperf diff`) | なし | なし |
+| 差分比較 | あり (`rperf diff` — `--format table`/`table-json` は Ruby 内で計算、Go 不要。pprof ベースの diff モードは Go 必要) | あり (`rperf diff`、Go 必要) | なし | なし |
 | ツール不要 | はい | いいえ (Go 必要) | いいえ (flamegraph.pl 必要) | はい |
 | Ruby にロード | あり (`Rperf.load`) | なし | なし | なし |
 | プログラマティックなパース | 容易 (JSON) | 複雑 (protobuf) | シンプル | シンプル |
@@ -210,8 +210,10 @@ Samples: 509, Frequency: 1000Hz
 | ファイル拡張子 | 形式 |
 |----------------|--------|
 | `.json.gz` | JSON (デフォルト) |
+| `.json` | JSON (プレーンテキスト) |
 | `.pb.gz` | pprof |
 | `.collapsed` | Collapsed stacks |
 | `.txt` | テキストレポート |
+| (その他) | pprof |
 
-デフォルトの出力ファイル（`rperf.json.gz`）は JSON 形式を使用します。
+認識されない拡張子はすべて pprof になります。デフォルトの出力ファイル（`rperf.json.gz`）は JSON 形式を使用します。

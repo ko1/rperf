@@ -76,7 +76,7 @@ data = Rperf.stop
 | `output:` | String | `nil` | File path to write on stop |
 | `verbose:` | Boolean | `false` | Print statistics to stderr |
 | `format:` | Symbol | `nil` | `:json`, `:pprof`, `:collapsed`, `:text`, or `nil` (auto-detect from output extension) |
-| `signal:` | Integer/Boolean | `nil` | Linux only: `nil` = timer signal (default), `false` = nanosleep thread, positive integer = specific RT signal number |
+| `signal:` | Integer/Boolean | `nil` | Linux only: `nil` = timer signal (default), `false` = nanosleep thread, positive integer = specific signal number |
 | `aggregate:` | Boolean | `true` | Aggregate identical stacks during profiling to reduce memory. `false` returns raw per-sample data |
 | `defer:` | Boolean | `false` | Start with timer paused. Use [`Rperf.profile`](#index:Rperf.profile) blocks to activate sampling for specific sections |
 | `inherit:` | `:fork`, `true`, or `false` | `:fork` | Controls child process tracking. `:fork` tracks forked children via `Process._fork` hook. `true` also tracks spawned Ruby children (sets `RUBYLIB` and `RUBYOPT=-rrperf`). `false` disables child tracking |
@@ -99,30 +99,37 @@ data = Rperf.stop
   # aggregate: true (default) — present only in this mode
   unique_frames: 42,         # unique frame count
   unique_stacks: 120,        # unique stack count
-  aggregated_samples: [                   # Array of [frames, weight, thread_seq, label_set_id]
+
+  aggregated_samples: [                   # always present: Array of [frames, weight, thread_seq, label_set_id]
     [frames, weight, seq, lsi],           #   frames: [[path, label], ...] deepest-first
     ...                                   #   weight: Integer (nanoseconds)
   ],                                      #   seq: Integer (thread sequence, 1-based)
                                           #   lsi: Integer (label set ID, 0 = no labels)
 
-  # aggregate: false — present only in this mode (C returns raw_samples;
+  # aggregate: false — additionally present in this mode (C returns raw_samples;
   # Ruby's stop also builds aggregated_samples from them for encoder use)
-  raw_samples: [                          # same element format as aggregated_samples
-    [frames, weight, seq, lsi],
+  raw_samples: [                          # [frames, weight, thread_seq, label_set_id, vm_state]
+    [frames, weight, seq, lsi, vm_state], #   vm_state: raw Integer (NOT converted to %GVL/%GC labels)
     ...
   ],
 
-  label_sets: [{}, {request: "abc"}],     # label set table (present when labels used)
+  label_sets: [{}, {request: "abc"},      # label set table (present when labels used)
+              {"%GVL" => "blocked"},      # VM-state labels are included too
+              {request: "abc", "%GC" => "mark"}],
 }
 ```
 
-Each sample (in both `aggregated_samples` and `raw_samples`) has:
+Each sample has:
 - **frames**: An array of `[path, label]` pairs, ordered deepest-first (leaf frame at index 0)
 - **weight**: Time in nanoseconds attributed to this sample
 - **thread_seq**: Thread sequence number (1-based, assigned per profiling session)
 - **label_set_id**: Label set ID (0 = no labels). Index into the `label_sets` array
 
-When `aggregate: true` (default), identical stacks are merged and their weights summed. The `aggregated_samples` array contains one entry per unique `(stack, thread_seq, label_set_id)` combination. When `aggregate: false`, the C extension returns `raw_samples` with every individual timer sample; Ruby's `Rperf.stop` also builds `aggregated_samples` from them so encoders always work.
+`raw_samples` entries carry a trailing fifth element, **vm_state** — the raw VM state integer.
+
+When `aggregate: true` (default), identical stacks are merged and their weights summed. The `aggregated_samples` array contains one entry per unique `(stack, thread_seq, label_set_id)` combination. When `aggregate: false`, the C extension returns `raw_samples` with every individual timer sample; Ruby's `Rperf.stop` also builds `aggregated_samples` from them so encoders always work — BOTH keys are present in this mode.
+
+GVL/GC states are stored as labels in `label_sets`. The C extension records them internally as `vm_state`; `Rperf.stop` converts them to `%GVL`/`%GC` labels via `merge_vm_state_labels!` before returning. For example, a sample taken while blocked off-GVL has a `label_sets` entry containing `{"%GVL" => "blocked"}`. User labels and VM-state labels share the same `label_sets`, so combinations like `{request: "abc", "%GVL" => "blocked"}` are possible. This conversion applies to `aggregated_samples` only — `raw_samples` keep the raw `vm_state` integer.
 
 ## Rperf.save
 
@@ -164,6 +171,10 @@ loop do
   Rperf.save("profile-#{Time.now.to_i}.pb.gz", snap)
 end
 ```
+
+## Rperf.running?
+
+[`Rperf.running?`](#index:Rperf.running?) returns `true` while a profiling session is active (between `start` and `stop`).
 
 ## Sample labels
 
@@ -378,7 +389,7 @@ wall_data = Rperf.start(mode: :wall) { workload }
 Rperf.save("wall.txt", wall_data)
 ```
 
-The CPU profile will focus on `compute_something`, while the wall profile will show the `sleep` calls with a `%GVL: blocked` label.
+The CPU profile will focus on `compute_something`, while the wall profile will show the `sleep` calls with a `%GVL=blocked` label.
 
 ### Processing samples
 

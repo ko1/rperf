@@ -76,7 +76,7 @@ data = Rperf.stop
 | `output:` | String | `nil` | 停止時に書き込むファイルパス |
 | `verbose:` | Boolean | `false` | 統計を stderr に出力 |
 | `format:` | Symbol | `nil` | `:json`、`:pprof`、`:collapsed`、`:text`、または `nil`（output 拡張子から自動検出） |
-| `signal:` | Integer/Boolean | `nil` | Linux のみ: `nil` = タイマーシグナル（デフォルト）、`false` = nanosleep スレッド、正の整数 = 特定の RT シグナル番号 |
+| `signal:` | Integer/Boolean | `nil` | Linux のみ: `nil` = タイマーシグナル（デフォルト）、`false` = nanosleep スレッド、正の整数 = 特定のシグナル番号 |
 | `aggregate:` | Boolean | `true` | 同一スタックをプロファイリング中に集約してメモリを削減。`false` は生のサンプルごとのデータを返す |
 | `defer:` | Boolean | `false` | タイマーを一時停止した状態で開始。特定のセクションのサンプリングを有効にするには [`Rperf.profile`](#index:Rperf.profile) ブロックを使用 |
 | `inherit:` | `:fork`, `true`, or `false` | `:fork` | 子プロセスの追跡を制御。`:fork` は `Process._fork` フックで fork された子を追跡。`true` は spawn された Ruby 子も追跡（`RUBYLIB` と `RUBYOPT=-rrperf` を設定）。`false` は子プロセス追跡を無効化 |
@@ -99,16 +99,17 @@ data = Rperf.stop
   # aggregate: true（デフォルト）— このモードでのみ存在
   unique_frames: 42,         # ユニークフレーム数
   unique_stacks: 120,        # ユニークスタック数
-  aggregated_samples: [                   # [frames, weight, thread_seq, label_set_id] の配列
+
+  aggregated_samples: [                   # 常に存在: [frames, weight, thread_seq, label_set_id] の配列
     [frames, weight, seq, lsi],           #   frames: [[path, label], ...] 最深部が先頭
     ...                                   #   weight: Integer（ナノ秒）
   ],                                      #   seq: Integer（スレッド連番、1 始まり）
                                           #   lsi: Integer（ラベルセット ID、0 = ラベルなし）
 
-  # aggregate: false — このモードでのみ存在（C は raw_samples を返す。
+  # aggregate: false — このモードでは追加で存在（C は raw_samples を返す。
   # Ruby の stop はエンコーダー用に aggregated_samples も構築する）
-  raw_samples: [                          # aggregated_samples と同じ要素形式
-    [frames, weight, seq, lsi],
+  raw_samples: [                          # [frames, weight, thread_seq, label_set_id, vm_state]
+    [frames, weight, seq, lsi, vm_state], #   vm_state: 生の Integer（%GVL/%GC ラベルには変換されない）
     ...
   ],
 
@@ -118,15 +119,17 @@ data = Rperf.stop
 }
 ```
 
-各サンプル（`aggregated_samples` と `raw_samples` の両方）には以下が含まれます:
+各サンプルには以下が含まれます:
 - **frames**: `[path, label]` ペアの配列、最深部が先頭（リーフフレームがインデックス 0）
 - **weight**: このサンプルに帰属する時間（ナノ秒）
 - **thread_seq**: スレッド連番（1 始まり、プロファイリングセッションごとに割り当て）
 - **label_set_id**: ラベルセット ID（0 = ラベルなし）。`label_sets` 配列へのインデックス
 
-`aggregate: true`（デフォルト）の場合、同一スタックはマージされ、重みが合計されます。`aggregated_samples` 配列にはユニークな `(stack, thread_seq, label_set_id)` の組み合わせごとに 1 エントリが含まれます。`aggregate: false` の場合、C 拡張は個々のタイマーサンプルすべてを `raw_samples` として返します。Ruby の `Rperf.stop` はエンコーダーが常に動作するように `aggregated_samples` も構築します。
+`raw_samples` の要素には末尾に 5 番目の要素 **vm_state**（生の VM 状態を表す整数）が付きます。
 
-GVL/GC の状態は `label_sets` にラベルとして格納されます。C 拡張は内部的に `vm_state` として記録しますが、`Rperf.stop` が `merge_vm_state_labels!` で `%GVL`/`%GC` ラベルに変換してから返します。例えば、GVL ブロック中のサンプルの `label_sets` エントリには `{"%GVL" => "blocked"}` が含まれます。ユーザーラベルと VM 状態ラベルは同じ `label_sets` で管理されるため、`{request: "abc", "%GVL" => "blocked"}` のように組み合わせて使用できます。
+`aggregate: true`（デフォルト）の場合、同一スタックはマージされ、重みが合計されます。`aggregated_samples` 配列にはユニークな `(stack, thread_seq, label_set_id)` の組み合わせごとに 1 エントリが含まれます。`aggregate: false` の場合、C 拡張は個々のタイマーサンプルすべてを `raw_samples` として返します。Ruby の `Rperf.stop` はエンコーダーが常に動作するように `aggregated_samples` も構築するため、このモードでは両方のキーが存在します。
+
+GVL/GC の状態は `label_sets` にラベルとして格納されます。C 拡張は内部的に `vm_state` として記録しますが、`Rperf.stop` が `merge_vm_state_labels!` で `%GVL`/`%GC` ラベルに変換してから返します。例えば、GVL ブロック中のサンプルの `label_sets` エントリには `{"%GVL" => "blocked"}` が含まれます。ユーザーラベルと VM 状態ラベルは同じ `label_sets` で管理されるため、`{request: "abc", "%GVL" => "blocked"}` のように組み合わせて使用できます。この変換が適用されるのは `aggregated_samples` のみで、`raw_samples` は生の `vm_state` 整数のままです。
 
 ## Rperf.save
 
@@ -168,6 +171,10 @@ loop do
   Rperf.save("profile-#{Time.now.to_i}.pb.gz", snap)
 end
 ```
+
+## Rperf.running?
+
+[`Rperf.running?`](#index:Rperf.running?) はプロファイリングセッションがアクティブな間（`start` から `stop` まで）`true` を返します。
 
 ## サンプルラベル
 
@@ -266,6 +273,9 @@ start(defer: false)     start(defer: true)
 ### Rperf.profile
 
 [`Rperf.profile`](#index:Rperf.profile) はブロックの間タイマーを有効化し、オプションでラベルを適用します。タイマー制御とラベル割り当てを 1 つの呼び出しで組み合わせます。
+
+> [!NOTE]
+> タイマーは**プロセス全体**で共有されます。いずれかのスレッドで `profile` ブロックが有効な間は、`profile` を呼んだスレッドだけでなく**すべてのスレッド**がサンプリングされます。各スレッドのサンプルにはそのスレッド自身のラベルが付くため、区別は可能です。最後の `profile` ブロックが終了する（参照カウントが 0 になる）と、タイマーは一時停止し、すべてのスレッドのサンプリングが止まります。
 
 ```ruby
 require "rperf"

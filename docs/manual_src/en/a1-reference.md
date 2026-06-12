@@ -131,10 +131,10 @@ These are used internally by the CLI to configure the auto-started profiler:
 | Aspect | cpu | wall |
 |--------|-----|------|
 | Clock | `CLOCK_THREAD_CPUTIME_ID` | `CLOCK_MONOTONIC` |
-| I/O time | Not measured | `%GVL: blocked` label |
-| Sleep time | Not measured | `%GVL: blocked` label |
-| GVL contention | Not measured | `%GVL: wait` label |
-| GC time | `%GC: mark`, `%GC: sweep` labels | `%GC: mark`, `%GC: sweep` labels |
+| I/O time | Not measured | `%GVL=blocked` label |
+| Sleep time | Not measured | `%GVL=blocked` label |
+| GVL contention | Not measured | `%GVL=wait` label |
+| GC time | `%GC=mark`, `%GC=sweep` labels | `%GC=mark`, `%GC=sweep` labels |
 | Best for | CPU hotspots | Latency analysis |
 
 ## Output format comparison
