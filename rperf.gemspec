@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.license       = "MIT"
   spec.required_ruby_version = ">= 3.4.0"
 
-  spec.files         = Dir["lib/**/*.rb", "ext/**/*.{c,h,rb}", "exe/*", "docs/help.md", "docs/logo.svg", "LICENSE", "README.md"]
+  spec.files         = Dir["lib/**/*.{rb,html}", "ext/**/*.{c,h,rb}", "exe/*", "docs/help.md", "docs/logo.svg", "LICENSE", "README.md"]
   spec.bindir        = "exe"
   spec.executables   = ["rperf"]
   spec.extensions    = ["ext/rperf/extconf.rb"]

@@ -10,6 +10,40 @@ def find_available_port
   port
 end
 
+# Serve a Rperf::Viewer app on a local port and open the browser.
+# Does not return (runs the Rack handler until interrupted).
+def serve_viewer(app)
+  port = find_available_port
+  url = "http://localhost:#{port}/"
+  $stderr.puts "Serving rperf viewer at #{url}"
+  $stderr.puts "Press Ctrl-C to stop."
+
+  # Open browser after server is ready
+  Thread.new do
+    20.times do
+      TCPSocket.new("localhost", port).close
+      break
+    rescue Errno::ECONNREFUSED
+      sleep 0.1
+    end
+    case RUBY_PLATFORM
+    when /darwin/ then system("open", url)
+    when /linux/  then system("xdg-open", url, err: File::NULL) || system("sensible-browser", url, err: File::NULL)
+    end
+  end
+
+  # Find an available Rack handler
+  begin
+    require "rackup/handler"
+  rescue LoadError
+    $stderr.puts "Error: 'rackup' gem is required for 'rperf report'. Install it with:"
+    $stderr.puts "  gem install rackup"
+    exit 1
+  end
+  handler = Rackup::Handler.default
+  handler.run(app, Port: port, Host: "localhost", Silent: true)
+end
+
 def run_pprof_subcommand(name, banner, min_files:)
   mode = :http
 
@@ -115,7 +149,28 @@ when "report"
     "       For .pb.gz: opens go tool pprof (requires Go).",
     min_files: 1) do |mode, files|
     report_file = files[0]
-    if report_file =~ /\.json(\.gz)?\z/
+    if File.directory?(report_file)
+      # Time-travel mode: list all profiles in the directory (meta/summary
+      # only — bodies are lazy-loaded on selection)
+      unless mode == :http
+        $stderr.puts "Directory input opens the time-travel viewer; --top/--text/--html/--format are not supported"
+        exit 1
+      end
+      require_relative "../lib/rperf"
+      require_relative "../lib/rperf/viewer"
+      app = Rperf::Viewer.new(
+        proc { |_| [404, { "content-type" => "text/plain" }, ["Not Found"]] },
+        path: ""
+      )
+      count = app.add_snapshot_dir(report_file)
+      if count == 0
+        $stderr.puts "No .json(.gz) profiles found in #{report_file}"
+        exit 1
+      end
+      $stderr.puts "Loaded #{count} snapshot#{count == 1 ? '' : 's'} from #{report_file}"
+      serve_viewer(app)
+      exit
+    elsif report_file =~ /\.json(\.gz)?\z/
       # Use rperf viewer
       require_relative "../lib/rperf"
       require_relative "../lib/rperf/viewer"
@@ -140,42 +195,12 @@ when "report"
         exit
       end
 
-      port = find_available_port
-
       app = Rperf::Viewer.new(
         proc { |_| [404, { "content-type" => "text/plain" }, ["Not Found"]] },
         path: ""
       )
       app.add_snapshot(data)
-
-      url = "http://localhost:#{port}/"
-      $stderr.puts "Serving rperf viewer at #{url}"
-      $stderr.puts "Press Ctrl-C to stop."
-
-      # Open browser after server is ready
-      Thread.new do
-        20.times do
-          TCPSocket.new("localhost", port).close
-          break
-        rescue Errno::ECONNREFUSED
-          sleep 0.1
-        end
-        case RUBY_PLATFORM
-        when /darwin/ then system("open", url)
-        when /linux/  then system("xdg-open", url, err: File::NULL) || system("sensible-browser", url, err: File::NULL)
-        end
-      end
-
-      # Find an available Rack handler
-      begin
-        require "rackup/handler"
-      rescue LoadError
-        $stderr.puts "Error: 'rackup' gem is required for 'rperf report'. Install it with:"
-        $stderr.puts "  gem install rackup"
-        exit 1
-      end
-      handler = Rackup::Handler.default
-      handler.run(app, Port: port, Host: "localhost", Silent: true)
+      serve_viewer(app)
       exit
     else
       if mode == :table || mode == :table_json

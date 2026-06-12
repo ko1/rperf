@@ -105,7 +105,10 @@ module Rperf
           nil
         end
       else
-        collect_git
+        # Memoized (array wraps a legitimate nil): periodic viewer snapshots
+        # must not spawn git subprocesses on every take_snapshot!
+        @collect_git_memo ||= [collect_git]
+        @collect_git_memo[0]
       end
     end
 

@@ -70,6 +70,7 @@ module Rperf
     @stat_start_mono = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     @stat_start_times = Process.times
     @gc_stat_start = GC.stat
+    @gc_stat_snapshot_base = @gc_stat_start
     @label_set_table = nil
     @label_set_index = nil
     _c_start(frequency, c_mode, aggregate, c_signal, defer)
@@ -237,6 +238,23 @@ module Rperf
   def self.snapshot(clear: false)
     data = _c_snapshot(clear)
     return unless data
+    # GC/memory stats for the snapshot's summary. The baseline advances on
+    # clear: true so interval snapshots report per-interval deltas.
+    if @gc_stat_snapshot_base
+      gc = GC.stat
+      base = @gc_stat_snapshot_base
+      data[:gc_stats] = {
+        count: gc[:count] - base[:count],
+        minor_count: gc[:minor_gc_count] - base[:minor_gc_count],
+        major_count: gc[:major_gc_count] - base[:major_gc_count],
+        time_ms: (gc[:time] || 0) - (base[:time] || 0),
+        allocated_objects: gc[:total_allocated_objects] - base[:total_allocated_objects],
+        freed_objects: gc[:total_freed_objects] - base[:total_freed_objects],
+      }
+      @gc_stat_snapshot_base = gc if clear
+    end
+    sys_stats = get_system_stats
+    data[:maxrss_mb] = (sys_stats[:maxrss_kb] / 1024.0).round if sys_stats[:maxrss_kb]
     merge_vm_state_labels!(data)
     data
   end
@@ -401,10 +419,13 @@ module Rperf
     when :json
       require "json"
       json_data = data
-      unless internal || data[:meta]
+      unless internal
         # meta/summary must be the FIRST keys so Meta.read can extract them
-        # from the head of the (gzipped) file without loading the body.
-        json_data = { meta: Meta.build_meta(data), summary: Meta.build_summary(data) }.merge(data)
+        # from the head of the (gzipped) file without loading the body —
+        # reorder even when re-saving data that already carries them.
+        meta = data[:meta] || Meta.build_meta(data)
+        summary = data[:summary] || Meta.build_summary(data)
+        json_data = { meta: meta, summary: summary }.merge(data.except(:meta, :summary))
       end
       json_data = json_data.merge(rperf_version: VERSION, pid: Process.pid, ppid: Process.ppid)
       json_str = JSON.generate(json_data)
