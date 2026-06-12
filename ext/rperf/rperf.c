@@ -80,7 +80,11 @@ typedef struct rperf_sample_buffer {
     size_t sample_count;
     size_t sample_capacity;
     VALUE *frame_pool;
-    size_t frame_pool_count;
+    /* _Atomic: read by GC dmark concurrently with the aggregator's clear.
+     * Seq-cst accesses pair with the frame_table count release-stores so
+     * dmark never observes the cleared pool together with a stale
+     * frame_table count (which would leave frames unmarked). */
+    _Atomic size_t frame_pool_count;
     size_t frame_pool_capacity;
 } rperf_sample_buffer_t;
 
@@ -101,8 +105,6 @@ typedef struct rperf_frame_table {
 } rperf_frame_table_t;
 
 /* ---- Aggregation table: stack → weight ---- */
-
-#define RPERF_AGG_ENTRY_EMPTY 0
 
 typedef struct rperf_agg_entry {
     uint32_t frame_start;     /* offset into stack_pool */
@@ -145,7 +147,10 @@ typedef struct rperf_gc_state {
 /* ---- Sampling overhead stats ---- */
 
 typedef struct rperf_stats {
-    size_t trigger_count;
+    /* _Atomic: incremented by the signal handler / nanosleep worker, read and
+     * cleared by snapshot while running (atomic size_t is async-signal-safe
+     * when lock-free, which it is on all supported platforms). */
+    _Atomic size_t trigger_count;
     size_t sampling_count;
     int64_t sampling_total_ns;
     size_t dropped_samples;     /* samples lost due to allocation failure */
@@ -206,12 +211,17 @@ rperf_profiler_mark(void *ptr)
 {
     rperf_profiler_t *prof = (rperf_profiler_t *)ptr;
     int i;
-    /* Mark both sample buffers' frame_pools */
+    /* Mark both sample buffers' frame_pools.
+     * Load the count once: the aggregator may clear it concurrently, and the
+     * pools must be read BEFORE frame_table.count below — seeing the cleared
+     * count (seq-cst) guarantees the corresponding frame_table inserts are
+     * visible, so every frame is covered by at least one mark source. */
     for (i = 0; i < 2; i++) {
         rperf_sample_buffer_t *buf = &prof->buffers[i];
-        if (buf->frame_pool && buf->frame_pool_count > 0) {
+        size_t fp_count = buf->frame_pool_count;
+        if (buf->frame_pool && fp_count > 0) {
             rb_gc_mark_locations(buf->frame_pool,
-                                buf->frame_pool + buf->frame_pool_count);
+                                buf->frame_pool + fp_count);
         }
     }
     /* Mark label_sets array */
@@ -249,10 +259,8 @@ rperf_profiler_memsize(const void *ptr)
     /* Frame table */
     size += prof->frame_table.capacity * sizeof(VALUE);           /* keys */
     size += prof->frame_table.bucket_capacity * sizeof(uint32_t); /* buckets */
-    for (i = 0; i < prof->frame_table.old_keys_count; i++) {
-        /* old_keys entries are previous keys arrays; exact sizes unknown,
-         * but the pointer array itself is accounted for below. */
-    }
+    /* old_keys entries are previous keys arrays; exact sizes unknown,
+     * only the pointer array itself is accounted for. */
     size += prof->frame_table.old_keys_capacity * sizeof(VALUE *); /* old_keys */
 
     /* Aggregation table */
@@ -637,7 +645,12 @@ rperf_aggregate_buffer(rperf_profiler_t *prof, rperf_sample_buffer_t *buf)
         /* Convert VALUE frames to frame_ids */
         int overflow = 0;
         for (j = 0; j < s->depth; j++) {
-            if (s->frame_start + j >= buf->frame_pool_count) break;
+            if (s->frame_start + j >= buf->frame_pool_count) {
+                /* Defensive: sample points past the pool — truncate the
+                 * sample so we never hash/insert uninitialized temp_ids */
+                s->depth = j;
+                break;
+            }
             VALUE fval = buf->frame_pool[s->frame_start + j];
             uint32_t fid = rperf_frame_table_insert(&prof->frame_table, fval);
             if (fid == RPERF_FRAME_TABLE_EMPTY) { overflow = 1; break; }
@@ -648,6 +661,7 @@ rperf_aggregate_buffer(rperf_profiler_t *prof, rperf_sample_buffer_t *buf)
             prof->stats.dropped_aggregation += buf->sample_count - i;
             break;
         }
+        if (s->depth <= 0) continue;
 
         hash = rperf_fnv1a_u32(temp_ids, s->depth, s->thread_seq, s->label_set_id, s->vm_state);
 
@@ -753,7 +767,8 @@ static void
 rperf_handle_suspended(rperf_profiler_t *prof, VALUE thread, rperf_thread_data_t *td)
 {
     /* Has GVL — safe to call Ruby APIs */
-    int64_t wall_now = rperf_wall_time_ns();
+    /* suspended_at_ns is only consumed by RESUMED in wall mode */
+    int64_t wall_now = (prof->mode == RPERF_MODE_WALL) ? rperf_wall_time_ns() : 0;
 
     int is_first = 0;
 
@@ -766,19 +781,22 @@ rperf_handle_suspended(rperf_profiler_t *prof, VALUE thread, rperf_thread_data_t
     int64_t time_now = rperf_current_time_ns(prof);
     if (time_now < 0) return;
 
-    /* Capture backtrace into active buffer's frame_pool */
-    rperf_sample_buffer_t *buf = &prof->buffers[atomic_load_explicit(&prof->active_idx, memory_order_relaxed)];
-    if (rperf_ensure_frame_pool_capacity(buf, RPERF_MAX_STACK_DEPTH) < 0) return;
-    size_t frame_start = buf->frame_pool_count;
-    int depth = rb_profile_frames(0, RPERF_MAX_STACK_DEPTH,
-                                  &buf->frame_pool[frame_start], NULL);
-    if (depth <= 0) return;
-    buf->frame_pool_count += depth;
-
-    /* Record normal sample (skip if first time — no prev_time, or if paused) */
+    /* Record normal sample (skip if first time — no prev_time, or if paused).
+     * The backtrace is captured only when a sample is actually recorded:
+     * committing frames to the pool while paused would grow it without bound,
+     * because no aggregation runs until samples accumulate. */
     if (!is_first && !RPERF_PAUSED(prof)) {
-        int64_t weight = time_now - td->prev_time_ns;
-        rperf_record_sample(prof, frame_start, depth, weight, RPERF_VM_STATE_NORMAL, td->thread_seq, td->label_set_id);
+        rperf_sample_buffer_t *buf = &prof->buffers[atomic_load_explicit(&prof->active_idx, memory_order_relaxed)];
+        if (rperf_ensure_frame_pool_capacity(buf, RPERF_MAX_STACK_DEPTH) >= 0) {
+            size_t frame_start = buf->frame_pool_count;
+            int depth = rb_profile_frames(0, RPERF_MAX_STACK_DEPTH,
+                                          &buf->frame_pool[frame_start], NULL);
+            if (depth > 0) {
+                buf->frame_pool_count += depth;
+                int64_t weight = time_now - td->prev_time_ns;
+                rperf_record_sample(prof, frame_start, depth, weight, RPERF_VM_STATE_NORMAL, td->thread_seq, td->label_set_id);
+            }
+        }
     }
 
     /* Save timestamp for READY/RESUMED */
@@ -863,10 +881,19 @@ static void
 rperf_thread_event_hook(rb_event_flag_t event, const rb_internal_thread_event_data_t *data, void *user_data)
 {
     rperf_profiler_t *prof = (rperf_profiler_t *)user_data;
-    if (!prof->running) return;
 
     VALUE thread = data->thread;
     rperf_thread_data_t *td = (rperf_thread_data_t *)rb_internal_thread_specific_get(thread, prof->ts_key);
+
+    /* EXITED frees the thread's data even when running == 0: a thread can
+     * exit between stop setting running = 0 and the hook removal, and its td
+     * would otherwise leak (stop's Thread.list cleanup no longer sees it). */
+    if (event & RUBY_INTERNAL_THREAD_EVENT_EXITED) {
+        rperf_handle_exited(prof, thread, td);
+        return;
+    }
+
+    if (!prof->running) return;
 
     if (event & RUBY_INTERNAL_THREAD_EVENT_SUSPENDED)
         rperf_handle_suspended(prof, thread, td);
@@ -874,8 +901,6 @@ rperf_thread_event_hook(rb_event_flag_t event, const rb_internal_thread_event_da
         rperf_handle_ready(td);
     else if (event & RUBY_INTERNAL_THREAD_EVENT_RESUMED)
         rperf_handle_resumed(prof, thread, td);
-    else if (event & RUBY_INTERNAL_THREAD_EVENT_EXITED)
-        rperf_handle_exited(prof, thread, td);
 }
 
 /* ---- GC event hook ---- */
@@ -1142,7 +1167,7 @@ rperf_build_aggregated_result(rperf_profiler_t *prof)
     rb_hash_aset(result, ID2SYM(rb_intern("frequency")), INT2NUM(prof->frequency));
     rb_hash_aset(result, ID2SYM(rb_intern("trigger_count")), SIZET2NUM(prof->stats.trigger_count));
     rb_hash_aset(result, ID2SYM(rb_intern("sampling_count")), SIZET2NUM(prof->stats.sampling_count));
-    rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LONG2NUM(prof->stats.sampling_total_ns));
+    rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LL2NUM(prof->stats.sampling_total_ns));
     if (prof->stats.dropped_samples > 0)
         rb_hash_aset(result, ID2SYM(rb_intern("dropped_samples")), SIZET2NUM(prof->stats.dropped_samples));
     if (prof->stats.dropped_aggregation > 0)
@@ -1161,8 +1186,8 @@ rperf_build_aggregated_result(rperf_profiler_t *prof)
                  + (int64_t)prof->start_realtime.tv_nsec;
         duration_ns = ((int64_t)now_monotonic.tv_sec - (int64_t)prof->start_monotonic.tv_sec) * 1000000000LL
                     + ((int64_t)now_monotonic.tv_nsec - (int64_t)prof->start_monotonic.tv_nsec);
-        rb_hash_aset(result, ID2SYM(rb_intern("start_time_ns")), LONG2NUM(start_ns));
-        rb_hash_aset(result, ID2SYM(rb_intern("duration_ns")), LONG2NUM(duration_ns));
+        rb_hash_aset(result, ID2SYM(rb_intern("start_time_ns")), LL2NUM(start_ns));
+        rb_hash_aset(result, ID2SYM(rb_intern("duration_ns")), LL2NUM(duration_ns));
     }
 
     {
@@ -1188,7 +1213,7 @@ rperf_build_aggregated_result(rperf_profiler_t *prof)
 
             VALUE sample = rb_ary_new_capa(5);
             rb_ary_push(sample, frames);
-            rb_ary_push(sample, LONG2NUM(e->weight));
+            rb_ary_push(sample, LL2NUM(e->weight));
             rb_ary_push(sample, INT2NUM(e->thread_seq));
             rb_ary_push(sample, INT2NUM(e->label_set_id));
             rb_ary_push(sample, INT2NUM(e->vm_state));
@@ -1313,6 +1338,14 @@ rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig, VAL
     /* Pre-initialize current thread's time so the first sample is not skipped */
     {
         VALUE cur_thread = rb_thread_current();
+        /* A stale td can survive a fork (the atfork child handler does not
+         * free the forking thread's data) — free it before creating a fresh
+         * one, or it would leak on every fork + restart cycle. */
+        rperf_thread_data_t *stale = (rperf_thread_data_t *)rb_internal_thread_specific_get(cur_thread, g_profiler.ts_key);
+        if (stale) {
+            free(stale);
+            rb_internal_thread_specific_set(cur_thread, g_profiler.ts_key, NULL);
+        }
         rperf_thread_data_t *td = rperf_thread_data_create(&g_profiler, cur_thread);
         if (!td) {
             rb_remove_event_hook(rperf_gc_event_hook);
@@ -1377,24 +1410,34 @@ rb_rperf_start(VALUE self, VALUE vfreq, VALUE vmode, VALUE vagg, VALUE vsig, VAL
         if (timer_create(CLOCK_MONOTONIC, &sev, &g_profiler.timer_id) != 0) {
             g_profiler.running = 0;
             sigaction(g_profiler.timer_signal, &g_profiler.old_sigaction, NULL);
+            /* Signal under the mutex — see rb_rperf_stop for the rationale */
+            CHECKED(pthread_mutex_lock(&g_profiler.worker_mutex));
             CHECKED(pthread_cond_signal(&g_profiler.worker_cond));
+            CHECKED(pthread_mutex_unlock(&g_profiler.worker_mutex));
             CHECKED(pthread_join(g_profiler.worker_thread, NULL));
             goto timer_fail;
         }
 
-        its.it_value.tv_sec = 0;
         if (RPERF_PAUSED(&g_profiler)) {
             /* defer mode: create timer but don't arm it */
+            its.it_value.tv_sec = 0;
             its.it_value.tv_nsec = 0;
         } else {
-            its.it_value.tv_nsec = 1000000000L / g_profiler.frequency;
+            /* Split into sec/nsec: frequency 1 gives a 1s interval, and
+             * tv_nsec must be < 1e9 or timer_settime fails with EINVAL */
+            long interval_ns = 1000000000L / g_profiler.frequency;
+            its.it_value.tv_sec = interval_ns / 1000000000L;
+            its.it_value.tv_nsec = interval_ns % 1000000000L;
         }
         its.it_interval = its.it_value;
         if (timer_settime(g_profiler.timer_id, 0, &its, NULL) != 0) {
             timer_delete(g_profiler.timer_id);
             g_profiler.running = 0;
             sigaction(g_profiler.timer_signal, &g_profiler.old_sigaction, NULL);
+            /* Signal under the mutex — see rb_rperf_stop for the rationale */
+            CHECKED(pthread_mutex_lock(&g_profiler.worker_mutex));
             CHECKED(pthread_cond_signal(&g_profiler.worker_cond));
+            CHECKED(pthread_mutex_unlock(&g_profiler.worker_mutex));
             CHECKED(pthread_join(g_profiler.worker_thread, NULL));
             goto timer_fail;
         }
@@ -1455,10 +1498,15 @@ rb_rperf_stop(VALUE self)
     }
 #endif
 
-    /* Wake and join worker thread.
+    /* Wake and join worker thread.  Signal while holding worker_mutex:
+     * the worker re-checks its predicate (running) with the mutex held, so
+     * signaling under the mutex guarantees it either sees running == 0 or is
+     * already inside cond_wait when the signal fires — no lost wakeup.
      * Any pending timer signals are still handled by rperf_signal_handler
      * (just increments trigger_count + calls rb_postponed_job_trigger). */
+    CHECKED(pthread_mutex_lock(&g_profiler.worker_mutex));
     CHECKED(pthread_cond_signal(&g_profiler.worker_cond));
+    CHECKED(pthread_mutex_unlock(&g_profiler.worker_mutex));
     CHECKED(pthread_join(g_profiler.worker_thread, NULL));
     CHECKED(pthread_mutex_destroy(&g_profiler.worker_mutex));
     CHECKED(pthread_cond_destroy(&g_profiler.worker_cond));
@@ -1517,7 +1565,7 @@ rb_rperf_stop(VALUE self)
         rb_hash_aset(result, ID2SYM(rb_intern("frequency")), INT2NUM(g_profiler.frequency));
         rb_hash_aset(result, ID2SYM(rb_intern("trigger_count")), SIZET2NUM(g_profiler.stats.trigger_count));
         rb_hash_aset(result, ID2SYM(rb_intern("sampling_count")), SIZET2NUM(g_profiler.stats.sampling_count));
-        rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LONG2NUM(g_profiler.stats.sampling_total_ns));
+        rb_hash_aset(result, ID2SYM(rb_intern("sampling_time_ns")), LL2NUM(g_profiler.stats.sampling_total_ns));
         if (g_profiler.stats.dropped_samples > 0)
             rb_hash_aset(result, ID2SYM(rb_intern("dropped_samples")), SIZET2NUM(g_profiler.stats.dropped_samples));
         if (g_profiler.stats.dropped_aggregation > 0)
@@ -1531,8 +1579,8 @@ rb_rperf_stop(VALUE self)
                      + (int64_t)g_profiler.start_realtime.tv_nsec;
             duration_ns = ((int64_t)stop_monotonic.tv_sec - (int64_t)g_profiler.start_monotonic.tv_sec) * 1000000000LL
                         + ((int64_t)stop_monotonic.tv_nsec - (int64_t)g_profiler.start_monotonic.tv_nsec);
-            rb_hash_aset(result, ID2SYM(rb_intern("start_time_ns")), LONG2NUM(start_ns));
-            rb_hash_aset(result, ID2SYM(rb_intern("duration_ns")), LONG2NUM(duration_ns));
+            rb_hash_aset(result, ID2SYM(rb_intern("start_time_ns")), LL2NUM(start_ns));
+            rb_hash_aset(result, ID2SYM(rb_intern("duration_ns")), LL2NUM(duration_ns));
         }
 
         samples_ary = rb_ary_new_capa((long)buf->sample_count);
@@ -1548,7 +1596,7 @@ rb_rperf_stop(VALUE self)
 
             VALUE sample = rb_ary_new_capa(5);
             rb_ary_push(sample, frames);
-            rb_ary_push(sample, LONG2NUM(s->weight));
+            rb_ary_push(sample, LL2NUM(s->weight));
             rb_ary_push(sample, INT2NUM(s->thread_seq));
             rb_ary_push(sample, INT2NUM(s->label_set_id));
             rb_ary_push(sample, INT2NUM(s->vm_state));
@@ -1684,10 +1732,13 @@ rperf_arm_timer(rperf_profiler_t *prof)
 #if RPERF_USE_TIMER_SIGNAL
     if (prof->timer_signal > 0) {
         struct itimerspec its;
-        its.it_value.tv_sec = 0;
-        its.it_value.tv_nsec = 1000000000L / prof->frequency;
+        long interval_ns = 1000000000L / prof->frequency;
+        its.it_value.tv_sec = interval_ns / 1000000000L;
+        its.it_value.tv_nsec = interval_ns % 1000000000L;
         its.it_interval = its.it_value;
-        timer_settime(prof->timer_id, 0, &its, NULL);
+        if (timer_settime(prof->timer_id, 0, &its, NULL) != 0) {
+            fprintf(stderr, "rperf: timer_settime (arm) failed: %s\n", strerror(errno));
+        }
         return;
     }
 #endif
@@ -1705,7 +1756,9 @@ rperf_disarm_timer(rperf_profiler_t *prof)
     if (prof->timer_signal > 0) {
         struct itimerspec its;
         memset(&its, 0, sizeof(its));
-        timer_settime(prof->timer_id, 0, &its, NULL);
+        if (timer_settime(prof->timer_id, 0, &its, NULL) != 0) {
+            fprintf(stderr, "rperf: timer_settime (disarm) failed: %s\n", strerror(errno));
+        }
         return;
     }
 #endif
