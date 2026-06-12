@@ -1,5 +1,6 @@
 require_relative "rperf/version"
 require_relative "rperf/meta"
+require_relative "rperf/table"
 require "zlib"
 require "stringio"
 

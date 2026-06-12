@@ -83,6 +83,8 @@ and flat/cumulative top-50 function tables.
 
     --top                   Print top functions by flat time
     --text                  Print text report
+    --format FORMAT         Flat table for AI/machine consumption:
+                            'table' (TSV) or 'table-json' (JSON array)
     --html                  Output static HTML viewer to stdout
 
 Default (no flag): opens interactive web UI in browser.
@@ -96,14 +98,45 @@ sites (e.g., GitHub Pages).
 
     rperf report --html profile.json.gz > report.html
 
-### diff: Compare two profiles (target - base). Requires Go.
+### diff: Compare two profiles (target - base). Requires Go (except --format table).
 
 Accepts `.json.gz` (auto-converted to pprof) or `.pb.gz` files.
 
     --top                   Print top functions by diff
     --text                  Print text diff report
+    --format FORMAT         Flat diff table for AI/machine consumption:
+                            'table' (TSV) or 'table-json' (JSON array).
+                            Computed in Ruby — no Go required.
+                            .json.gz / .json files only.
 
 Default (no flag): opens diff in browser.
+
+### Table output for AI analysis (--format table / table-json)
+
+Aggregation, diffing, and cutoff happen on the rperf side; the output is a
+flat table that an LLM can analyze directly — no tree walking required.
+
+`rperf report --format table FILE` columns (self_pct descending, top 50
+plus an `(other)` aggregate row):
+
+    method  self_pct  total_pct  self_ms
+
+`rperf diff --format table BASE HEAD` columns (|delta_pt| descending,
+top 50; delta_pt = self_pct_head - self_pct_base in percentage points):
+
+    method  self_pct_base  self_pct_head  delta_pt
+
+Per-method allocation data does not exist in sampling profiles, so
+allocation counts appear only in the summary (whole-profile delta).
+
+The last TSV line is `# summary` with tab-separated key=value pairs
+(total_ms / allocated_objects / GC counts; base/head/delta for diff).
+With `table-json`, the output is a JSON array of row objects whose last
+element is `{"summary": {...}}`.
+
+Feed the result to an LLM:
+
+    rperf diff base.json.gz head.json.gz --format table | claude -p "回帰の原因を分析して"
 
 ### Multi-process profiling
 
