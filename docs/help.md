@@ -26,9 +26,16 @@ POSIX systems (Linux, macOS). Requires Ruby >= 3.4.0.
                             (same as --format=text --output=/dev/stdout)
     --signal VALUE          Timer signal (Linux only): signal number, or 'false'
                             for nanosleep thread (default: auto)
+    --snapshot-dir DIR      Save as rperf-<sha7>-<timestamp>.json.gz in DIR
+                            (rperf-nogit-<timestamp>-<pid>.json.gz outside git)
+    --label KEY=VALUE       Add a label to profile metadata (repeatable)
     --no-inherit            Do not profile forked/spawned child processes
     --no-aggregate          Disable C-level sample aggregation (raw per-sample data)
     -v, --verbose           Print sampling statistics to stderr
+
+JSON output embeds `meta` (git commit, host, Ruby/rperf versions, labels)
+and `summary` (time, GC, allocation, top methods) — see "Profile metadata"
+under OUTPUT FORMATS.
 
 ### stat: Run command and print performance summary to stderr.
 
@@ -37,6 +44,7 @@ Uses wall mode by default. No file output by default.
     -o, --output PATH       Also save profile to file (default: none)
     -f, --frequency HZ      Sampling frequency in Hz (default: 1000)
     -m, --mode MODE         cpu or wall (default: wall)
+    --label KEY=VALUE       Add a label to profile metadata (repeatable)
     --report                Include flat/cumulative profile tables in output
     --signal VALUE          Timer signal (Linux only): signal number, or 'false'
                             for nanosleep thread (default: auto)
@@ -61,6 +69,7 @@ Like `stat --report`. Uses wall mode by default. No file output by default.
     -o, --output PATH       Also save profile to file (default: none)
     -f, --frequency HZ      Sampling frequency in Hz (default: 1000)
     -m, --mode MODE         cpu or wall (default: wall)
+    --label KEY=VALUE       Add a label to profile metadata (repeatable)
     --signal VALUE          Timer signal (Linux only): signal number, or 'false'
                             for nanosleep thread (default: auto)
     --no-inherit            Do not profile forked/spawned child processes
@@ -146,6 +155,8 @@ Limitations:
     rperf record -o profile.collapsed ruby app.rb
     rperf record -o profile.txt ruby app.rb
     rperf record -p ruby app.rb
+    rperf record --snapshot-dir ./profiles ruby app.rb
+    rperf record --label ci=github-actions --label pr=123 ruby app.rb
     rperf stat ruby app.rb
     rperf stat --report ruby app.rb
     rperf stat -o profile.pb.gz ruby app.rb
@@ -484,6 +495,70 @@ Readable by non-Ruby tools (Python, jq, etc.).
 Extension convention: `.json.gz` (gzip-compressed, default) or `.json` (plain text).
 View with: `rperf report` (opens rperf viewer in browser, no Go required).
 Load programmatically: `data = Rperf.load("rperf.json.gz")`
+
+#### Profile metadata (meta / summary)
+
+JSON profiles embed two extra top-level keys, written FIRST in the file so
+tools can list profiles by decompressing only the head (`Rperf.read_meta`):
+
+```json
+{
+  "meta": {
+    "format_version": 1,
+    "created_at": "2026-06-12T10:00:00Z",
+    "ruby_version": "3.5.0",
+    "rperf_version": "0.10.0",
+    "mode": "cpu",
+    "hostname": "...",
+    "git": {
+      "sha": "88e1a40...",
+      "branch": "main",
+      "subject": "Add nested includes support",
+      "committed_at": "2026-06-09T...",
+      "dirty": false
+    },
+    "labels": { "ci": "github-actions", "pr": "123" }
+  },
+  "summary": {
+    "total_ms": 2001.8,
+    "cpu_ms": 2023.3,
+    "gc_count_minor": 2,
+    "gc_count_major": 2,
+    "gc_ms": 3.0,
+    "allocated_objects": 48741,
+    "freed_objects": 27034,
+    "maxrss_mb": 16,
+    "samples": 1999,
+    "top_methods": [
+      { "name": "Object#fibonacci", "self_pct": 99.9, "total_pct": 99.9 }
+    ]
+  }
+}
+```
+
+Notes:
+
+- `git` is omitted outside a git repository (never an error). In GitHub
+  Actions, `GITHUB_SHA` / `GITHUB_REF_NAME` take priority over git commands.
+  The CLI collects git info before launching the profiled command, so a
+  `chdir` in the app cannot point git at the wrong repository.
+- `git.dirty` is true when the working tree has uncommitted changes.
+- GC counts and allocation counts are deltas over the profiled period
+  (`GC.stat` baselines are captured at `Rperf.start`). `maxrss_mb` is the
+  process-lifetime peak (no period delta is possible).
+- `summary.top_methods` lists up to 50 methods by self time.
+- In multi-process profiling, GC/memory stats come from the root process
+  only (same policy as `rperf stat`); time and sample stats are aggregated.
+- Files saved by older rperf versions (no `meta`) remain loadable; viewers
+  treat them as unknown snapshots.
+- pprof / collapsed / text exports do not contain meta.
+
+### Rperf.read_meta(path)
+
+Reads only `meta` / `summary` from a `.json(.gz)` profile without parsing
+the sample body (fast even for large files). Returns
+`{ meta: Hash|nil, summary: Hash|nil }`, or nil for pre-meta files and
+unreadable files.
 
 ### pprof
 
