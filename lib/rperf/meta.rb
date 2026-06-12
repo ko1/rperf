@@ -185,13 +185,19 @@ module Rperf
         magic = f.read(2)
         f.rewind
         io = (magic == "\x1f\x8b".b) ? Zlib::GzipReader.new(f) : f
-        buf = "".b
-        loop do
-          chunk = io.read(READ_CHUNK)
-          buf << chunk if chunk
-          result = scan_prefix(buf)
-          return result unless result == :incomplete
-          return nil if chunk.nil? || buf.bytesize > READ_LIMIT
+        begin
+          buf = "".b
+          loop do
+            chunk = io.read(READ_CHUNK)
+            buf << chunk if chunk
+            result = scan_prefix(buf)
+            return result unless result == :incomplete
+            return nil if chunk.nil? || buf.bytesize > READ_LIMIT
+          end
+        ensure
+          # Free the inflate zstream now — directory listings open many files
+          # and the buffers would otherwise linger until GC
+          io.close if io.is_a?(Zlib::GzipReader)
         end
       end
     rescue Zlib::Error, SystemCallError, JSON::ParserError
