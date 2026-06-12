@@ -1,4 +1,5 @@
 require_relative "rperf/version"
+require_relative "rperf/meta"
 require "zlib"
 require "stringio"
 
@@ -67,6 +68,7 @@ module Rperf
     @stat = stat
     @stat_start_mono = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     @stat_start_times = Process.times
+    @gc_stat_start = GC.stat
     @label_set_table = nil
     @label_set_index = nil
     _c_start(frequency, c_mode, aggregate, c_signal, defer)
@@ -115,6 +117,24 @@ module Rperf
     data[:user_ns] = ((times.utime - start_times.utime) * 1_000_000_000).to_i
     data[:sys_ns] = ((times.stime - start_times.stime) * 1_000_000_000).to_i
 
+    # GC / memory statistics for the summary (deltas since start; GC.stat is
+    # cumulative over the process lifetime). maxrss is a process-lifetime
+    # peak — no delta is possible.
+    if @gc_stat_start
+      gc = GC.stat
+      data[:gc_stats] = {
+        count: gc[:count] - @gc_stat_start[:count],
+        minor_count: gc[:minor_gc_count] - @gc_stat_start[:minor_gc_count],
+        major_count: gc[:major_gc_count] - @gc_stat_start[:major_gc_count],
+        time_ms: (gc[:time] || 0) - (@gc_stat_start[:time] || 0),
+        allocated_objects: gc[:total_allocated_objects] - @gc_stat_start[:total_allocated_objects],
+        freed_objects: gc[:total_freed_objects] - @gc_stat_start[:total_freed_objects],
+      }
+      @gc_stat_start = nil
+    end
+    sys_stats = get_system_stats
+    data[:maxrss_mb] = (sys_stats[:maxrss_kb] / 1024.0).round if sys_stats[:maxrss_kb]
+
     # When aggregate: false, C extension returns :raw_samples but not
     # :aggregated_samples.  Build aggregated view so encoders always work.
     if data[:raw_samples] && !data[:aggregated_samples]
@@ -138,11 +158,11 @@ module Rperf
       # Root's @output/@format/@stat are preserved for the merged result.
       print_stats(data) if @verbose
       begin
-        save(File.join(session_dir, "profile-#{Process.pid}.json.gz"), data, format: :json)
+        write_data(File.join(session_dir, "profile-#{Process.pid}.json.gz"), data, :json, internal: true)
       rescue SystemCallError
         # Session dir may have been removed (e.g., test scenario) — continue to aggregation
       end
-      merged = _aggregate_and_report
+      merged = _aggregate_and_report(data)
       if merged.nil? && data
         # Aggregation failed — fall back to root's own data
         $stderr.puts "rperf: warning: multi-process aggregation failed; writing root process data only"
@@ -160,7 +180,7 @@ module Rperf
       if @_session_dir_output
         # Child process writing to session dir — tolerate missing dir
         begin
-          write_data(@output, data, @format)
+          write_data(@output, data, @format, internal: true)
         rescue SystemCallError
           # Parent may have already cleaned up the session dir (e.g., parent
           # exited first and rm_rf'd it), or disk is full. Silently skip —
@@ -367,7 +387,10 @@ module Rperf
     write_data(path, data, format)
   end
 
-  def self.write_data(path, data, format)
+  # internal: true skips meta/summary generation — used for per-process
+  # intermediate files in the multi-process session dir (meta is attached
+  # once, on the root's final output).
+  def self.write_data(path, data, format, internal: false)
     fmt = detect_format(path, format)
     case fmt
     when :collapsed
@@ -376,7 +399,13 @@ module Rperf
       File.write(path, Text.encode(data))
     when :json
       require "json"
-      json_data = data.merge(rperf_version: VERSION, pid: Process.pid, ppid: Process.ppid)
+      json_data = data
+      unless internal || data[:meta]
+        # meta/summary must be the FIRST keys so Meta.read can extract them
+        # from the head of the (gzipped) file without loading the body.
+        json_data = { meta: Meta.build_meta(data), summary: Meta.build_summary(data) }.merge(data)
+      end
+      json_data = json_data.merge(rperf_version: VERSION, pid: Process.pid, ppid: Process.ppid)
       json_str = JSON.generate(json_data)
       if path.to_s.end_with?(".gz")
         File.binwrite(path, gzip(json_str))
@@ -409,6 +438,14 @@ module Rperf
       $stderr.puts "rperf: warning: file has no version info (may be from an older rperf)"
     end
     data
+  end
+
+  # Read only the meta/summary head of a profile saved by rperf record
+  # (.json.gz or .json) without loading the sample body.
+  # Returns { meta: Hash|nil, summary: Hash|nil }, or nil for files saved
+  # by older rperf versions (no leading meta) or unreadable files.
+  def self.read_meta(path)
+    Meta.read(path)
   end
 
   def self.detect_format(path, format)
@@ -905,7 +942,9 @@ module Rperf
     at_exit { Rperf.stop }
   end
 
-  def self._aggregate_and_report
+  # root_data: the root process's own profile data — GC/OS stats in the
+  # merged summary come from the root only (same policy as `rperf stat`).
+  def self._aggregate_and_report(root_data = nil)
     session_dir = ENV["RPERF_SESSION_DIR"]
     return unless session_dir && File.directory?(session_dir)
 
@@ -957,6 +996,11 @@ module Rperf
       sys_ns: total_sys_ns,
       process_count: process_count,
     }
+
+    if root_data
+      merged_data[:gc_stats] = root_data[:gc_stats] if root_data[:gc_stats]
+      merged_data[:maxrss_mb] = root_data[:maxrss_mb] if root_data[:maxrss_mb]
+    end
 
     print_stat(merged_data) if @stat
     if @output

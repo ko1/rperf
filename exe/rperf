@@ -230,6 +230,7 @@ else
 end
 
 output = (subcommand == "record") ? "rperf.json.gz" : nil
+output_given = false
 frequency = 1000
 mode = (subcommand == "record") ? "cpu" : "wall"
 format = nil
@@ -238,6 +239,8 @@ verbose = false
 aggregate = true
 stat_report = (subcommand == "exec")
 inherit = true
+meta_labels = {}
+snapshot_dir = nil
 
 parser = OptionParser.new do |opts|
   opts.banner = case subcommand
@@ -248,6 +251,7 @@ parser = OptionParser.new do |opts|
 
   opts.on("-o", "--output PATH", "Output file#{subcommand == 'record' ? ' (default: rperf.json.gz)' : ' (default: none)'}") do |v|
     output = v
+    output_given = true
   end
 
   opts.on("-f", "--frequency HZ", Integer, "Sampling frequency in Hz (default: 1000)") do |v|
@@ -268,7 +272,21 @@ parser = OptionParser.new do |opts|
     opts.on("-p", "--print", "Print text profile to stdout (same as --format=text --output=/dev/stdout)") do
       format = "text"
       output = "/dev/stdout"
+      output_given = true
     end
+
+    opts.on("--snapshot-dir DIR", "Save output as rperf-<sha7>-<timestamp>.json.gz in DIR") do |v|
+      snapshot_dir = v
+    end
+  end
+
+  opts.on("--label KEY=VALUE", "Add a label to profile metadata (repeatable)") do |v|
+    key, value = v.split("=", 2)
+    if key.nil? || key.empty? || value.nil?
+      $stderr.puts "Error: --label must be KEY=VALUE, got: #{v.inspect}"
+      exit 1
+    end
+    meta_labels[key] = value
   end
 
   opts.on("--signal VALUE", "Timer signal (Linux only): signal number, or 'false' for nanosleep thread") do |v|
@@ -345,6 +363,31 @@ if signal && signal != "false"
   end
 end
 
+# Load the library BEFORE exporting RPERF_ENABLED — requiring it afterwards
+# would trigger the ENV-based auto-start in the CLI process itself.
+require_relative "../lib/rperf"
+require "json"
+
+# Collect git metadata here, not in the profiled process: the app may chdir,
+# which would point git at the wrong repository. The profiled process reads
+# RPERF_META_GIT instead of running git ("null" = checked, not a repo).
+git_info = Rperf::Meta.collect_git
+ENV["RPERF_META_GIT"] = git_info ? JSON.generate(git_info) : "null"
+ENV["RPERF_META_LABELS"] = JSON.generate(meta_labels) unless meta_labels.empty?
+
+if snapshot_dir
+  if output_given
+    $stderr.puts "Error: --snapshot-dir and -o/--output (or -p) are mutually exclusive"
+    exit 1
+  end
+  if format && format != "json"
+    $stderr.puts "Error: --snapshot-dir requires JSON format (got --format=#{format})"
+    exit 1
+  end
+  FileUtils.mkdir_p(snapshot_dir)
+  output = File.join(snapshot_dir, Rperf::Meta.snapshot_filename(git_info))
+end
+
 # Add lib dir to RUBYLIB so -rrperf can find the correct version.
 # RUBYLIB handles spaces in paths safely (PATH_SEPARATOR delimited).
 # RUBYOPT -r<path> does not support spaces, so we use RUBYLIB + -rrperf.
@@ -368,7 +411,6 @@ end
 
 # Multi-process (fork) support: create a session directory for aggregation
 if inherit
-  require_relative "../lib/rperf"
   session_dir = Rperf.send(:_create_session_dir, clean_stale: true)
   if session_dir
     ENV["RPERF_ROOT_PROCESS"] = Process.pid.to_s
