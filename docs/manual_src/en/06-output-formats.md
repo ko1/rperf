@@ -28,6 +28,49 @@ data = Rperf.load("profile.json")     # plain text
 
 **Advantages**: Native rperf format, no external tools required to view. Portable format. Can be loaded back into Ruby or processed by any JSON-capable tool. Use `.json` when you want to inspect or pipe through `jq`.
 
+### Metadata and summary statistics (meta / summary)
+
+JSON profiles embed [`meta`](#index:meta) and [`summary`](#index:summary) at
+the top level:
+
+```json
+{
+  "meta": {
+    "format_version": 1,
+    "created_at": "2026-06-12T10:00:00Z",
+    "ruby_version": "3.5.0",
+    "rperf_version": "0.10.0",
+    "mode": "cpu",
+    "hostname": "...",
+    "git": { "sha": "88e1a40...", "branch": "main",
+             "subject": "Add nested includes support",
+             "committed_at": "2026-06-09T...", "dirty": false },
+    "labels": { "ci": "github-actions", "pr": "123" }
+  },
+  "summary": {
+    "total_ms": 2001.8, "cpu_ms": 2023.3,
+    "gc_count_minor": 2, "gc_count_major": 2, "gc_ms": 3.0,
+    "allocated_objects": 48741, "freed_objects": 27034,
+    "maxrss_mb": 16, "samples": 1999,
+    "top_methods": [ { "name": "Object#fibonacci", "self_pct": 99.9, "total_pct": 99.9 } ]
+  }
+}
+```
+
+Design notes:
+
+- `meta` / `summary` are written **first** in the file, so
+  `Rperf.read_meta(path)` can extract them by decompressing only the head of
+  the gzip stream. This is what lets the time-travel viewer list profiles
+  without loading bodies.
+- `git` is omitted outside a git repository (never an error). In GitHub
+  Actions, environment variables such as `GITHUB_SHA` take priority over git
+  commands.
+- GC counts and allocation counts are deltas over the profiled period;
+  `maxrss_mb` is the process-lifetime peak.
+- Files saved by older rperf versions (without `meta`) remain loadable.
+- meta is not reflected in pprof / collapsed / text exports.
+
 ## pprof
 
 The [pprof](#index:pprof) format is a gzip-compressed Protocol Buffers binary. This is the standard format used by Go's pprof tooling.

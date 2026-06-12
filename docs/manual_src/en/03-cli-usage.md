@@ -261,10 +261,30 @@ rperf record [options] command [args...]
 | `-m MODE` | `cpu` or `wall` (default: `cpu`) |
 | `--format FMT` | `json`, `pprof`, `collapsed`, or `text` (default: auto from extension) |
 | `-p, --print` | Print text profile to stdout (same as `--format=text --output=/dev/stdout`) |
+| `--snapshot-dir DIR` | Save as `rperf-<sha7>-<timestamp>.json.gz` in DIR |
+| `--label KEY=VALUE` | Add a label to profile metadata (repeatable) |
 | `--signal VALUE` | Timer signal (Linux only): signal number, or `false` for nanosleep thread |
 | `--no-aggregate` | Disable sample aggregation (keep raw samples) |
 | `--no-inherit` | Do not profile forked/spawned child processes (default: inherit) |
 | `-v` | Print sampling statistics to stderr |
+
+### Recording into a snapshot directory
+
+[`--snapshot-dir`](#index:--snapshot-dir) accumulates per-commit profiles in a single
+directory. The file name is derived from the git commit:
+`rperf-<sha7>-<timestamp>.json.gz` (or `rperf-nogit-<timestamp>-<pid>.json.gz`
+outside a git repository):
+
+```bash
+rperf record --snapshot-dir ./profiles ruby my_app.rb
+```
+
+JSON profiles automatically embed `meta` (git SHA, branch, commit subject,
+dirty flag, hostname, Ruby/rperf versions, and any `--label` values) and
+`summary` (run time, GC counts, allocation counts, top 50 methods by self
+time). In GitHub Actions, environment variables such as `GITHUB_SHA` take
+priority over git commands. Browse the accumulated directory across commits
+with `rperf report ./profiles/` (time-travel mode, described below).
 
 ## rperf report
 
@@ -314,14 +334,47 @@ For `.pb.gz` files, `--top` and `--text` use `go tool pprof` and produce pprof-f
 
 The default behavior (without `--top` or `--text`) opens the rperf viewer for JSON files, or an interactive web UI powered by [pprof](#cite:ren2010) for `.pb.gz` files.
 
+### Time-travel mode (directory input)
+
+Passing a directory instead of a file opens the
+[time-travel viewer](#index:time-travel viewer), which lists every
+`*.json(.gz)` profile in the directory:
+
+```bash
+rperf report ./profiles/
+```
+
+- **Sidebar**: each snapshot row shows the short SHA (with `*` when the
+  working tree was dirty), commit subject, date, and badges versus the
+  previous snapshot (`alloc ±N%`, GC count; ⚠️ when allocation changed more
+  than ±15%). Rows are grouped by git branch, with main/master expanded by
+  default.
+- **Lazy loading**: only each file's leading `meta`/`summary` is read for
+  the listing; bodies load on selection. A directory with 100 snapshots
+  lists in under a second.
+- **Diff mode**: the ⇄ button on a row diffs the current snapshot against
+  it. The flamegraph is recolored by share change (red = increased,
+  blue = decreased, neutral below ±0.4pt); the direction is base (older) →
+  current (newer).
+- **Method pinning**: Shift+click a frame to pin that method. A sparkline
+  of its share across all snapshots appears at the top of the sidebar;
+  click a point to jump to that snapshot. The pinned frame is highlighted
+  and others are dimmed (plain click still zooms).
+- **Keyboard**: `j` / `k` move to the newer / older snapshot.
+- Old files without `meta` are listed as unknown snapshots.
+
+Combined with `rperf record --snapshot-dir`, this completes a per-commit
+performance tracking workflow.
+
 ### report options
 
 | Option | Description |
 |--------|-------------|
 | `--top` | Print top functions by flat time |
 | `--text` | Print text report |
+| `--format FMT` | Flat table for AI/machine consumption: `table` (TSV) or `table-json` (JSON array) |
 | `--html` | Output static HTML viewer to stdout (`.json.gz` only) |
-| (default) | Open interactive web UI in browser |
+| (default) | Open interactive web UI in browser (time-travel mode for a directory) |
 
 ## rperf diff
 
@@ -337,6 +390,34 @@ rperf diff --top before.pb.gz after.pb.gz
 # Print text diff
 rperf diff --text before.pb.gz after.pb.gz
 ```
+
+Browser mode, `--top`, and `--text` require Go. `--format table` (below) is
+computed in Ruby — no Go required.
+
+### Table output for AI analysis (--format table)
+
+[`--format table`](#index:--format table) emits a flat table with all
+aggregation, diffing, and cutoff done on the rperf side — no tree parsing
+needed, so an LLM can analyze the result directly:
+
+```bash
+# TSV diff table
+rperf diff --format table base.json.gz head.json.gz
+
+# Feed it to an LLM
+rperf diff base.json.gz head.json.gz --format table | claude -p "analyze the regression"
+```
+
+Diff table columns are `method`, `self_pct_base`, `self_pct_head`, and
+`delta_pt` (sorted by |delta| descending, top 50). The trailing `# summary`
+line carries base/head/delta for total_ms, allocation counts, and GC counts.
+Sampling profiles have no per-method allocation data, so allocation appears
+only as a whole-profile delta in the summary.
+
+`rperf report --format table FILE` prints a single-profile table (`method`,
+`self_pct`, `total_pct`, `self_ms`; self_pct descending, top 50 plus an
+`(other)` aggregate row). With `--format table-json` the output is a JSON
+array whose last element is `{"summary": {...}}`.
 
 ### Workflow example
 

@@ -161,9 +161,21 @@ Rperf::Viewer.instance.add_snapshot(data)
 
 ビューアには 3 つのタブがあります:
 
-- **Flamegraph** — d3-flame-graph によるインタラクティブなフレームグラフ。フレームをクリックでズームイン、ルートをクリックでズームアウト。
+- **Flamegraph** — d3-flame-graph によるインタラクティブなフレームグラフ。フレームをクリックでズームイン、ルートをクリックでズームアウト。Shift+クリックでメソッドをピン留め（サイドバーに占有率のスパークラインを表示）。
 - **Top** — Flat（リーフ）と Cumulative（累積）の重み付けテーブル（上位 50 関数）。カラムヘッダー（Flat、Cum、Function）をクリックでソート。
 - **Tags** — 各ラベルキーについて、値ごとの重みとパーセンテージの内訳を表示。値の行をクリックすると tagfocus を設定して Flamegraph タブに遷移。
+
+### スナップショットサイドバー（時間旅行 UI）
+
+スナップショットが 2 つ以上あると、左側に一覧サイドバーが表示されます。各スナップショットには `meta` / `summary`（保存ファイルと同じ形式）が付与されるため、行には git の SHA・コミットメッセージ・alloc/GC バッジが並びます。行クリックで切り替え、`j` / `k` で前後に移動、⇄ ボタンで diff 表示（フレームグラフを増加 = 赤 / 減少 = 青で差分着色）になります。`rperf report ./profiles/`（CLI の時間旅行モード）と同じ UI です。
+
+ディレクトリに保存したプロファイル群を読み込むこともできます（本体は選択時に遅延ロード、`max_snapshots:` の上限は適用されません）:
+
+```ruby
+Rperf::Viewer.instance.add_snapshot_dir("./profiles")
+```
+
+ビューアのデータ取得は fetch ベース（`<path>/snapshots` で一覧、`<path>/snapshots/<id>` で本体)です。`window.RPERF_DATA_SOURCE` を定義すると取得先 URL を実行時に差し替えられ、署名付き URL の期限切れ（HTTP 403）時に新しい URL を返す `onAuthError(url)` フックも指定できます。
 
 ### フィルタリング
 

@@ -28,6 +28,42 @@ data = Rperf.load("profile.json")     # プレーンテキスト
 
 **利点**: rperf のネイティブ形式。表示に外部ツール不要。ポータブルな形式。Ruby にロードし直したり、JSON 対応の任意のツールで処理可能。`jq` でパイプ処理したい場合は `.json` を使用。
 
+### メタデータと要約統計 (meta / summary)
+
+JSON プロファイルのトップレベルには [`meta`](#index:meta) と [`summary`](#index:summary) が埋め込まれます:
+
+```json
+{
+  "meta": {
+    "format_version": 1,
+    "created_at": "2026-06-12T10:00:00Z",
+    "ruby_version": "3.5.0",
+    "rperf_version": "0.10.0",
+    "mode": "cpu",
+    "hostname": "...",
+    "git": { "sha": "88e1a40...", "branch": "main",
+             "subject": "Add nested includes support",
+             "committed_at": "2026-06-09T...", "dirty": false },
+    "labels": { "ci": "github-actions", "pr": "123" }
+  },
+  "summary": {
+    "total_ms": 2001.8, "cpu_ms": 2023.3,
+    "gc_count_minor": 2, "gc_count_major": 2, "gc_ms": 3.0,
+    "allocated_objects": 48741, "freed_objects": 27034,
+    "maxrss_mb": 16, "samples": 1999,
+    "top_methods": [ { "name": "Object#fibonacci", "self_pct": 99.9, "total_pct": 99.9 } ]
+  }
+}
+```
+
+設計上のポイント:
+
+- `meta` / `summary` はファイルの**先頭**に書かれるため、`Rperf.read_meta(path)` は gzip の先頭部分だけを伸長して読み取れます。時間旅行ビューアの一覧表示が本体のロードなしで成立するのはこのためです。
+- git 情報は git リポジトリ外では省略されます（エラーにはなりません）。GitHub Actions 環境では `GITHUB_SHA` などが git コマンドより優先されます。
+- GC 回数とアロケーション数はプロファイル期間中の差分です。`maxrss_mb` はプロセス起動からのピーク値です。
+- `meta` のない旧バージョンのファイルも従来どおり読み込めます。
+- pprof / collapsed / text 形式には `meta` は反映されません。
+
 ## pprof
 
 [pprof](#index:pprof) 形式は gzip 圧縮された Protocol Buffers バイナリです。これは Go の pprof ツールで使用される標準形式です。

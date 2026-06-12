@@ -75,6 +75,13 @@ rperf report --top profile.json.gz           # print top functions to terminal
 
 # Compare two profiles (requires Go)
 rperf diff before.json.gz after.json.gz      # open diff in browser
+
+# Track performance across commits (time-travel viewer)
+rperf record --snapshot-dir ./profiles ruby app.rb   # → profiles/rperf-<sha7>-<ts>.json.gz
+rperf report ./profiles/                             # sidebar: per-commit list, diff, sparkline
+
+# Flat tables for AI analysis (no Go required)
+rperf diff --format table base.json.gz head.json.gz | claude -p "analyze the regression"
 ```
 
 On `rperf report`, you can see the profile result like this page: [rprof viewer](https://ko1.github.io/rperf/examples/cpu_intensive_profile.html)
@@ -134,8 +141,8 @@ Inspired by Linux `perf` — familiar subcommand interface for profiling workflo
 | `rperf record` | Profile a command and save to file (default: `.json.gz`) |
 | `rperf stat` | Profile a command and print summary to stderr |
 | `rperf exec` | Profile a command and print full report to stderr |
-| `rperf report` | Open viewer for `.json.gz`; wraps `go tool pprof` for `.pb.gz` (requires Go) |
-| `rperf diff` | Compare two profiles (requires Go) |
+| `rperf report` | Open viewer for `.json.gz` (or a directory for time-travel mode); wraps `go tool pprof` for `.pb.gz` (requires Go) |
+| `rperf diff` | Compare two profiles (requires Go, except `--format table`) |
 | `rperf help` | Show full reference documentation |
 
 ## How It Works
