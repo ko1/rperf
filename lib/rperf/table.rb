@@ -20,7 +20,8 @@ module Rperf
     # top 50 plus an "(other)" row aggregating the rest.
     def report_rows(data, limit: ROWS_LIMIT)
       flat, cum, total = flat_cum_by_name(data)
-      rows = flat.map do |name, w|
+      entries = flat.sort_by { |name, w| [-w, name] }
+      rows = entries.first(limit).map do |name, w|
         {
           method: name,
           self_pct: pct(w, total),
@@ -28,15 +29,16 @@ module Rperf
           self_ms: ms(w),
         }
       end
-      rows.sort_by! { |r| [-r[:self_pct], r[:method]] }
-      rest = rows[limit..]
-      rows = rows.first(limit)
-      if rest && !rest.empty?
+      if entries.size > limit
+        # Aggregate the raw weights, not the already-rounded row values:
+        # per-row rounding errors are systematic and would make the (other)
+        # row inconsistent with itself (pct vs ms) and with the true total
+        rest_weight = entries.drop(limit).sum { |_, w| w }
         rows << {
           method: "(other)",
-          self_pct: (rest.sum { |r| r[:self_pct] }).round(1),
+          self_pct: pct(rest_weight, total),
           total_pct: nil,  # overlapping cumulative values cannot be summed
-          self_ms: (rest.sum { |r| r[:self_ms] }).round(1),
+          self_ms: ms(rest_weight),
         }
       end
       rows
@@ -58,7 +60,7 @@ module Rperf
       out = String.new
       out << "method\tself_pct\ttotal_pct\tself_ms\n"
       rows.each do |r|
-        out << [r[:method], r[:self_pct], r[:total_pct], r[:self_ms]].map { |v| v.nil? ? "" : v.to_s }.join("\t") << "\n"
+        out << [tsv_cell(r[:method]), r[:self_pct], r[:total_pct], r[:self_ms]].map { |v| v.nil? ? "" : v.to_s }.join("\t") << "\n"
       end
       out << summary_line(report_summary(data))
       out
@@ -96,9 +98,8 @@ module Rperf
       h = report_summary(head)
       out = {}
       %i[total_ms allocated_objects gc_count_minor gc_count_major].each do |key|
-        next unless b[key] || h[key]
-        out[:"#{key}_base"] = b[key]
-        out[:"#{key}_head"] = h[key]
+        out[:"#{key}_base"] = b[key] if b[key]
+        out[:"#{key}_head"] = h[key] if h[key]
         out[:"#{key}_delta"] = (h[key] - b[key]).round(1) if b[key] && h[key]
       end
       out
@@ -109,7 +110,7 @@ module Rperf
       out = String.new
       out << "method\tself_pct_base\tself_pct_head\tdelta_pt\n"
       rows.each do |r|
-        out << [r[:method], r[:self_pct_base], r[:self_pct_head], r[:delta_pt]].join("\t") << "\n"
+        out << [tsv_cell(r[:method]), r[:self_pct_base], r[:self_pct_head], r[:delta_pt]].join("\t") << "\n"
       end
       out << summary_line(diff_summary(base, head))
       out
@@ -141,7 +142,15 @@ module Rperf
     end
 
     def summary_line(summary)
-      "# summary\t" + summary.map { |k, v| "#{k}=#{v}" }.join("\t") + "\n"
+      (["# summary"] + summary.map { |k, v| "#{k}=#{v}" }).join("\t") + "\n"
+    end
+
+    # TSV has no escaping convention — replace separator characters so a
+    # pathological method name (define_method allows any string) cannot
+    # shift columns or split a row.
+    def tsv_cell(value)
+      s = value.to_s
+      s.match?(/[\t\n\r]/) ? s.gsub(/[\t\n\r]/, " ") : s
     end
   end
 end

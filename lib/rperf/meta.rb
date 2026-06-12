@@ -24,7 +24,10 @@ module Rperf
     # repository or git is unavailable.
     def collect_git(dir = Dir.pwd)
       gh_sha = ENV["GITHUB_SHA"]
-      if gh_sha && !gh_sha.empty?
+      # Validate the sha shape: the value is passed to git as a positional
+      # argument, and a crafted value starting with "-" would be parsed as
+      # a git option
+      if gh_sha && gh_sha.match?(/\A\h{7,64}\z/)
         git = { sha: gh_sha, dirty: false }
         branch = ENV["GITHUB_HEAD_REF"]
         branch = ENV["GITHUB_REF_NAME"] if branch.nil? || branch.empty?
@@ -151,20 +154,14 @@ module Rperf
       s
     end
 
-    # Top methods by self time. Entries from compute_flat_cum are keyed by
-    # [label, path]; merge by label so a method split across paths counts once.
+    # Top methods by self time, merged by method name (shares the by-name
+    # fold with Table so report/summary numbers can never diverge).
     def top_methods(data, limit: TOP_METHODS_LIMIT)
       samples = data[:aggregated_samples]
       return [] if !samples || samples.empty?
 
-      result = Rperf.send(:compute_flat_cum, samples)
-      total = result[:total_weight]
+      flat_by_name, cum_by_name, total = Table.flat_cum_by_name(data)
       return [] if total <= 0
-
-      flat_by_name = Hash.new(0)
-      result[:flat].each { |(label, _path), w| flat_by_name[label] += w }
-      cum_by_name = Hash.new(0)
-      result[:cum].each { |(label, _path), w| cum_by_name[label] += w }
 
       flat_by_name.sort_by { |_, w| -w }.first(limit).map do |name, w|
         {
@@ -197,7 +194,10 @@ module Rperf
           return nil if chunk.nil? || buf.bytesize > READ_LIMIT
         end
       end
-    rescue Zlib::GzipFile::Error, SystemCallError, JSON::ParserError
+    rescue Zlib::Error, SystemCallError, JSON::ParserError
+      # Zlib::Error covers GzipFile::Error (truncated) and also DataError /
+      # BufError (valid gzip header, corrupt deflate body) — one corrupt
+      # snapshot must not break listing an entire directory
       nil
     end
 

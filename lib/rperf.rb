@@ -77,7 +77,7 @@ module Rperf
 
     # Set up child process tracking
     if inherit && !ENV["RPERF_SESSION_DIR"]
-      _setup_inherit(mode, frequency, signal, aggregate, output, format, stat, inherit, defer)
+      _setup_inherit(mode, frequency, signal, aggregate, inherit, defer)
     end
 
     if block_given?
@@ -89,6 +89,10 @@ module Rperf
       result
     end
   end
+
+  # Defensive fallback for process times when start didn't record them
+  ZERO_TIMES = Struct.new(:utime, :stime).new(0.0, 0.0).freeze
+  private_constant :ZERO_TIMES
 
   # VM state integer → label value mapping.
   # These values appear as "%GVL" / "%GC" label keys in label_sets.
@@ -115,7 +119,7 @@ module Rperf
 
     # Record process times for multi-process aggregation
     times = Process.times
-    start_times = @stat_start_times || Struct.new(:utime, :stime).new(0.0, 0.0)
+    start_times = @stat_start_times || ZERO_TIMES
     data[:user_ns] = ((times.utime - start_times.utime) * 1_000_000_000).to_i
     data[:sys_ns] = ((times.stime - start_times.stime) * 1_000_000_000).to_i
 
@@ -286,7 +290,9 @@ module Rperf
 
     cur_id = _c_get_label
     cur_labels = @label_set_table[cur_id] || {}
-    kw.each_value { |v| v.freeze }
+    # Interned label sets must be deeply immutable, but freezing the caller's
+    # own objects is an observable side effect — dup mutable Strings instead
+    kw = kw.transform_values { |v| v.is_a?(String) && !v.frozen? ? v.dup.freeze : v.freeze }
     new_labels = cur_labels.merge(kw).reject { |_, v| v.nil? }
     new_id = _intern_label_set(new_labels)
     _c_set_label(new_id)
@@ -343,6 +349,11 @@ module Rperf
       _c_profile_dec
       _c_set_label(cur_id)
     end
+  end
+
+  # Returns true while a profiling session is active (between start and stop).
+  def self.running?
+    _c_running?
   end
 
   # Returns the current thread's labels as a Hash.
@@ -413,9 +424,9 @@ module Rperf
     fmt = detect_format(path, format)
     case fmt
     when :collapsed
-      File.write(path, Collapsed.encode(data))
+      atomic_write(path, Collapsed.encode(data))
     when :text
-      File.write(path, Text.encode(data))
+      atomic_write(path, Text.encode(data))
     when :json
       require "json"
       json_data = data
@@ -430,15 +441,44 @@ module Rperf
       json_data = json_data.merge(rperf_version: VERSION, pid: Process.pid, ppid: Process.ppid)
       json_str = JSON.generate(json_data)
       if path.to_s.end_with?(".gz")
-        File.binwrite(path, gzip(json_str))
+        atomic_write(path, gzip(json_str), binary: true)
       else
-        File.write(path, json_str)
+        atomic_write(path, json_str)
       end
     else
-      File.binwrite(path, gzip(PProf.encode(data)))
+      atomic_write(path, gzip(PProf.encode(data)), binary: true)
     end
   end
   private_class_method :write_data
+
+  # Write via tmp file + rename so a crash mid-write never leaves a truncated
+  # file at the final path (the multi-process aggregator globs the session dir
+  # and would otherwise load — and then discard — a partial child profile).
+  def self.atomic_write(path, content, binary: false)
+    # rename cannot replace special files (/dev/null → EBUSY) and would
+    # replace a symlink instead of writing through it — write those directly
+    st = begin
+      File.lstat(path)
+    rescue SystemCallError
+      nil
+    end
+    if st && !st.file?
+      binary ? File.binwrite(path, content) : File.write(path, content)
+      return
+    end
+
+    tmp = "#{path}.tmp-#{Process.pid}"
+    binary ? File.binwrite(tmp, content) : File.write(tmp, content)
+    File.rename(tmp, path)
+  rescue Exception
+    begin
+      File.unlink(tmp)
+    rescue SystemCallError
+      # tmp was never created or already renamed
+    end
+    raise
+  end
+  private_class_method :atomic_write
 
   # Load a profile saved by rperf record (.json.gz or .json).
   # Returns the data hash (same format as Rperf.stop / Rperf.snapshot).
@@ -453,6 +493,9 @@ module Rperf
     end
     require "json"
     data = JSON.parse(raw, symbolize_names: true)
+    # symbolize_names only converts keys — :mode round-trips as a String
+    # ("wall"), which encoders compare against :wall/:cpu symbols
+    data[:mode] = data[:mode].to_sym if data[:mode].is_a?(String)
     saved_version = data.delete(:rperf_version)
     if saved_version && saved_version != VERSION
       $stderr.puts "rperf: warning: file was saved by rperf #{saved_version} (current: #{VERSION})"
@@ -573,7 +616,7 @@ module Rperf
     samples_raw = data[:aggregated_samples] || []
     real_ns = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - @stat_start_mono) * 1_000_000_000).to_i
     times = Process.times
-    start_times = @stat_start_times || Struct.new(:utime, :stime).new(0.0, 0.0)
+    start_times = @stat_start_times || ZERO_TIMES
     user_ns = ((times.utime - start_times.utime) * 1_000_000_000).to_i
     sys_ns = ((times.stime - start_times.stime) * 1_000_000_000).to_i
 
@@ -779,9 +822,11 @@ module Rperf
     end
 
     if File.readable?("/proc/self/stat")
-      fields = File.read("/proc/self/stat").split
-      stats[:page_faults_minor] = fields[9].to_i
-      stats[:page_faults_major] = fields[11].to_i
+      # comm (field 2) is parenthesized and may contain spaces — split only
+      # the part after the closing paren (fields from state, field 3, onward)
+      fields = File.read("/proc/self/stat").rpartition(")").last.split
+      stats[:page_faults_minor] = fields[7].to_i   # minflt (field 10)
+      stats[:page_faults_major] = fields[9].to_i   # majflt (field 12)
     end
 
     if File.readable?("/proc/self/io")
@@ -806,13 +851,19 @@ module Rperf
   # Called only when NOT already inside a CLI-managed session (no RPERF_SESSION_DIR).
   # Creates the session directory eagerly — if creation fails, inherit is silently
   # disabled and profiling continues in single-process mode.
-  def self._setup_inherit(mode, frequency, signal, aggregate, output, format, stat, inherit, defer)
-    session_dir = _create_session_dir
+  def self._setup_inherit(mode, frequency, signal, aggregate, inherit, defer)
+    session_dir = _create_session_dir(clean_stale: true)
     return unless session_dir
 
     ENV["RPERF_ROOT_PROCESS"] = Process.pid.to_s
     ENV["RPERF_SESSION_DIR"] = session_dir
     ENV["RPERF_DEFER"] = "1" if defer
+
+    # Remember the start options for forked children (_restart_in_child).
+    # Fork preserves module state, so this works for inherit: :fork too,
+    # where the RPERF_* env vars below are NOT exported.
+    @_child_start_opts = { mode: mode, frequency: frequency, signal: signal,
+                           aggregate: aggregate, defer: defer }
 
     _install_fork_hook
 
@@ -941,20 +992,27 @@ module Rperf
     @label_set_table = nil
     @label_set_index = nil
 
-    child_output = File.join(session_dir, "profile-#{Process.pid}.json.gz")
+    require "securerandom"
+    # Random suffix: PIDs can be recycled within a long-lived session, and a
+    # plain profile-<pid> name would silently overwrite an earlier child's data
+    child_output = File.join(session_dir, "profile-#{Process.pid}-#{SecureRandom.hex(4)}.json.gz")
 
+    # Start options: prefer the values remembered by _setup_inherit (API
+    # inherit: :fork / true — fork preserves module state); fall back to the
+    # RPERF_* env vars (CLI-managed sessions always export them).
+    saved = @_child_start_opts
     opts = {
-      frequency: (ENV["RPERF_FREQUENCY"] || 1000).to_i,
-      mode: ENV["RPERF_MODE"] == "cpu" ? :cpu : :wall,
-      aggregate: ENV["RPERF_AGGREGATE"] != "0",
+      frequency: saved ? saved[:frequency] : (ENV["RPERF_FREQUENCY"] || 1000).to_i,
+      mode: saved ? saved[:mode] : (ENV["RPERF_MODE"] == "cpu" ? :cpu : :wall),
+      aggregate: saved ? saved[:aggregate] : ENV["RPERF_AGGREGATE"] != "0",
       output: child_output,
       format: :json,
       stat: false,
       verbose: false,
     }
-    sig = _parse_signal_env
+    sig = saved ? saved[:signal] : _parse_signal_env
     opts[:signal] = sig unless sig.nil?
-    opts[:defer] = true if ENV["RPERF_DEFER"] == "1"
+    opts[:defer] = true if saved ? saved[:defer] : ENV["RPERF_DEFER"] == "1"
 
     start(**opts, inherit: false)
     @_session_dir_output = true
@@ -1002,11 +1060,20 @@ module Rperf
       process_count += 1
     end
 
-    return if process_count == 0
+    if process_count == 0
+      # Nothing loadable — remove the session dir here, or stop's empty-dir
+      # rmdir would fail on the leftover corrupt files and leak the dir
+      _cleanup_session_dir(session_dir)
+      return
+    end
 
+    # mode/frequency: the root's own profile is authoritative; the env vars
+    # are only set by the CLI or inherit: true (and default to the root's
+    # actual settings via _setup_inherit for the API case)
+    saved = @_child_start_opts
     merged_data = {
-      mode: (ENV["RPERF_MODE"] || "wall").to_sym,
-      frequency: (ENV["RPERF_FREQUENCY"] || 1000).to_i,
+      mode: (root_data && root_data[:mode]) || (saved ? saved[:mode] : (ENV["RPERF_MODE"] || "wall").to_sym),
+      frequency: (root_data && root_data[:frequency]) || (saved ? saved[:frequency] : (ENV["RPERF_FREQUENCY"] || 1000).to_i),
       aggregated_samples: merged_samples,
       label_sets: merged_label_sets,
       trigger_count: total_trigger_count,
@@ -1034,8 +1101,7 @@ module Rperf
     merged_data
   rescue => e
     $stderr.puts "rperf: warning: failed to aggregate multi-process data: #{e.message}"
-    # Fallback: try to write whatever individual profiles exist as-is
-    _fallback_aggregate_output(session_dir)
+    # stop() falls back to writing the root's own data when this returns nil
     _cleanup_session_dir(session_dir)
     nil
   end
@@ -1049,22 +1115,8 @@ module Rperf
   end
   private_class_method :_cleanup_session_dir
 
-  # Best-effort fallback: if aggregation failed, try to copy the first
-  # available child profile to @output so the user gets something.
-  def self._fallback_aggregate_output(session_dir)
-    return unless @output
-    return unless session_dir && File.directory?(session_dir)
-    files = Dir.glob(File.join(session_dir, "profile-*.json.gz"))
-    return if files.empty?
-    require "fileutils"
-    FileUtils.cp(files.first, @output)
-  rescue StandardError
-    # nothing more we can do
-  end
-  private_class_method :_fallback_aggregate_output
-
   def self._merge_into(merged_samples, merged_label_sets, data, merged_label_sets_index = nil)
-    # Build a reverse index on first call for O(1) dedup lookups
+    # Build a reverse index when the caller doesn't maintain one across calls
     unless merged_label_sets_index
       merged_label_sets_index = {}
       merged_label_sets.each_with_index { |ls, i| merged_label_sets_index[ls] = i }
@@ -1124,7 +1176,9 @@ module Rperf
       # normal mode which would duplicate output with the root process.
       _rperf_session_dir = ENV["RPERF_SESSION_DIR"]
       if File.directory?(_rperf_session_dir)
-        _rperf_start_opts[:output] = File.join(_rperf_session_dir, "profile-#{Process.pid}.json.gz")
+        require "securerandom"
+        # Random suffix: PID reuse must not overwrite an earlier child's profile
+        _rperf_start_opts[:output] = File.join(_rperf_session_dir, "profile-#{Process.pid}-#{SecureRandom.hex(4)}.json.gz")
         _rperf_start_opts[:format] = :json
         _rperf_start_opts[:stat] = false
         _rperf_start_opts[:verbose] = false
@@ -1152,6 +1206,21 @@ module Rperf
       _rperf_start_opts[:stat] = _rperf_stat
       _rperf_start_opts[:inherit] = false  # no RPERF_SESSION_DIR means --no-inherit
       start(**_rperf_start_opts)
+      # --no-inherit: scrub the env the CLI injected for THIS process, so
+      # Ruby descendants spawned by the app don't auto-start their own
+      # sessions (and clobber RPERF_OUTPUT with their own profiles)
+      %w[RPERF_ENABLED RPERF_OUTPUT RPERF_STAT RPERF_FORMAT RPERF_VERBOSE
+         RPERF_FREQUENCY RPERF_MODE RPERF_SIGNAL RPERF_AGGREGATE
+         RPERF_DEFER].each { |k| ENV.delete(k) }
+      if ENV["RUBYOPT"]
+        rubyopt = ENV["RUBYOPT"].split(" ").reject { |o| o == "-rrperf" }.join(" ")
+        rubyopt.empty? ? ENV.delete("RUBYOPT") : ENV["RUBYOPT"] = rubyopt
+      end
+      if ENV["RUBYLIB"]
+        _rperf_lib_dir = File.expand_path("..", __FILE__)
+        rubylib = ENV["RUBYLIB"].split(File::PATH_SEPARATOR).reject { |p| p == _rperf_lib_dir }.join(File::PATH_SEPARATOR)
+        rubylib.empty? ? ENV.delete("RUBYLIB") : ENV["RUBYLIB"] = rubylib
+      end
       at_exit { stop }
     end
   end
@@ -1207,7 +1276,10 @@ module Rperf
       return "" if !samples || samples.empty?
       merged = Hash.new(0)
       samples.each do |frames, weight|
-        key = frames.reverse.map { |_, label| label }.join(";")
+        # ";" is the frame separator and has no escape in the collapsed
+        # format — replace it so a pathological method name cannot corrupt
+        # stack splitting downstream (FlameGraph/speedscope)
+        key = frames.reverse.map { |_, label| label.include?(";") ? label.tr(";", ",") : label }.join(";")
         merged[key] += weight
       end
       merged.map { |stack, weight| "#{stack} #{weight}" }.join("\n") + "\n"
@@ -1223,10 +1295,10 @@ module Rperf
     module_function
 
     def encode(data)
-      samples_raw = data[:aggregated_samples]
+      samples_raw = data[:aggregated_samples] || []
       frequency = data[:frequency]
-      interval_ns = 1_000_000_000 / frequency
-      mode = data[:mode] || :cpu
+      interval_ns = (frequency && frequency > 0) ? 1_000_000_000 / frequency : 0
+      mode = (data[:mode] || :cpu).to_sym
 
       # Build string table: index 0 must be ""
       string_table = [""]
@@ -1242,7 +1314,7 @@ module Rperf
 
       # Convert string frames to index frames and merge identical stacks per thread/label
       merged = Hash.new(0)
-      thread_seq_key = intern.("thread_seq")
+      thread_seq_key = nil  # interned lazily — only when a sample carries thread_seq
       label_sets = data[:label_sets]  # Array of Hash (may be nil)
       samples_raw.each do |frames, weight, thread_seq, label_set_id|
         key = [frames.map { |path, label| [intern.(path), intern.(label)] }, thread_seq || 0, label_set_id || 0]
@@ -1262,8 +1334,8 @@ module Rperf
         end
       end
 
-      # Build location/function tables
-      locations, functions = build_tables(merged.map { |(frames, _, _), w| [frames, w] })
+      # Build the frame → id table (locations and functions are 1:1)
+      frame_ids = build_tables(merged)
 
       # Intern type label and unit
       type_label = mode == :wall ? "wall" : "cpu"
@@ -1279,11 +1351,12 @@ module Rperf
       # field 2: sample (repeated Sample) with thread_seq + user labels
       merged.each do |(frames, thread_seq, label_set_id), weight|
         sample_buf = "".b
-        loc_ids = frames.map { |f| locations[f] }
+        loc_ids = frames.map { |f| frame_ids[f] }
         sample_buf << encode_packed_uint64(1, loc_ids)
         sample_buf << encode_packed_int64(2, [weight])
         if thread_seq && thread_seq > 0
           label_buf = "".b
+          thread_seq_key ||= intern.("thread_seq")
           label_buf << encode_int64(1, thread_seq_key)  # key
           label_buf << encode_int64(3, thread_seq)       # num
           sample_buf << encode_message(3, label_buf)
@@ -1302,19 +1375,18 @@ module Rperf
         buf << encode_message(2, sample_buf)
       end
 
-      # field 4: location (repeated Location)
-      locations.each do |frame, loc_id|
+      # field 4: location (repeated Location) — Line points at the same id
+      frame_ids.each do |_frame, id|
         loc_buf = "".b
-        loc_buf << encode_uint64(1, loc_id)
+        loc_buf << encode_uint64(1, id)
         line_buf = "".b
-        func_id = functions[frame]
-        line_buf << encode_uint64(1, func_id)
+        line_buf << encode_uint64(1, id)
         loc_buf << encode_message(4, line_buf)
         buf << encode_message(4, loc_buf)
       end
 
       # field 5: function (repeated Function)
-      functions.each do |frame, func_id|
+      frame_ids.each do |frame, func_id|
         func_buf = "".b
         func_buf << encode_uint64(1, func_id)
         func_buf << encode_int64(2, frame[1])    # name (label_idx)
@@ -1361,22 +1433,23 @@ module Rperf
       buf
     end
 
+    # Assign sequential ids to unique frames.  rperf emits exactly one
+    # Location and one Function per frame, sharing the same id, so a single
+    # table serves both.
     def build_tables(merged)
-      locations = {}
-      functions = {}
+      frame_ids = {}
       next_id = 1
 
-      merged.each do |frames, _weight|
+      merged.each do |(frames, _thread_seq, _label_set_id), _weight|
         frames.each do |frame|
-          unless locations.key?(frame)
-            locations[frame] = next_id
-            functions[frame] = next_id
+          unless frame_ids.key?(frame)
+            frame_ids[frame] = next_id
             next_id += 1
           end
         end
       end
 
-      [locations, functions]
+      frame_ids
     end
 
     # --- Protobuf encoding helpers ---
