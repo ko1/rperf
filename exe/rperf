@@ -33,6 +33,19 @@ def serve_viewer(app, port: nil, host: nil)
     exit 1
   end
 
+  if port
+    # Fail fast on a taken port — otherwise the readiness probe below would
+    # "succeed" against the foreign server and open the browser on it, and
+    # the handler would die with a raw EADDRINUSE backtrace
+    begin
+      TCPServer.open(host || "localhost", port) {}
+    rescue Errno::EADDRINUSE
+      $stderr.puts "Error: port #{port} is already in use (choose another --port)"
+      exit 1
+    rescue SystemCallError
+      # unbindable host etc. — let the handler report it
+    end
+  end
   port ||= find_available_port
   host ||= "localhost"
   local = %w[localhost 127.0.0.1 ::1].include?(host)
@@ -58,16 +71,21 @@ def serve_viewer(app, port: nil, host: nil)
       end
       case RUBY_PLATFORM
       when /darwin/ then system("open", url)
-      when /linux/  then system("xdg-open", url, err: File::NULL) || system("sensible-browser", url, err: File::NULL)
+      when /linux/  then system("xdg-open", url, out: File::NULL, err: File::NULL) || system("sensible-browser", url, out: File::NULL, err: File::NULL)
       end
     end
   end
 
   handler = Rackup::Handler.default
-  handler.run(app, Port: port, Host: host, Silent: true)
+  begin
+    handler.run(app, Port: port, Host: host, Silent: true)
+  rescue Errno::EADDRINUSE
+    $stderr.puts "Error: port #{port} is already in use (choose another --port)"
+    exit 1
+  end
 end
 
-def run_pprof_subcommand(name, banner, min_files:)
+def run_pprof_subcommand(banner, min_files:)
   mode = :http
   port = nil
   host = nil
@@ -116,23 +134,25 @@ def run_pprof_subcommand(name, banner, min_files:)
 
   begin
     parser.order!(ARGV)
-  rescue OptionParser::InvalidOption, OptionParser::MissingArgument, OptionParser::NeedlessArgument => e
+  rescue OptionParser::ParseError => e
     $stderr.puts e.message
     $stderr.puts parser
     exit 1
   end
 
-  if ARGV.size < min_files
-    msg = min_files > 1 ? "Two profile files required." : "No profile file specified."
-    $stderr.puts msg if min_files > 1
-    # For report, use default file
-  end
-
-  files = ARGV.shift(min_files > 1 ? [ARGV.size, min_files].min : 1)
+  files = ARGV.shift(min_files)
   files = ["rperf.json.gz"] if files.empty? && min_files == 1
 
-  if min_files > 1 && files.size < min_files
+  if files.size < min_files
     $stderr.puts "Two profile files required."
+    $stderr.puts parser
+    exit 1
+  end
+
+  # order! stops at the first non-option — anything left over (e.g. options
+  # placed after the file argument) would be silently ignored
+  unless ARGV.empty?
+    $stderr.puts "Unexpected extra arguments: #{ARGV.join(' ')} (options must come before the file arguments)"
     $stderr.puts parser
     exit 1
   end
@@ -149,7 +169,7 @@ def run_pprof_subcommand(name, banner, min_files:)
 end
 
 def self.help_text
-  @help_text ||= File.read(File.expand_path("../docs/help.md", __dir__))
+  File.read(File.expand_path("../docs/help.md", __dir__))
 end
 
 USAGE = "Usage: rperf record [options] command [args...]\n" \
@@ -179,7 +199,7 @@ when "help"
   puts help_text
   exit
 when "report"
-  run_pprof_subcommand("report",
+  run_pprof_subcommand(
     "Usage: rperf report [options] [file]\n" \
     "       Opens profile in browser (default) or prints summary.\n" \
     "       Default file: rperf.json.gz\n" \
@@ -245,6 +265,10 @@ when "report"
         $stderr.puts "--format table requires a .json.gz / .json profile (got: #{report_file})"
         exit 1
       end
+      if mode == :html
+        $stderr.puts "--html requires a .json.gz / .json profile (got: #{report_file})"
+        exit 1
+      end
       unless system("go", "version", out: File::NULL, err: File::NULL)
         $stderr.puts "'go' command not found. Install Go to use pprof files, or use .json.gz format."
         $stderr.puts "  https://go.dev/dl/"
@@ -253,12 +277,16 @@ when "report"
       case mode
       when :top  then exec("go", "tool", "pprof", "-top", report_file)
       when :text then exec("go", "tool", "pprof", "-text", report_file)
-      else            exec("go", "tool", "pprof", "-http=#{host || %q(localhost)}:#{port || find_available_port}", report_file)
+      else
+        # pprof has its own browser launcher — suppress it without a GUI
+        http_args = ["-http=#{host || %q(localhost)}:#{port || find_available_port}"]
+        http_args << "-no_browser" unless can_open_browser?
+        exec("go", "tool", "pprof", *http_args, report_file)
       end
     end
   end
 when "diff"
-  run_pprof_subcommand("diff",
+  run_pprof_subcommand(
     "Usage: rperf diff [options] base target\n" \
     "       Compare two profiles (shows target - base).\n" \
     "       Accepts .json.gz (auto-converted) or .pb.gz files.\n" \
@@ -306,7 +334,10 @@ when "diff"
     pprof_args = case mode
                  when :top  then ["-top", "-diff_base=#{base_file}", target_file]
                  when :text then ["-text", "-diff_base=#{base_file}", target_file]
-                 else            ["-http=#{host || %q(localhost)}:#{port || find_available_port}", "-diff_base=#{base_file}", target_file]
+                 else
+                   args = ["-http=#{host || %q(localhost)}:#{port || find_available_port}"]
+                   args << "-no_browser" unless can_open_browser?
+                   args + ["-diff_base=#{base_file}", target_file]
                  end
     if tmpfiles.empty?
       exec("go", "tool", "pprof", *pprof_args)
@@ -424,7 +455,7 @@ end
 
 begin
   parser.order!(ARGV)
-rescue OptionParser::InvalidOption, OptionParser::MissingArgument, OptionParser::NeedlessArgument => e
+rescue OptionParser::ParseError => e
   $stderr.puts e.message
   $stderr.puts parser
   exit 1
@@ -482,6 +513,22 @@ if snapshot_dir
   end
   FileUtils.mkdir_p(snapshot_dir)
   output = File.join(snapshot_dir, Rperf::Meta.snapshot_filename(git_info))
+  # Timestamp resolution is one second and the in-git name has no pid —
+  # don't overwrite an earlier run from the same second on the same commit
+  output = output.sub(/\.json\.gz\z/, "-#{Process.pid}.json.gz") if File.exist?(output)
+end
+
+if output
+  # Resolve now: the profiled app may chdir, which would silently relocate a
+  # relative output path. Validate writability up front, too — discovering an
+  # unwritable path in at_exit wastes the entire profiling run.
+  output = File.expand_path(output)
+  out_dir = File.dirname(output)
+  writable = File.exist?(output) ? File.writable?(output) : (File.directory?(out_dir) && File.writable?(out_dir))
+  unless writable
+    $stderr.puts "Error: output path is not writable: #{output}"
+    exit 1
+  end
 end
 
 # Add lib dir to RUBYLIB so -rrperf can find the correct version.
@@ -506,6 +553,7 @@ if subcommand == "stat" || subcommand == "exec"
 end
 
 # Multi-process (fork) support: create a session directory for aggregation
+session_dir = nil
 if inherit
   session_dir = Rperf.send(:_create_session_dir, clean_stale: true)
   if session_dir
@@ -514,4 +562,12 @@ if inherit
   end
 end
 
-exec(*ARGV)
+begin
+  exec(*ARGV)
+rescue Errno::ENOENT, Errno::EACCES => e
+  $stderr.puts "rperf: failed to execute #{ARGV.first.inspect}: #{e.message}"
+  # exec never ran — remove the eagerly created session dir instead of
+  # leaving it for the stale-PID sweep
+  FileUtils.rm_rf(session_dir) if session_dir
+  exit(e.is_a?(Errno::ENOENT) ? 127 : 126)
+end
