@@ -161,9 +161,30 @@ Rperf::Viewer.instance.add_snapshot(data)
 
 The viewer has three tabs:
 
-- **Flamegraph** — Interactive flamegraph powered by d3-flame-graph. Click a frame to zoom in, click the root to zoom out.
+- **Flamegraph** — Interactive flamegraph powered by d3-flame-graph. Click a frame to zoom in, click the root to zoom out. Shift+click pins a method (its share sparkline appears in the sidebar).
 - **Top** — Flat and cumulative weight table (top 50 functions). Click column headers (Flat, Cum, Function) to sort.
 - **Tags** — Shows each label key with a breakdown of values by weight and percentage. Click a value row to set tagfocus and jump to the Flamegraph tab.
+
+### Snapshot sidebar (time-travel UI)
+
+When more than one snapshot exists, a sidebar lists them on the left. Each
+snapshot carries `meta` / `summary` (the same format as saved profiles), so
+rows show the git SHA, commit subject, and alloc/GC badges. Click a row to
+switch, `j` / `k` to move between snapshots, and the ⇄ button to enter diff
+mode (the flamegraph is recolored: red = share increased, blue = decreased).
+This is the same UI as `rperf report ./profiles/` (CLI time-travel mode).
+
+You can also load a directory of saved profiles (bodies are lazy-loaded on
+selection; the `max_snapshots:` cap does not apply):
+
+```ruby
+Rperf::Viewer.instance.add_snapshot_dir("./profiles")
+```
+
+The viewer fetches data from `<path>/snapshots` (list) and
+`<path>/snapshots/<id>` (body). Define `window.RPERF_DATA_SOURCE` to replace
+the URLs at runtime; an optional `onAuthError(url)` hook can return a fresh
+URL when a fetch hits HTTP 403 (e.g., an expired signed URL).
 
 ### Filtering
 

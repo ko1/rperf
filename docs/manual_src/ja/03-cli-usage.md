@@ -261,9 +261,21 @@ rperf record [options] command [args...]
 | `-m MODE` | `cpu` または `wall` (デフォルト: `cpu`) |
 | `--format FMT` | `json`、`pprof`、`collapsed`、または `text` (デフォルト: 拡張子から自動検出) |
 | `-p, --print` | テキストプロファイルを stdout に出力 (`--format=text --output=/dev/stdout` と同等) |
+| `--snapshot-dir DIR` | `rperf-<sha7>-<timestamp>.json.gz` の名前で DIR に保存 |
+| `--label KEY=VALUE` | プロファイルメタデータにラベルを追加（複数指定可） |
 | `--signal VALUE` | タイマーシグナル (Linux のみ): シグナル番号、または `false` で nanosleep スレッド |
 | `--no-aggregate` | サンプル集約を無効化（生サンプルを保持） |
 | `-v` | サンプリング統計を stderr に出力 |
+
+### スナップショットディレクトリへの記録
+
+[`--snapshot-dir`](#index:--snapshot-dir) はコミットごとのプロファイルを 1 つのディレクトリに蓄積するためのオプションです。出力ファイル名は git コミットから自動的に `rperf-<sha7>-<timestamp>.json.gz` と決まります（git リポジトリ外では `rperf-nogit-<timestamp>-<pid>.json.gz`）:
+
+```bash
+rperf record --snapshot-dir ./profiles ruby my_app.rb
+```
+
+JSON プロファイルには `meta`（git の SHA・ブランチ・コミットメッセージ・dirty フラグ、ホスト名、Ruby/rperf バージョン、`--label` で付けた任意ラベル）と `summary`（実行時間、GC 回数、アロケーション数、self 時間上位 50 メソッドなど）が自動的に埋め込まれます。GitHub Actions 環境では `GITHUB_SHA` などの環境変数が git コマンドより優先されます。蓄積したディレクトリは `rperf report ./profiles/`（後述の時間旅行モード）でコミットを横断して閲覧できます。
 
 ## rperf report
 
@@ -310,14 +322,32 @@ rperf report --top rperf.json.gz
 
 デフォルト動作（`--top` や `--text` なし）では、フレームグラフ、上位関数ビュー、コールグラフの可視化を備えたインタラクティブな Web UI がブラウザで開きます。JSON 形式では rperf 組み込みビューア、pprof 形式では [pprof](#cite:ren2010) を利用します。
 
+### 時間旅行モード（ディレクトリ指定）
+
+ファイルの代わりにディレクトリを渡すと、ディレクトリ内のすべての `*.json(.gz)` プロファイルを一覧する[時間旅行ビューア](#index:time-travel viewer)が開きます:
+
+```bash
+rperf report ./profiles/
+```
+
+- **サイドバー**: スナップショットごとに SHA 短縮形（未コミット変更があれば `*` 付き）、コミットメッセージ、日付、直前スナップショットとの差分バッジ（`alloc ±N%`、GC 回数。alloc が ±15% を超えると ⚠️）を表示します。ブランチごとにグループ化され、main/master はデフォルトで展開されます。
+- **遅延ロード**: 一覧表示には各ファイルの先頭の `meta`/`summary` だけを読み、本体は選択時にロードします。100 スナップショットでも一覧は 1 秒以内に開きます。
+- **diff モード**: 行の ⇄ ボタンでそのスナップショットを base にした差分表示になります。フレームグラフは占有率の変化で着色されます（増加 = 赤、減少 = 青、±0.4pt 未満は中立色）。方向は base（古い）→ current（新しい）です。
+- **メソッドのピン留め**: フレームを Shift+クリックでピン留めすると、サイドバー上部にそのメソッドの占有率のスパークライン（全スナップショット横断）が表示されます。点をクリックするとそのスナップショットにジャンプします。ピン留め中は該当フレームがハイライトされ、他は減光します（通常のクリックは従来どおりズーム）。
+- **キーボード**: `j` / `k` で新しい/古いスナップショットへ移動します。
+- `meta` のない旧形式ファイルも「不明スナップショット」として一覧に表示されます。
+
+`rperf record --snapshot-dir` と組み合わせると、コミットごとの性能変化を追跡するワークフローが完成します。
+
 ### report のオプション
 
 | オプション | 説明 |
 |--------|-------------|
 | `--top` | フラットタイムによる上位の関数を出力 |
 | `--text` | テキストレポートを出力 |
+| `--format FMT` | AI/機械可読向けフラットテーブル: `table` (TSV) または `table-json` (JSON 配列) |
 | `--html` | 静的 HTML ビューアを標準出力に出力（`.json.gz` のみ） |
-| (デフォルト) | ブラウザでインタラクティブな Web UI を開く |
+| (デフォルト) | ブラウザでインタラクティブな Web UI を開く（ディレクトリ指定で時間旅行モード） |
 
 ## rperf diff
 
@@ -333,6 +363,24 @@ rperf diff --top before.pb.gz after.pb.gz
 # テキスト差分を出力
 rperf diff --text before.pb.gz after.pb.gz
 ```
+
+ブラウザ表示・`--top`・`--text` には Go が必要です。次の `--format table` だけは Ruby 内で計算するため Go 不要です。
+
+### AI / 機械可読向けテーブル出力 (--format table)
+
+[`--format table`](#index:--format table) は、集計・diff・足切りをすべて rperf 側で行ったフラットな表を出力します。木構造のパースが不要なので、LLM にそのまま分析させるのに適しています:
+
+```bash
+# TSV 形式の diff テーブル
+rperf diff --format table base.json.gz head.json.gz
+
+# LLM に分析させる
+rperf diff base.json.gz head.json.gz --format table | claude -p "回帰の原因を分析して"
+```
+
+diff テーブルの列は `method`、`self_pct_base`、`self_pct_head`、`delta_pt`（|delta| 降順、上位 50 件）です。末尾の `# summary` 行に total_ms / アロケーション数 / GC 回数の base・head・差分が入ります。サンプリングプロファイラの性質上メソッド単位のアロケーション情報は存在しないため、アロケーションはプロファイル全体の差分としてのみ表示されます。
+
+`rperf report --format table FILE` は単一プロファイルの表（`method`、`self_pct`、`total_pct`、`self_ms`。self_pct 降順、上位 50 件 + `(other)` 合算行）を出力します。`--format table-json` にすると JSON 配列（最終要素が `{"summary": {...}}`）になります。
 
 ### ワークフロー例
 

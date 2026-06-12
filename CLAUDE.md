@@ -10,13 +10,16 @@ rperf is a safepoint-based sampling performance profiler for Ruby. It uses actua
 ## Architecture
 
 ```
-ext/rperf/rperf.c    -- C extension: timer (signal or thread), GVL/GC event hooks, sampling
-lib/rperf.rb         -- Ruby API: start/stop, encoders (PProf, Collapsed, Text), stat output
-lib/rperf/viewer.rb  -- Rack middleware: in-browser flamegraph viewer (d3-flame-graph)
-lib/rperf/rack.rb    -- Rack middleware: per-request label annotation
-exe/rperf            -- CLI: record, stat, exec, report, diff, help subcommands
-test/                -- Unit tests (per-component: profiler, gvl, output, stat, cli, fork)
-benchmark/           -- Accuracy benchmark suite (see benchmark/README.md)
+ext/rperf/rperf.c          -- C extension: timer (signal or thread), GVL/GC event hooks, sampling
+lib/rperf.rb               -- Ruby API: start/stop, encoders (PProf, Collapsed, Text), stat output
+lib/rperf/meta.rb          -- meta/summary builders, git info collection, prefix reader (read_meta)
+lib/rperf/table.rb         -- flat table output for AI/machine consumption (--format table)
+lib/rperf/viewer.rb        -- Rack middleware: in-browser flamegraph viewer (d3-flame-graph)
+lib/rperf/viewer/viewer.html -- viewer UI (HTML/CSS/JS, loaded at require time)
+lib/rperf/rack.rb          -- Rack middleware: per-request label annotation
+exe/rperf                  -- CLI: record, stat, exec, report, diff, help subcommands
+test/                      -- Unit tests (per-component: profiler, gvl, output, stat, cli, fork, meta, table, viewer)
+benchmark/                 -- Accuracy benchmark suite (see benchmark/README.md)
 ```
 
 ## Build & Test
@@ -29,11 +32,11 @@ rake test             # Run unit tests
 ## CLI Subcommands
 
 ```bash
-rperf record [options] command [args...]   # Profile and save to file
+rperf record [options] command [args...]   # Profile and save to file (--snapshot-dir, --label)
 rperf stat [options] command [args...]     # Profile and print summary to stderr
 rperf exec [options] command [args...]     # Profile and print full report to stderr (stat --report)
-rperf report [options] [file]              # Open profile in viewer or pprof (Go required for .pb.gz)
-rperf diff [options] base target              # Compare two profiles (requires Go)
+rperf report [options] [file|dir]          # Open profile in viewer (dir = time-travel mode) or pprof (Go required for .pb.gz)
+rperf diff [options] base target           # Compare two profiles (requires Go, except --format table)
 rperf help                                 # Full reference documentation (AI-friendly)
 ```
 
@@ -69,6 +72,9 @@ See `benchmark/README.md` for full documentation.
 
 - **Viewer (Rack middleware)**: `Rperf::Viewer` is a Rack middleware that serves an in-browser profiling UI at `/rperf/` (configurable via `path:` option). Snapshots are stored in memory (up to `max_snapshots:`, default 24). The UI has three tabs: **Flamegraph** (d3-flame-graph), **Top** (flat/cumulative table, sortable by column click), **Tags** (label key/value breakdown with weight bars, click to filter). Filtering: **tagfocus** (regex on label values, Enter to apply), **tagignore** (dropdown checkboxes, includes `key = (none)` to exclude untagged samples), **tagroot/tagleaf** (dropdown checkboxes for label keys, prepend/append to stack). Logo SVG is loaded from `docs/logo.svg` at require time and inlined into the HTML. Tag keys are sorted (so `%`-prefixed VM state keys appear first).
 - **RackMiddleware**: `Rperf::RackMiddleware` wraps requests with `Rperf.profile(endpoint: "GET /path")`, adding per-request labels and activating profiling for the duration of the request (works with `defer: true`).
+- **Profile metadata (meta/summary)**: JSON profiles embed `meta` (format_version, created_at, ruby/rperf versions, mode, hostname, git sha/branch/subject/committed_at/dirty, labels) and `summary` (total/cpu ms, GC counts/time, allocation deltas, maxrss_mb, samples, top 50 methods by self_pct) as the FIRST two top-level keys. `Rperf.read_meta(path)` (`Rperf::Meta.read`) extracts them by decompressing only the gzip head with a string-escape-aware brace scanner — never parses the sample body. The CLI collects git info before exec (chdir safety) and passes it via `RPERF_META_GIT` (`"null"` = checked, not a repo); `GITHUB_SHA`/`GITHUB_REF_NAME` take priority in CI. GC/alloc summary values are deltas from baselines captured at `Rperf.start` (`@gc_stat_start`; `Rperf.snapshot` uses a separate `clear:`-aware baseline). In multi-process mode, meta is attached once on the root's final output (session-dir intermediates use `write_data(internal: true)`); GC/OS stats come from the root only. `--snapshot-dir DIR` names files `rperf-<sha7>-<timestamp>.json.gz` (`rperf-nogit-<timestamp>-<pid>` outside git). Old files without meta remain loadable.
+- **Table output (`--format table`/`table-json`)**: `Rperf::Table` renders flat report/diff tables for LLM consumption (report: method/self_pct/total_pct/self_ms, top 50 + `(other)` row; diff: method/self_pct_base/self_pct_head/delta_pt, |delta| desc, top 50; trailing `# summary` line / `{"summary": ...}` array element). Diff tables are computed in Ruby — the only diff path that does not require Go. There is intentionally NO per-method alloc column: sampling profiles have no per-method allocation data; allocation appears only as whole-profile summary deltas.
+- **Time-travel viewer**: `rperf report DIR/` lists all `*.json(.gz)` in a sidebar via `Viewer#add_snapshot_dir` (meta/summary head-read only; bodies lazy-load on selection and are not retained server-side; `max_snapshots` does not apply; sorted by `git.committed_at` → `created_at` → mtime). Viewer HTML/JS lives in `lib/rperf/viewer/viewer.html` (read at require time; gemspec packages `lib/**/*.html`). The sidebar appears whenever >1 snapshot exists (shared with the Rack viewer — `add_snapshot` attaches meta/summary, git info memoized). Diff mode (⇄) recolors the flamegraph by name-based cumulative-share delta (red/blue, neutral <0.4pt, full intensity at 12pt); pin via Shift+click (plain click = zoom) shows a per-method share sparkline across snapshots with progressive body fetch; j/k navigate. Data URLs are runtime-replaceable via `window.RPERF_DATA_SOURCE` with an `onAuthError(url)` 403 re-fetch hook. `render_static_html` (`--html`) remains the one data-embedding exception (no server to fetch from) and relies on the literal `loadSnapshotList();` init line and `<select id="sel-snapshot"` marker in viewer.html — keep those markers when editing.
 
 ## Thread Safety Notes
 
