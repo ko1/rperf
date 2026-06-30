@@ -6,7 +6,11 @@
 # first two top-level keys, so Meta.read can decompress only the head of the
 # file and stop as soon as both are extracted.
 
-require "json"
+# NOTE: json is NOT required here. rperf loads via `ruby -rrperf` at interpreter
+# boot, before the profiled app runs `bundler/setup`. Requiring json eagerly
+# would activate the default json gem and then clash with a bundle that pins a
+# different json (Gem::LoadError). json is used only at profile write/read time
+# (after the app has set up its bundle), so each user requires it lazily.
 require "time"
 require "zlib"
 
@@ -103,6 +107,7 @@ module Rperf
         v = ENV["RPERF_META_GIT"].to_s
         return nil if v.empty? || v == "null"
         begin
+          require "json"
           JSON.parse(v, symbolize_names: true)
         rescue JSON::ParserError
           nil
@@ -119,6 +124,7 @@ module Rperf
       v = ENV["RPERF_META_LABELS"]
       return nil unless v
       begin
+        require "json"
         labels = JSON.parse(v)
         labels.is_a?(Hash) ? labels : nil
       rescue JSON::ParserError
@@ -224,6 +230,7 @@ module Rperf
     # Returns { meta:, summary: }, nil (old format / malformed),
     # or :incomplete (need more input).
     def scan_prefix(buf)
+      require "json" # lazy: see the note at the top of this file
       n = buf.bytesize
       i = skip_ws(buf, 0, n)
       return :incomplete if i >= n

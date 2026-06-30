@@ -5,8 +5,11 @@
 # TSV: header row, data rows, then a trailing "# summary" line of
 # tab-separated key=value pairs.
 # JSON: an array of row objects; the last element is { "summary": { ... } }.
-
-require "json"
+#
+# json is required lazily in the format methods, not here: rperf loads at
+# interpreter boot via `-rrperf`, before the profiled app's bundler/setup, and
+# eagerly activating the default json gem would clash with a bundle that pins a
+# different json (see the note in meta.rb).
 
 module Rperf
   module Table
@@ -67,6 +70,7 @@ module Rperf
     end
 
     def report_json(data)
+      require "json"
       JSON.generate(report_rows(data) + [{ summary: report_summary(data) }])
     end
 
@@ -117,6 +121,7 @@ module Rperf
     end
 
     def diff_json(base, head)
+      require "json"
       JSON.generate(diff_rows(base, head) + [{ summary: diff_summary(base, head) }])
     end
 
