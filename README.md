@@ -82,6 +82,12 @@ rperf report ./profiles/                             # sidebar: per-commit list,
 
 # Flat tables for AI analysis (no Go required)
 rperf diff --format table base.json.gz head.json.gz | claude -p "analyze the regression"
+
+# Drive rperf without wrapping the command (CI/tooling): source the env, then
+# run your command unchanged — `bundle exec …` stays bundler-managed, plain
+# `ruby …` stays plain. (Run `rperf help` for details.)
+eval "$(rperf record --snapshot-dir ./profiles --print-env)"
+export RPERF_ROOT_PROCESS=$$ && exec ruby app.rb
 ```
 
 On `rperf report`, you can see the profile result like this page: [rperf viewer](https://ko1.github.io/rperf/examples/cpu_intensive_profile.html)

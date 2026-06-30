@@ -31,7 +31,27 @@ POSIX systems (Linux, macOS). Requires Ruby >= 3.4.0.
     --label KEY=VALUE       Add a label to profile metadata (repeatable)
     --no-inherit            Do not profile forked/spawned child processes
     --no-aggregate          Disable C-level sample aggregation (raw per-sample data)
+    --print-env             Print the env rperf would set (export KEY=VALUE lines)
+                            and exit WITHOUT running a command — see below
     -v, --verbose           Print sampling statistics to stderr
+
+#### --print-env: drive rperf without wrapping the command
+
+Instead of `rperf record [options] -- command`, `--print-env` prints the
+environment a profiled process auto-starts from and exits without running
+anything. A wrapper (e.g. a CI script) sources it, makes the process that runs
+the command the session root, and runs the command unchanged — so a
+`bundle exec …` command stays bundler-managed and a plain `ruby …` stays plain;
+rperf is never inserted into the command line.
+
+    eval "$(rperf record --snapshot-dir ./profiles --print-env)"
+    export RPERF_ROOT_PROCESS=$$    # the pid that will exec the command is the root
+    exec ruby app.rb               # runs verbatim; rperf auto-starts via RUBYOPT
+
+`RPERF_ROOT_PROCESS` is not emitted (the caller sets it to the pid that execs
+the command); `RPERF_META_LABELS` is not emitted (set it yourself if you want
+per-run labels). Everything else (`RUBYOPT=-rrperf`, output path, mode,
+frequency, fork session dir, …) is included.
 
 JSON output embeds `meta` (git commit, host, Ruby/rperf versions, labels)
 and `summary` (time, GC, allocation, top methods) — see "Profile metadata"

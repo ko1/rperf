@@ -414,4 +414,33 @@ class TestRperfCli < Test::Unit::TestCase
     assert_match(/not found/i, stderr)
   end
 
+  # --- --print-env ---
+
+  def test_cli_print_env_emits_setup_without_running
+    Dir.mktmpdir do |dir|
+      stdout, stderr, status = run_rperf("record", "--snapshot-dir", dir, "--print-env")
+      assert_equal 0, status.exitstatus, "--print-env should exit 0 with no command: #{stderr}"
+
+      env = stdout.lines.grep(/\Aexport /).to_h { |l| l.sub(/\Aexport /, "").chomp.split("=", 2) }
+      assert_equal "1", env["RPERF_ENABLED"]
+      assert_equal "cpu", env["RPERF_MODE"]
+      assert_includes env["RUBYOPT"].to_s, "-rrperf"
+      assert_includes env["RUBYLIB"].to_s, LIB_DIR
+      assert_match %r{#{Regexp.escape(dir)}/rperf-.*\.json\.gz}, env["RPERF_OUTPUT"].to_s
+      assert env.key?("RPERF_SESSION_DIR"), "session dir is set for fork aggregation"
+      # The caller becomes the root, so we must NOT pin it to this short-lived pid.
+      assert !env.key?("RPERF_ROOT_PROCESS"), "RPERF_ROOT_PROCESS is the caller's job"
+    end
+  end
+
+  def test_cli_print_env_is_shell_safe_and_evalable
+    Dir.mktmpdir do |dir|
+      stdout, _, status = run_rperf("record", "--snapshot-dir", dir, "--print-env")
+      assert_equal 0, status.exitstatus
+      # The output must be sourceable by a shell without error.
+      _, stderr, sh = Open3.capture3("bash", "-c", "eval \"$1\"; echo \"$RPERF_ENABLED\"", "_", stdout)
+      assert_equal 0, sh.exitstatus, "print-env output should eval cleanly: #{stderr}"
+    end
+  end
+
 end

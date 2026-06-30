@@ -368,6 +368,7 @@ stat_report = (subcommand == "exec")
 inherit = true
 meta_labels = {}
 snapshot_dir = nil
+print_env = false
 
 parser = OptionParser.new do |opts|
   opts.banner = case subcommand
@@ -441,6 +442,13 @@ parser = OptionParser.new do |opts|
     inherit = false
   end
 
+  opts.on("--print-env",
+          "Print the environment rperf would set (one `export KEY=VALUE` per line), then exit " \
+          "WITHOUT running a command. The caller sources it, sets RPERF_ROOT_PROCESS to the pid " \
+          "that will exec the command, and runs the command itself — so rperf never wraps it.") do
+    print_env = true
+  end
+
   opts.on("-v", "--verbose", "Print sampling statistics to stderr") do
     verbose = true
   end
@@ -461,7 +469,7 @@ rescue OptionParser::ParseError => e
   exit 1
 end
 
-if ARGV.empty?
+if ARGV.empty? && !print_env
   $stderr.puts "No command specified."
   $stderr.puts parser
   exit 1
@@ -557,9 +565,27 @@ session_dir = nil
 if inherit
   session_dir = Rperf.send(:_create_session_dir, clean_stale: true)
   if session_dir
-    ENV["RPERF_ROOT_PROCESS"] = Process.pid.to_s
     ENV["RPERF_SESSION_DIR"] = session_dir
+    # In --print-env mode this short-lived process does not run the command, so
+    # it must not claim rootship: the caller sets RPERF_ROOT_PROCESS to the pid
+    # that will exec the command. Otherwise (normal exec) we are the root.
+    ENV["RPERF_ROOT_PROCESS"] = Process.pid.to_s unless print_env
   end
+end
+
+# --print-env: emit the environment a profiled process inherits to auto-start
+# rperf, then exit without running anything. RPERF_ROOT_PROCESS and
+# RPERF_META_LABELS are deliberately omitted — the caller owns those (it sets
+# the root pid, and labels per measurement run).
+if print_env
+  require "shellwords"
+  %w[RUBYLIB RUBYOPT RPERF_ENABLED RPERF_OUTPUT RPERF_FREQUENCY RPERF_MODE
+     RPERF_FORMAT RPERF_VERBOSE RPERF_SIGNAL RPERF_AGGREGATE RPERF_META_GIT
+     RPERF_SESSION_DIR RPERF_STAT RPERF_STAT_COMMAND RPERF_STAT_REPORT].each do |k|
+    v = ENV[k]
+    puts "export #{k}=#{Shellwords.escape(v)}" unless v.nil?
+  end
+  exit 0
 end
 
 begin
